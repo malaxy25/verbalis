@@ -42,9 +42,9 @@ def _einwilligung_einholen(bereits_bestaetigt: bool) -> bool:
 
 
 def cmd_app(_args) -> int:
-    from .app import starten
+    from .app import hauptprogramm
 
-    starten()
+    hauptprogramm()
     return 0
 
 
@@ -156,10 +156,15 @@ def cmd_transkribieren(args) -> int:
         print(e)
         return 1
 
+    from .ablauf import korrigieren
+    from .korrekturen import Korrekturliste
+
     namen = {"ich": args.name, "gegenueber": args.gegenueber}
     absaetze, rechenzeit, dauer = _transkribiere_ordner(ordner, tr, namen, args.bis)
-    md = speichern(ordner, "transkript", absaetze, f"Transkript {ordner.name}",
-                   _kopf(ordner, args.modell, rechenzeit, dauer), spuren=namen)
+    kopf = _kopf(ordner, args.modell, rechenzeit, dauer)
+    if n := korrigieren(absaetze, Korrekturliste.laden()):
+        kopf["Korrekturen"] = f"{n} automatisch ersetzt"
+    md = speichern(ordner, "transkript", absaetze, f"Transkript {ordner.name}", kopf, spuren=namen)
     print(f"\nGespeichert: {md}  ({rechenzeit / max(dauer, 1e-9):.2f}× Echtzeit)")
     return 0
 

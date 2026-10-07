@@ -214,3 +214,79 @@ def test_restdauer_aus_statistik_und_fortschritt():
     d._faktor_merken("m|beam5", 1.0)
     d._faktor_merken("m|beam5", 2.0)
     assert d._faktor("m|beam5") == 1.5
+
+
+class ToccoTranscriber(FakeTranscriber):
+    gesehene_stichworte = []
+
+    def transkribiere(self, audio, sprache="de", fortschritt=None):
+        ToccoTranscriber.gesehene_stichworte.append(self.stichworte)
+        return [Segment(0.0, 1.0, "Das Release von Toko kommt. Toko ist bereit.")]
+
+
+def _fertige_aufnahme(d):
+    aid = d.aufnahme_starten(einwilligung=True)
+    d.aufnahme_stoppen()
+    assert warten_bis(lambda: d.aufnahmen()[0]["status"] == "fertig")
+    return aid
+
+
+def test_bearbeiten_vorschlagen_merken_anwenden(home):
+    d = dienst(transcriber_fabrik=ToccoTranscriber)
+    aid = _fertige_aufnahme(d)
+
+    r = d.transkript_bearbeiten(aid, 0, "Das Release von tocco kommt. Toko ist bereit.")
+    assert r["vorschlaege"] == [{"variante": "Toko", "ziel": "tocco", "art": "neu", "bisher": None}]
+    ordner = home / "aufnahmen" / aid
+    assert (ordner / "transkript_original.json").exists()
+    t = d.transkript(aid)
+    assert t["bearbeitet"] and "Release von tocco" in t["markdown"]
+
+    # Merken wendet die Regel gleich auf den Rest des Transkripts an
+    assert d.korrekturen_merken(aid, r["vorschlaege"]) == {"gemerkt": 1, "ersetzt": 3}  # 1 + 2 im zweiten Absatz
+    assert d.transkript(aid)["segmente"][0]["text"] == "Das Release von tocco kommt. tocco ist bereit."
+    assert d.korrekturen() == [{"ziel": "tocco", "varianten": ["Toko"]}]
+
+    # Nächste Transkription: Regel wird angewendet, Ziel ist Stichwort
+    time.sleep(1.1)
+    neu = _fertige_aufnahme(d)
+    t = d.transkript(neu)
+    assert "Toko" not in t["markdown"] and t["kopf"]["Korrekturen"] == "4 automatisch ersetzt"
+    assert "tocco" in ToccoTranscriber.gesehene_stichworte[-1]
+    assert not (home / "aufnahmen" / neu / "transkript_original.json").exists()
+
+    # Zweite Variante wird beim selben Ziel ergänzt
+    d.transkript_bearbeiten(neu, 0, t["segmente"][0]["text"].replace("tocco kommt", "Tokko kommt"))
+    r = d.transkript_bearbeiten(neu, 0, t["segmente"][0]["text"])
+    assert r["vorschlaege"][0]["art"] == "ergaenzt" and r["vorschlaege"][0]["variante"] == "Tokko"
+    d.korrekturen_merken("", r["vorschlaege"])
+    assert d.korrekturen() == [{"ziel": "tocco", "varianten": ["Tokko", "Toko"]}]
+    assert d.korrektur_entfernen("tocco", "Toko") == [{"ziel": "tocco", "varianten": ["Tokko"]}]
+
+
+def test_bearbeiten_prueft_eingaben():
+    d = dienst(transcriber_fabrik=ToccoTranscriber)
+    aid = _fertige_aufnahme(d)
+    with pytest.raises(ValueError, match="leer"):
+        d.transkript_bearbeiten(aid, 0, "   ")
+    with pytest.raises(ValueError, match="Absatz"):
+        d.transkript_bearbeiten(aid, 99, "x")
+    assert d.transkript_bearbeiten(aid, 0, d.transkript(aid)["segmente"][0]["text"]) == {"vorschlaege": []}
+
+
+def test_stichworte_ohne_doppelte():
+    from mitschrift.korrekturen import Korrekturliste
+    k = Korrekturliste()
+    k.hinzufuegen("Toko", "tocco")
+    k.hinzufuegen("Limetnah", "Limmat")
+    assert Dienst._stichworte("Tocco, Höngg, ", k) == "Tocco, Höngg, Limmat"
+
+
+def test_protokoll_ersatz_vertraegt_fortschrittsbalken():
+    from tqdm import tqdm
+
+    from mitschrift.app import _AnsProtokoll
+    ersatz = _AnsProtokoll(20)
+    for _ in tqdm(range(3), file=ersatz):
+        pass
+    assert ersatz.write("x\n") == 2 and not ersatz.isatty()

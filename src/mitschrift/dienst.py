@@ -13,6 +13,7 @@ die CPU, was Aussetzer in der Aufnahme verursachen kann).
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import queue
@@ -27,9 +28,13 @@ from typing import Callable
 
 from . import ablauf
 from .einstellungen import Einstellungen
+from .korrekturen import Korrekturliste, vorschlaege
+from .transcription.base import Segment
+from .transkript import als_markdown
 from .transcription.modelle import mitschrift_home
 
 GUELTIGE_ID = re.compile(r"^[\w\-]+$")
+log = logging.getLogger(__name__)
 
 
 def _db(rms: float) -> float:
@@ -292,7 +297,8 @@ class Dienst:
             try:
                 tr = self._modell_holen(e.modell)
                 tr.beam_size = e.beam_size
-                tr.stichworte = e.stichworte or None
+                korrekturen = Korrekturliste.laden()
+                tr.stichworte = self._stichworte(e.stichworte, korrekturen) or None
                 namen = {"ich": e.name, "gegenueber": e.gegenueber}
                 reihenfolge = list(namen.values())
                 with self._lock:
@@ -312,15 +318,92 @@ class Dienst:
                         return self._job["pausiert_s"] if self._job else 0.0
 
                 _, rechenzeit, dauer = ablauf.transkript_erstellen(
-                    self._pfad(aufnahme_id), tr, e.modell, namen, fortschritt, pausenzeit)
+                    self._pfad(aufnahme_id), tr, e.modell, namen, fortschritt, pausenzeit, korrekturen)
                 if dauer > 0 and rechenzeit > 0:
                     self._faktor_merken(schluessel, rechenzeit / dauer)
             except Exception as ex:  # Fehler pro Aufnahme anzeigen, Worker läuft weiter
+                log.exception("Transkription von %s fehlgeschlagen", aufnahme_id)
                 with self._lock:
                     self._fehler[aufnahme_id] = str(ex) or repr(ex)
             finally:
                 with self._lock:
                     self._job = None
+
+    # ------------------------------------------------------------ Korrekturen
+
+    @staticmethod
+    def _stichworte(eigene: str, korrekturen: Korrekturliste) -> str:
+        """Eigene Stichworte plus alle Korrektur-Ziele, ohne Doppelte."""
+        woerter: list[str] = []
+        for w in [*eigene.split(","), *korrekturen.ziele()]:
+            w = w.strip()
+            if w and w.lower() not in (x.lower() for x in woerter):
+                woerter.append(w)
+        return ", ".join(woerter)
+
+    def _transkript_schreiben(self, ordner: Path, daten: dict) -> None:
+        daten.pop("markdown", None)
+        (ordner / "transkript.json").write_text(json.dumps(daten, indent=2, ensure_ascii=False), encoding="utf-8")
+        absaetze = [Segment(s["start"], s["ende"], s["text"], s.get("sprecher")) for s in daten["segmente"]]
+        (ordner / "transkript.md").write_text(
+            als_markdown(absaetze, daten.get("titel") or f"Transkript {ordner.name}", daten.get("kopf", {})),
+            encoding="utf-8")
+
+    def transkript_bearbeiten(self, aufnahme_id: str, index: int, text: str) -> dict:
+        """Einen Absatz ändern. Gibt Vorschläge für die Korrekturliste zurück."""
+        ordner = self._pfad(aufnahme_id)
+        daten = json.loads((ordner / "transkript.json").read_text(encoding="utf-8"))
+        segmente = daten["segmente"]
+        if not 0 <= index < len(segmente):
+            raise ValueError("Diesen Absatz gibt es nicht (mehr).")
+        text = " ".join(text.split())
+        if not text:
+            raise ValueError("Ein Absatz darf nicht leer sein.")
+        alt = segmente[index]["text"]
+        if text == alt:
+            return {"vorschlaege": []}
+
+        original = ordner / "transkript_original.json"
+        if not original.exists():  # unbearbeitete Fassung einmalig sichern
+            original.write_text((ordner / "transkript.json").read_text(encoding="utf-8"), encoding="utf-8")
+        segmente[index]["text"] = text
+        daten["bearbeitet"] = True
+        self._transkript_schreiben(ordner, daten)
+
+        liste = Korrekturliste.laden()
+        vorschlag_liste = [liste.einordnen(v, z) for v, z in vorschlaege(alt, text)]
+        return {"vorschlaege": [v for v in vorschlag_liste if v["art"] != "bekannt"]}
+
+    def korrekturen_merken(self, aufnahme_id: str, regeln: list[dict]) -> dict:
+        """Ausgewählte Vorschläge speichern und gleich im ganzen Transkript anwenden."""
+        liste = Korrekturliste.laden()
+        neu = Korrekturliste()
+        for r in regeln:
+            info = liste.hinzufuegen(r["variante"], r["ziel"])
+            if info["art"] != "ignoriert":
+                neu.hinzufuegen(r["variante"], info["ziel"])
+        liste.speichern()
+
+        ersetzt = 0
+        if aufnahme_id:
+            ordner = self._pfad(aufnahme_id)
+            daten = json.loads((ordner / "transkript.json").read_text(encoding="utf-8"))
+            for s in daten["segmente"]:
+                s["text"], n = neu.anwenden(s["text"])
+                ersetzt += n
+            if ersetzt:
+                daten["bearbeitet"] = True
+                self._transkript_schreiben(ordner, daten)
+        return {"gemerkt": sum(len(v) for v in neu.regeln.values()), "ersetzt": ersetzt}
+
+    def korrekturen(self) -> list[dict]:
+        return Korrekturliste.laden().als_liste()
+
+    def korrektur_entfernen(self, ziel: str, variante: str | None = None) -> list[dict]:
+        liste = Korrekturliste.laden()
+        liste.entfernen(ziel, variante)
+        liste.speichern()
+        return liste.als_liste()
 
     # ------------------------------------------------------------ Verlauf
 

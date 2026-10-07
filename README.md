@@ -6,7 +6,7 @@ Lokale App, die Gespräche aufnimmt (eigenes Mikrofon **und** Systemaudio, also
 alle Teilnehmenden eines Teams-Calls) und danach ein Transkript erstellt –
 Hochdeutsch und Schweizerdeutsch. Alles läuft lokal, nichts verlässt den Rechner.
 
-**Stand 0.4.0:** Oberfläche für Aufnahme, Transkription und Verlauf. Sprechererkennung folgt.
+**Stand 0.5.0:** Oberfläche für Aufnahme, Transkription und Verlauf. Sprechererkennung folgt.
 
 ```bash
 mitschrift app
@@ -44,9 +44,22 @@ pip install -e ".[dev]"
 Ubuntu: Es braucht PipeWire mit `pipewire-pulse` (Standard bei Ubuntu) bzw.
 `libpulse0`. Windows: nichts Zusätzliches.
 
+## Start per Doppelklick (Windows)
+
+Einmalig im Repo ausführen, mit aktivierter `.venv`:
+
+```powershell
+pip install -e ".[dev]"
+.\werkzeuge\verknuepfung-erstellen.ps1
+```
+
+Danach gibt es «Mitschrift» auf dem Desktop und im Startmenü. Die Verknüpfung
+startet `.venv\Scripts\mitschrift-app.exe` ohne Konsolenfenster und zeigt auf
+das Repo – Updates wirken sofort. Fehler landen in `~/.mitschrift/protokoll.txt`.
+
 ## Oberfläche
 
-`mitschrift app` öffnet das Fenster:
+`mitschrift app` oder die Verknüpfung öffnet das Fenster:
 
 - **Aufnahme:** Mikrofon und Tonausgabe von Teams wählen, Zustimmung aller
   Teilnehmenden bestätigen, mit dem roten Knopf starten und beenden.
@@ -55,8 +68,11 @@ Ubuntu: Es braucht PipeWire mit `pipewire-pulse` (Standard bei Ubuntu) bzw.
   Modell bleibt geladen, die zweite Transkription startet deshalb schneller.
 - **Pausieren:** Transkriptionen lassen sich pausieren und fortsetzen. Während
   einer Aufnahme pausieren sie automatisch, damit die CPU frei bleibt.
+- **Korrigieren:** Absatz im Transkript anklicken, ändern, speichern. Die App
+  schlägt die geänderten Wörter für die Korrekturliste vor (z.B. «Toko» →
+  «tocco»); angehakte Vorschläge gelten ab dann für alle Transkripte.
 - **Einstellungen:** dein Name, Bezeichnung der anderen, Modell, Tempo
-  (genau/schnell), Stichworte und Aufnahmeordner.
+  (genau/schnell), Stichworte, Korrekturliste und Aufnahmeordner.
 
 Aufnahmen landen standardmässig in `~/.mitschrift/aufnahmen` (änderbar in den
 Einstellungen) – App und Kommandozeile nutzen denselben Ordner.

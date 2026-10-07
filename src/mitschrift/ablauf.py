@@ -7,10 +7,13 @@ import platform
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from . import __version__
 from .transkript import speichern, zusammenfuehren
+
+if TYPE_CHECKING:
+    from .korrekturen import Korrekturliste
 
 SPUREN = ("ich", "gegenueber")
 Fortschritt = Callable[[str, float], None]  # (anzeigename, anteil 0..1)
@@ -84,12 +87,28 @@ def kopf(ordner: Path, modell: str, rechenzeit: float, dauer: float) -> dict[str
     return {"Aufnahme": start, **k} if start else k
 
 
+def korrigieren(absaetze: list, liste: "Korrekturliste | None") -> int:
+    """Korrekturliste auf alle Absätze anwenden (an Ort und Stelle). Gibt die Anzahl zurück."""
+    if liste is None:
+        return 0
+    gesamt = 0
+    for a in absaetze:
+        a.text, n = liste.anwenden(a.text)
+        gesamt += n
+    return gesamt
+
+
 def transkript_erstellen(ordner: Path, transcriber, modell: str, namen: dict[str, str],
                          fortschritt: Fortschritt | None = None,
-                         pausenzeit: Callable[[], float] | None = None) -> tuple[Path, float, float]:
+                         pausenzeit: Callable[[], float] | None = None,
+                         korrekturen: "Korrekturliste | None" = None) -> tuple[Path, float, float]:
     """Gibt (pfad, rechenzeit_s, aufnahmedauer_s) zurück."""
     absaetze, rechenzeit, dauer = transkribieren(ordner, transcriber, namen, fortschritt=fortschritt,
                                                  pausenzeit=pausenzeit)
-    pfad = speichern(ordner, "transkript", absaetze, f"Transkript {ordner.name}",
-                     kopf(ordner, modell, rechenzeit, dauer), spuren=namen)
+    k = kopf(ordner, modell, rechenzeit, dauer)
+    n = korrigieren(absaetze, korrekturen)
+    if n:
+        k["Korrekturen"] = f"{n} automatisch ersetzt"
+    pfad = speichern(ordner, "transkript", absaetze, f"Transkript {ordner.name}", k, spuren=namen)
+    (ordner / "transkript_original.json").unlink(missing_ok=True)  # alte Bearbeitungen sind überholt
     return pfad, rechenzeit, dauer

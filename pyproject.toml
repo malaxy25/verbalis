@@ -1,6 +1,6 @@
 [project]
 name = "mitschrift"
-version = "0.4.0"
+version = "0.5.0"
 description = "Lokale Aufnahme und Transkription von Gesprächen (Mikrofon + Systemaudio), Deutsch und Schweizerdeutsch"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,10 @@ konvertieren = ["transformers>=4.40", "torch", "accelerate", "huggingface_hub"]
 
 [project.scripts]
 mitschrift = "mitschrift.__main__:main"
+
+[project.gui-scripts]
+# Startet die Oberfläche ohne Konsolenfenster – Ziel der Desktop-Verknüpfung
+mitschrift-app = "mitschrift.app:hauptprogramm"
 
 [build-system]
 requires = ["hatchling"]

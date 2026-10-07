@@ -178,11 +178,29 @@
   .absatz .wer { font-weight: 600; font-size: 14px; }
   .absatz.gegenueber .wer { color: var(--limmat); }
   .absatz time { display: block; font-size: 13px; color: var(--leise); font-variant-numeric: tabular-nums; }
-  .absatz .text { font-family: var(--schrift-text); font-size: 17px; line-height: 1.6; max-width: 38em; margin: 0; }
+  .absatz .text {
+    font-family: var(--schrift-text); font-size: 17px; line-height: 1.6; max-width: 38em; margin: 0;
+    padding: 2px 8px; margin-left: -8px; border-radius: 6px; cursor: text;
+  }
+  .absatz .text:hover { background: var(--flaeche-2); }
+  .absatz .text[contenteditable] { background: var(--flaeche); outline: 2px solid var(--limmat); outline-offset: 0; cursor: auto; }
+  .absatz .bearbeiten-leiste { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 2px; }
+  .absatz .bearbeiten-leiste small { color: var(--leise); }
+  .bearbeiten-hinweis { color: var(--leise); font-size: 13px; align-self: center; margin-left: 4px; }
+
+  .vorschlaege {
+    grid-column: 2; margin: 12px 0 4px; padding: 14px 16px; border-radius: 8px;
+    background: var(--limmat-hell); max-width: 38em;
+  }
+  .vorschlaege h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .vorschlaege p { margin: 0 0 10px; font-size: 14px; color: var(--leise); }
+  .vorschlaege label { display: flex; gap: 8px; align-items: baseline; margin: 4px 0; }
+  .vorschlaege .aktionen { margin-top: 12px; }
+  .vorschlaege .ergebnis { margin: 0; color: var(--tinte); }
 
   /* Einstellungen */
   dialog {
-    width: min(560px, 92vw); border: 1px solid var(--linie); border-radius: 12px;
+    width: min(560px, 92vw); max-height: 90vh; border: 1px solid var(--linie); border-radius: 12px;
     padding: 0; background: var(--flaeche); color: var(--tinte);
   }
   dialog::backdrop { background: rgb(21 27 34 / 0.45); }
@@ -200,6 +218,19 @@
   fieldset legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 4px; }
   fieldset label { display: flex; gap: 8px; align-items: baseline; }
   .dialog-knoepfe { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+  .korrekturliste { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 180px; overflow-y: auto; }
+  .korrekturliste li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .korrekturliste .ziel { font-weight: 600; font-size: 14px; margin-right: 4px; }
+  .variante {
+    display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px;
+    border: 1px solid var(--linie); border-radius: 999px; font-size: 13px; color: var(--leise);
+  }
+  .variante button {
+    border: 0; background: none; cursor: pointer; color: var(--leise);
+    width: 22px; height: 22px; border-radius: 50%; line-height: 1;
+  }
+  .variante button:hover { background: var(--rot-hell); color: var(--rot); }
+  .korrekturliste-leer { color: var(--leise); font-size: 13px; margin: 0; }
 
   @media (max-width: 760px) {
     body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
@@ -286,6 +317,11 @@
       <input type="text" name="stichworte" autocomplete="off">
       <small>Namen und Fachbegriffe, mit Komma getrennt, z.B. tocco, Höngg</small>
     </label>
+    <div class="feld">
+      <span>Korrekturliste</span>
+      <ul class="korrekturliste" id="korrekturliste"></ul>
+      <small>Wird nach jeder Transkription angewendet. Neue Einträge entstehen, wenn du im Transkript etwas korrigierst.</small>
+    </div>
     <label class="feld"><span>Aufnahmeordner</span>
       <input type="text" name="aufnahme_ordner" autocomplete="off" spellcheck="false">
       <small id="ordner-hinweis"></small>
@@ -527,10 +563,9 @@ async function transkriptZeichnen(a) {
     kopfListe,
     element("div", { class: "aktionen" },
       kopierenKnopf,
-      element("button", { type: "button", class: "aktion",
-        onclick: async () => { try { await rufe("transkribieren", a.id); await listeLaden(); } catch (e) { meldung(e.message); } },
-      }, "Neu transkribieren"),
+      neuTranskribierenKnopf(a.id, !!t.bearbeitet),
       ordnerKnopf(a.id),
+      element("span", { class: "bearbeiten-hinweis" }, "Zum Korrigieren einen Absatz anklicken."),
     ),
   );
 
@@ -538,14 +573,117 @@ async function transkriptZeichnen(a) {
   if (!t.segmente.length) {
     protokoll.append(element("p", { class: "leer" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
   }
-  for (const s of t.segmente) {
+  t.segmente.forEach((s, index) => {
     const spur = s.sprecher === ichName ? "ich" : "gegenueber";
-    protokoll.append(element("div", { class: `absatz ${spur}` },
+    const text = element("p", { class: "text", title: "Zum Korrigieren klicken" }, s.text);
+    const absatz = element("div", { class: `absatz ${spur}` },
       element("div", {}, element("div", { class: "wer" }, s.sprecher || ""), element("time", {}, zeitText(s.start))),
-      element("p", { class: "text" }, s.text),
-    ));
-  }
+      element("div", {}, text),
+    );
+    text.addEventListener("click", () => absatzBearbeiten(a.id, index, absatz, text));
+    protokoll.append(absatz);
+  });
   $("inhalt").replaceChildren(kopf, protokoll);
+}
+
+function neuTranskribierenKnopf(id, bearbeitet) {
+  const knopf = element("button", { type: "button", class: "aktion" }, "Neu transkribieren");
+  let bestaetigt = false;
+  knopf.addEventListener("click", async () => {
+    if (bearbeitet && !bestaetigt) {   // Korrekturen würden überschrieben – zweiter Klick bestätigt
+      bestaetigt = true;
+      knopf.textContent = "Korrekturen gehen verloren – nochmals klicken";
+      setTimeout(() => { bestaetigt = false; knopf.textContent = "Neu transkribieren"; }, 4000);
+      return;
+    }
+    try { await rufe("transkribieren", id); await listeLaden(); } catch (e) { meldung(e.message); }
+  });
+  return knopf;
+}
+
+/* ---------- Korrigieren ---------- */
+
+let bearbeitung = null;  // { abbrechen } des gerade bearbeiteten Absatzes
+
+function absatzBearbeiten(id, index, absatz, textEl) {
+  if (textEl.hasAttribute("contenteditable")) return;
+  if (bearbeitung) bearbeitung.abbrechen();
+  absatz.querySelectorAll(".vorschlaege").forEach((v) => v.remove());
+  const vorher = textEl.textContent;
+  textEl.setAttribute("contenteditable", "plaintext-only");
+  textEl.removeAttribute("title");
+  textEl.focus();
+
+  const leiste = element("div", { class: "bearbeiten-leiste" });
+  const speichernKnopf = element("button", { type: "button", class: "aktion primaer" }, "Korrektur speichern");
+  const abbrechenKnopf = element("button", { type: "button", class: "aktion" }, "Abbrechen");
+  leiste.append(speichernKnopf, abbrechenKnopf, element("small", {}, "Strg+Enter speichert, Esc bricht ab"));
+  textEl.after(leiste);
+
+  function beenden(text) {
+    textEl.removeAttribute("contenteditable");
+    textEl.title = "Zum Korrigieren klicken";
+    textEl.textContent = text;
+    textEl.removeEventListener("keydown", tasten);
+    leiste.remove();
+    bearbeitung = null;
+  }
+  async function speichern() {
+    const neu = textEl.textContent.replace(/\s+/g, " ").trim();
+    if (neu === vorher.trim()) { beenden(vorher); return; }
+    speichernKnopf.disabled = true;
+    try {
+      const r = await rufe("transkript_bearbeiten", id, index, neu);
+      beenden(neu);
+      if (r.vorschlaege.length) vorschlaegeZeigen(id, absatz, r.vorschlaege);
+    } catch (e) {
+      speichernKnopf.disabled = false;
+      meldung(e.message);
+    }
+  }
+  function tasten(ev) {
+    if (ev.key === "Escape") { ev.preventDefault(); beenden(vorher); }
+    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); speichern(); }
+    if (ev.key === "Enter" && !ev.ctrlKey && !ev.metaKey) ev.preventDefault();  // ein Absatz bleibt ein Absatz
+  }
+  textEl.addEventListener("keydown", tasten);
+  speichernKnopf.addEventListener("click", speichern);
+  abbrechenKnopf.addEventListener("click", () => beenden(vorher));
+  bearbeitung = { abbrechen: () => beenden(vorher) };
+}
+
+function vorschlagText(v) {
+  if (v.art === "ergaenzt") return `«${v.variante}» zu «${v.ziel}» hinzufügen`;
+  if (v.art === "ersetzt") return `«${v.variante}» → «${v.ziel}» (ersetzt bisher «${v.variante}» → «${v.bisher}»)`;
+  return `«${v.variante}» → «${v.ziel}»`;
+}
+
+function vorschlaegeZeigen(id, absatz, vorschlaege) {
+  const kaesten = vorschlaege.map((v) => {
+    const box = element("input", { type: "checkbox" });   // bewusst nicht vorausgewählt
+    return { v, box, zeile: element("label", {}, box, element("span", {}, vorschlagText(v))) };
+  });
+  const merkenKnopf = element("button", { type: "button", class: "aktion primaer" }, "Ausgewählte merken");
+  const schliessenKnopf = element("button", { type: "button", class: "aktion" }, "Nicht merken");
+  const panel = element("div", { class: "vorschlaege", role: "group", "aria-label": "Korrekturen merken" },
+    element("h3", {}, "Für künftige Transkripte merken?"),
+    element("p", {}, "Nur anhaken, was immer gilt – etwa Namen und Fachbegriffe. Wörter, die je nach Satz anders gemeint sind, besser nicht."),
+    ...kaesten.map((k) => k.zeile),
+    element("div", { class: "aktionen" }, merkenKnopf, schliessenKnopf),
+  );
+  absatz.append(panel);
+  schliessenKnopf.addEventListener("click", () => panel.remove());
+  merkenKnopf.addEventListener("click", async () => {
+    const regeln = kaesten.filter((k) => k.box.checked).map((k) => ({ variante: k.v.variante, ziel: k.v.ziel }));
+    if (!regeln.length) { panel.remove(); return; }
+    try {
+      const r = await rufe("korrekturen_merken", id, regeln);
+      const weitere = r.ersetzt ? ` ${r.ersetzt} weitere ${r.ersetzt === 1 ? "Stelle" : "Stellen"} in diesem Transkript korrigiert.` : "";
+      panel.replaceChildren(element("p", { class: "ergebnis" }, `Gemerkt.${weitere}`));
+      setTimeout(() => panel.remove(), 3500);
+      if (r.ersetzt) setTimeout(() => inhaltZeichnen(true), 1200);
+    } catch (e) { meldung(e.message); }
+  });
 }
 
 async function kopieren(text) {
@@ -737,8 +875,28 @@ async function einstellungenOeffnen() {
   $("ordner-hinweis").textContent = `Leer lassen für den Standard. Aktuell: ${e.ordner}`;
   try { zustand.modelle = await rufe("modelle"); } catch (_) { zustand.modelle = []; }
   modellAuswahlFuellen(e.modell);
+  try { korrekturlisteZeichnen(await rufe("korrekturen")); } catch (_) { korrekturlisteZeichnen([]); }
   modellStatusZeigen();
   $("dlg-einstellungen").showModal();
+}
+
+function korrekturlisteZeichnen(liste) {
+  const ul = $("korrekturliste");
+  if (!liste.length) {
+    ul.replaceChildren(element("li", {}, element("p", { class: "korrekturliste-leer" }, "Noch keine Korrekturen gemerkt.")));
+    return;
+  }
+  ul.replaceChildren(...liste.map((eintrag) => element("li", {},
+    element("span", { class: "ziel" }, eintrag.ziel),
+    element("span", { class: "bearbeiten-hinweis" }, "statt"),
+    ...eintrag.varianten.map((v) => element("span", { class: "variante" }, v,
+      element("button", {
+        type: "button", "aria-label": `«${v}» → «${eintrag.ziel}» entfernen`, title: "Entfernen",
+        onclick: async () => {
+          try { korrekturlisteZeichnen(await rufe("korrektur_entfernen", eintrag.ziel, v)); } catch (e) { $("modell-status").textContent = e.message; }
+        },
+      }, "×"))),
+  )));
 }
 
 async function einstellungenSpeichern(ereignis) {

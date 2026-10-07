@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 – 2026-10-07
+- Transkript direkt in der App korrigieren (Absatz anklicken); die unbearbeitete Fassung bleibt als
+  `transkript_original.json` erhalten
+- Korrekturliste: Aus Korrekturen entstehen Vorschläge (z.B. «Toko» → «tocco»), die man gezielt merkt.
+  Ziel eindeutig, Varianten gesammelt. Wird nach jeder Transkription angewendet, die Ziele fliessen
+  zusätzlich als Stichworte ins Modell. Verwaltung in den Einstellungen.
+- «Neu transkribieren» bei korrigierten Transkripten erst nach Bestätigung
+- Start per Doppelklick: `mitschrift-app.exe` ohne Konsolenfenster, Skript
+  `werkzeuge/verknuepfung-erstellen.ps1` für Desktop und Startmenü, eigenes Icon
+- Fehlerprotokoll in `~/.mitschrift/protokoll.txt`; App lässt sich unter Windows nur einmal öffnen
+
 ## 0.4.0 – 2026-10-07
 - Transkription pausieren und fortsetzen (hält nach dem nächsten Textabschnitt an)
 - Automatische Pause, solange eine Aufnahme läuft – die CPU bleibt frei für den Call
