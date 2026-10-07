@@ -4,6 +4,10 @@ Die Oberfläche fragt regelmässig `zustand()` ab und ruft Aktionen auf.
 Transkriptionen laufen nacheinander in einem Hintergrund-Thread, damit
 Aufnahme und Bedienung nie blockieren. Das geladene Modell bleibt im
 Speicher, solange sich die Einstellung nicht ändert (Laden dauert ~15 s).
+
+Pausieren: Der Thread hält nach jedem fertigen Textabschnitt an, solange
+manuell pausiert ist oder eine Aufnahme läuft (sonst konkurrieren beide um
+die CPU, was Aussetzer in der Aufnahme verursachen kann).
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from typing import Callable
 
 from . import ablauf
 from .einstellungen import Einstellungen
+from .transcription.modelle import mitschrift_home
 
 GUELTIGE_ID = re.compile(r"^[\w\-]+$")
 
@@ -66,6 +71,7 @@ class Dienst:
         self._fehler: dict[str, str] = {}
         self._transcriber = None
         self._transcriber_modell: str | None = None
+        self._pause_manuell = False
 
         self._worker = threading.Thread(target=self._arbeiten, name="transkription", daemon=True)
         self._worker.start()
@@ -194,22 +200,104 @@ class Dienst:
             self._transcriber_modell = modell
         return self._transcriber
 
+    # ------------------------------------------------------------ Pause
+
+    def _pausengrund(self) -> str | None:
+        if self._pause_manuell:
+            return "manuell"
+        if self._rec is not None:
+            return "aufnahme"
+        return None
+
+    def pausieren(self) -> None:
+        with self._lock:
+            self._pause_manuell = True
+
+    def fortsetzen(self) -> None:
+        with self._lock:
+            self._pause_manuell = False
+
+    def _warten_falls_pausiert(self) -> None:
+        """Im Worker-Thread aufrufen: blockiert, solange pausiert ist."""
+        beginn = None
+        while True:
+            with self._lock:
+                if self._pausengrund() is None:
+                    if beginn is not None and self._job:
+                        self._job["pausiert_s"] += time.monotonic() - beginn
+                        self._job["pause_seit"] = None
+                    return
+                if beginn is None:
+                    beginn = time.monotonic()
+                    if self._job:
+                        self._job["pause_seit"] = beginn
+            time.sleep(0.1)
+
+    # ------------------------------------------------------------ Restdauer
+
+    @staticmethod
+    def _statistik_pfad() -> Path:
+        return mitschrift_home() / "statistik.json"
+
+    def _faktor(self, schluessel: str) -> float | None:
+        try:
+            return json.loads(self._statistik_pfad().read_text(encoding="utf-8"))["echtzeitfaktor"].get(schluessel)
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            return None
+
+    def _faktor_merken(self, schluessel: str, faktor: float) -> None:
+        pfad = self._statistik_pfad()
+        try:
+            daten = json.loads(pfad.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            daten = {}
+        faktoren = daten.setdefault("echtzeitfaktor", {})
+        alt = faktoren.get(schluessel)
+        faktoren[schluessel] = round(faktor if alt is None else (alt + faktor) / 2, 3)
+        pfad.parent.mkdir(parents=True, exist_ok=True)
+        pfad.write_text(json.dumps(daten, indent=2), encoding="utf-8")
+
+    def _restdauer(self, job: dict) -> float | None:
+        if job["start"] is None:
+            return None
+        jetzt = job["pause_seit"] or time.monotonic()
+        aktiv = max(jetzt - job["start"] - job["pausiert_s"], 0.0)
+        anteil = job["anteil"]
+        if anteil >= 0.1 and aktiv >= 10:
+            return aktiv * (1 - anteil) / anteil
+        if job["faktor"] and job["dauer_s"]:
+            rest = job["faktor"] * job["dauer_s"] - aktiv
+            return rest if rest > 0 else None
+        return None
+
+    # ------------------------------------------------------------ Worker
+
     def _arbeiten(self) -> None:
         while True:
             aufnahme_id = self._warteschlange.get()
             if aufnahme_id is None:
                 return
+            self._warten_falls_pausiert()
             with self._lock:
                 if aufnahme_id in self._wartend:
                     self._wartend.remove(aufnahme_id)
                 e = self._e
-                self._job = {"id": aufnahme_id, "phase": f"Modell {e.modell} wird geladen", "anteil": 0.0}
+                schluessel = f"{e.modell}|beam{e.beam_size}"
+                self._job = {
+                    "id": aufnahme_id, "phase": f"Modell {e.modell} wird geladen", "anteil": 0.0,
+                    "start": None, "pausiert_s": 0.0, "pause_seit": None,
+                    "dauer_s": ablauf.meta_lesen(self._pfad(aufnahme_id)).get("dauer_s"),
+                    "faktor": self._faktor(schluessel),
+                }
             try:
                 tr = self._modell_holen(e.modell)
                 tr.beam_size = e.beam_size
                 tr.stichworte = e.stichworte or None
                 namen = {"ich": e.name, "gegenueber": e.gegenueber}
                 reihenfolge = list(namen.values())
+                with self._lock:
+                    self._job["start"] = time.monotonic()
+                    self._job["phase"] = "Transkription beginnt"
 
                 def fortschritt(name: str, anteil: float):
                     index = reihenfolge.index(name) if name in reihenfolge else 0
@@ -217,8 +305,16 @@ class Dienst:
                         if self._job:
                             self._job["phase"] = f"Spur «{name}» wird transkribiert"
                             self._job["anteil"] = (index + anteil) / len(reihenfolge)
+                    self._warten_falls_pausiert()
 
-                ablauf.transkript_erstellen(self._pfad(aufnahme_id), tr, e.modell, namen, fortschritt)
+                def pausenzeit() -> float:
+                    with self._lock:
+                        return self._job["pausiert_s"] if self._job else 0.0
+
+                _, rechenzeit, dauer = ablauf.transkript_erstellen(
+                    self._pfad(aufnahme_id), tr, e.modell, namen, fortschritt, pausenzeit)
+                if dauer > 0 and rechenzeit > 0:
+                    self._faktor_merken(schluessel, rechenzeit / dauer)
             except Exception as ex:  # Fehler pro Aufnahme anzeigen, Worker läuft weiter
                 with self._lock:
                     self._fehler[aufnahme_id] = str(ex) or repr(ex)
@@ -237,7 +333,7 @@ class Dienst:
         if self._rec_info.get("id") == aufnahme_id:
             return "aufnahme"
         if self._job and self._job["id"] == aufnahme_id:
-            return "laeuft"
+            return "pausiert" if self._pausengrund() and self._job["start"] is not None else "laeuft"
         if aufnahme_id in self._wartend:
             return "wartet"
         if aufnahme_id in self._fehler:
@@ -297,11 +393,17 @@ class Dienst:
                         "dauer_s": round(time.monotonic() - rec.t0, 1),
                         "pegel": {"ich": _db(ich.pegel_rms), "gegenueber": _db(gegenueber.pegel_rms)},
                     }
-            job = dict(self._job) if self._job else None
+            job = None
+            if self._job:
+                rest = self._restdauer(self._job)
+                job = {"id": self._job["id"], "phase": self._job["phase"], "anteil": self._job["anteil"],
+                       "rest_s": round(rest) if rest is not None else None}
             wartend = list(self._wartend)
+            pause = self._pausengrund()
         if rec is not None and aufnahme is None:
             self.aufnahme_stoppen()
-        return {"aufnahme": aufnahme, "job": job, "wartend": wartend, "aufnahme_fehler": self._aufnahme_fehler}
+        return {"aufnahme": aufnahme, "job": job, "wartend": wartend, "pause": pause,
+                "aufnahme_fehler": self._aufnahme_fehler}
 
     def beenden(self) -> None:
         """Beim Schliessen des Fensters: laufende Aufnahme sauber speichern."""

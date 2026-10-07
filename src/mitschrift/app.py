@@ -58,6 +58,12 @@ class Api:
     def transkribieren(self, aufnahme_id):
         return self._rufe(self._d.transkribieren, aufnahme_id)
 
+    def pausieren(self):
+        return self._rufe(self._d.pausieren)
+
+    def fortsetzen(self):
+        return self._rufe(self._d.fortsetzen)
+
     def ordner_oeffnen(self, aufnahme_id=""):
         return self._rufe(self._d.ordner_oeffnen, aufnahme_id)
 

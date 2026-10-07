@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 – 2026-10-07
+- Transkription pausieren und fortsetzen (hält nach dem nächsten Textabschnitt an)
+- Automatische Pause, solange eine Aufnahme läuft – die CPU bleibt frei für den Call
+- Restdauer: anfangs aus dem Tempo früherer Transkriptionen geschätzt, danach aus dem Fortschritt
+- Pausen zählen nicht mehr zur ausgewiesenen Rechenzeit
+- Einstellungen: echte Auswahlliste für Modelle, eigenes Modell über «Anderes Modell …»
+
 ## 0.3.0 – 2026-10-07
 - Oberfläche (`mitschrift app`): Aufnahme mit Pegelspuren, Zustimmung pro Aufnahme,
   automatische Transkription im Hintergrund, Verlauf, Transkriptansicht, Einstellungen

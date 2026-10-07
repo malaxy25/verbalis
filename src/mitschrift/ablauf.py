@@ -51,8 +51,13 @@ def meta_lesen(ordner: Path) -> dict:
 
 
 def transkribieren(ordner: Path, transcriber, namen: dict[str, str], bis_s: float | None = None,
-                   fortschritt: Fortschritt | None = None):
-    """Beide Spuren transkribieren. Gibt (absätze, rechenzeit_s, aufnahmedauer_s) zurück."""
+                   fortschritt: Fortschritt | None = None, pausenzeit: Callable[[], float] | None = None):
+    """Beide Spuren transkribieren. Gibt (absätze, rechenzeit_s, aufnahmedauer_s) zurück.
+
+    pausenzeit: liefert die bisher pausierte Zeit in Sekunden; sie wird nicht
+    zur Rechenzeit gezählt.
+    """
+    pausenzeit = pausenzeit or (lambda: 0.0)
     from .transcription.faster import SAMPLERATE_WHISPER, lade_audio
 
     spuren = {}
@@ -65,9 +70,9 @@ def transkribieren(ordner: Path, transcriber, namen: dict[str, str], bis_s: floa
             if fortschritt:
                 fortschritt(n, min(position / gesamt, 1.0) if gesamt else 1.0)
 
-        t = time.monotonic()
+        t, p = time.monotonic(), pausenzeit()
         spuren[anzeigename] = transcriber.transkribiere(audio, fortschritt=melden)
-        rechenzeit += time.monotonic() - t
+        rechenzeit += (time.monotonic() - t) - (pausenzeit() - p)
         melden(1, 1)
     return zusammenfuehren(spuren), rechenzeit, aufnahmedauer
 
@@ -80,7 +85,11 @@ def kopf(ordner: Path, modell: str, rechenzeit: float, dauer: float) -> dict[str
 
 
 def transkript_erstellen(ordner: Path, transcriber, modell: str, namen: dict[str, str],
-                         fortschritt: Fortschritt | None = None) -> Path:
-    absaetze, rechenzeit, dauer = transkribieren(ordner, transcriber, namen, fortschritt=fortschritt)
-    return speichern(ordner, "transkript", absaetze, f"Transkript {ordner.name}",
+                         fortschritt: Fortschritt | None = None,
+                         pausenzeit: Callable[[], float] | None = None) -> tuple[Path, float, float]:
+    """Gibt (pfad, rechenzeit_s, aufnahmedauer_s) zurück."""
+    absaetze, rechenzeit, dauer = transkribieren(ordner, transcriber, namen, fortschritt=fortschritt,
+                                                 pausenzeit=pausenzeit)
+    pfad = speichern(ordner, "transkript", absaetze, f"Transkript {ordner.name}",
                      kopf(ordner, modell, rechenzeit, dauer), spuren=namen)
+    return pfad, rechenzeit, dauer

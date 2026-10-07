@@ -6,7 +6,7 @@ Lokale App, die Gespräche aufnimmt (eigenes Mikrofon **und** Systemaudio, also
 alle Teilnehmenden eines Teams-Calls) und danach ein Transkript erstellt –
 Hochdeutsch und Schweizerdeutsch. Alles läuft lokal, nichts verlässt den Rechner.
 
-**Stand 0.3.0:** Oberfläche für Aufnahme, Transkription und Verlauf. Sprechererkennung folgt.
+**Stand 0.4.0:** Oberfläche für Aufnahme, Transkription und Verlauf. Sprechererkennung folgt.
 
 ```bash
 mitschrift app
@@ -51,8 +51,10 @@ Ubuntu: Es braucht PipeWire mit `pipewire-pulse` (Standard bei Ubuntu) bzw.
 - **Aufnahme:** Mikrofon und Tonausgabe von Teams wählen, Zustimmung aller
   Teilnehmenden bestätigen, mit dem roten Knopf starten und beenden.
 - **Transkript:** entsteht nach dem Beenden automatisch im Hintergrund.
-  Fortschritt in der Liste links. Das Modell bleibt geladen, die zweite
-  Transkription startet deshalb schneller.
+  Fortschritt und Restdauer in der Ansicht, Status in der Liste links. Das
+  Modell bleibt geladen, die zweite Transkription startet deshalb schneller.
+- **Pausieren:** Transkriptionen lassen sich pausieren und fortsetzen. Während
+  einer Aufnahme pausieren sie automatisch, damit die CPU frei bleibt.
 - **Einstellungen:** dein Name, Bezeichnung der anderen, Modell, Tempo
   (genau/schnell), Stichworte und Aufnahmeordner.
 

@@ -160,6 +160,8 @@
   .fortschritt .balken { height: 6px; border-radius: 3px; background: var(--linie); overflow: hidden; margin: 12px 0 8px; }
   .fortschritt .balken div { height: 100%; width: 0; background: var(--limmat); transition: width .3s; }
   .fortschritt p { margin: 0; color: var(--leise); }
+  .fortschritt .rest { color: var(--tinte); font-variant-numeric: tabular-nums; margin-bottom: 14px; }
+  .fortschritt.pausiert .balken div { background: var(--leise); }
 
   .transkript-kopf { max-width: 52em; margin-bottom: 24px; }
   .transkript-kopf h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
@@ -187,11 +189,12 @@
   dialog form { padding: 24px 26px 20px; display: grid; gap: 16px; }
   dialog h2 { margin: 0; font-size: 18px; font-weight: 600; }
   .feld { display: grid; gap: 4px; }
-  .feld > span { font-weight: 600; font-size: 14px; }
+  .feld > span, .feld > label > span { font-weight: 600; font-size: 14px; }
   .feld small { color: var(--leise); font-size: 13px; }
-  .feld input[type=text] {
+  .feld input[type=text], .feld select {
     padding: 7px 10px; border: 1px solid var(--linie); border-radius: 6px; background: var(--flaeche);
   }
+  .feld input[hidden] { display: none; }
   .feld-paar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 4px; }
   fieldset legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 4px; }
@@ -268,11 +271,12 @@
         <small>für die Spur aus Teams</small>
       </label>
     </div>
-    <label class="feld"><span>Modell</span>
-      <input type="text" name="modell" list="modell-liste" autocomplete="off" spellcheck="false">
-      <datalist id="modell-liste"></datalist>
+    <div class="feld">
+      <label for="sel-modell"><span>Modell</span></label>
+      <select id="sel-modell" name="modell_auswahl"></select>
+      <input type="text" name="modell_eigen" placeholder="Name, Hugging-Face-ID oder Ordner" autocomplete="off" spellcheck="false" hidden aria-label="Eigenes Modell">
       <small id="modell-status"></small>
-    </label>
+    </div>
     <fieldset>
       <legend>Tempo</legend>
       <label><input type="radio" name="qualitaet" value="genau"> Genau <small>beste Qualität, langsamer</small></label>
@@ -371,6 +375,7 @@ const STATUS_TEXT = {
   fertig: "Transkript bereit",
   ohne: "Noch kein Transkript",
   fehler: "Transkription fehlgeschlagen",
+  pausiert: "Transkription pausiert",
 };
 
 /* ---------- Verlauf ---------- */
@@ -396,7 +401,7 @@ function listeZeichnen() {
     return;
   }
   for (const a of zustand.aufnahmen) {
-    const statusKlasse = { laeuft: "ist-aktiv", wartet: "ist-aktiv", fehler: "ist-fehler", aufnahme: "ist-aufnahme" }[a.status] || "";
+    const statusKlasse = { laeuft: "ist-aktiv", pausiert: "ist-aktiv", wartet: "ist-aktiv", fehler: "ist-fehler", aufnahme: "ist-aufnahme" }[a.status] || "";
     const knopf = element("button", {
         type: "button",
         "aria-current": String(a.id === zustand.auswahl),
@@ -418,7 +423,8 @@ function gewaehlt() {
 
 async function inhaltZeichnen(erzwingen = false) {
   const a = gewaehlt();
-  const schluessel = a ? `${a.id}:${a.status}:${a.fehler || ""}` : "leer";
+  const pause = (zustand.letzterZustand && zustand.letzterZustand.pause) || "";
+  const schluessel = a ? `${a.id}:${a.status}:${a.fehler || ""}:${a.status === "wartet" ? pause : ""}` : "leer";
   if (!erzwingen && schluessel === zustand.angezeigt) return;
   zustand.angezeigt = schluessel;
   const inhalt = $("inhalt");
@@ -444,17 +450,33 @@ async function inhaltZeichnen(erzwingen = false) {
       ));
       return;
     case "wartet":
-      inhalt.replaceChildren(element("div", { class: "leer" },
-        element("h2", {}, "Wartet auf Transkription"),
-        element("p", {}, "Eine andere Aufnahme wird gerade transkribiert. Diese kommt danach an die Reihe."),
-      ));
+      if (pause === "manuell") {
+        inhalt.replaceChildren(element("div", { class: "leer" },
+          element("h2", {}, "Transkriptionen sind pausiert"),
+          element("p", {}, "Diese Aufnahme wird transkribiert, sobald die Transkription fortgesetzt wird."),
+          element("div", { class: "aktionen" },
+            element("button", { type: "button", class: "aktion primaer", onclick: pauseUmschalten }, "Fortsetzen")),
+        ));
+      } else {
+        inhalt.replaceChildren(element("div", { class: "leer" },
+          element("h2", {}, "Wartet auf Transkription"),
+          element("p", {}, pause === "aufnahme"
+            ? "Wird transkribiert, sobald die laufende Aufnahme beendet ist."
+            : "Eine andere Aufnahme wird gerade transkribiert. Diese kommt danach an die Reihe."),
+        ));
+      }
       return;
     case "laeuft":
-      inhalt.replaceChildren(element("div", { class: "fortschritt" },
+    case "pausiert":
+      inhalt.replaceChildren(element("div", { class: "fortschritt", id: "fortschritt" },
         element("h2", {}, "Transkript wird erstellt"),
         element("div", { class: "balken" }, element("div", { id: "fortschritt-balken" })),
         element("p", { id: "fortschritt-text" }, "Wird vorbereitet"),
+        element("p", { class: "rest", id: "fortschritt-rest" }, ""),
+        element("div", { class: "aktionen" },
+          element("button", { type: "button", class: "aktion", id: "btn-pause", onclick: pauseUmschalten }, "Pausieren")),
       ));
+      if (zustand.letzterZustand) fortschrittZeigen(zustand.letzterZustand);
       return;
     case "fehler":
       inhalt.replaceChildren(element("div", { class: "leer" },
@@ -597,6 +619,42 @@ async function aufnahmeUmschalten() {
   }
 }
 
+/* ---------- Fortschritt & Pause ---------- */
+
+function restText(sekunden) {
+  if (sekunden == null) return "Restdauer wird geschätzt";
+  const minuten = Math.round(sekunden / 60);
+  if (sekunden < 60) return "noch weniger als eine Minute";
+  if (minuten < 60) return `noch etwa ${minuten} Min.`;
+  return `noch etwa ${Math.floor(minuten / 60)} Std. ${minuten % 60} Min.`;
+}
+
+function fortschrittZeigen(z) {
+  const box = $("fortschritt");
+  if (!box || !z.job || z.job.id !== zustand.auswahl) return;
+  const prozent = Math.round(z.job.anteil * 100);
+  const pausiert = !!z.pause;
+  box.classList.toggle("pausiert", pausiert);
+  box.querySelector("h2").textContent = pausiert ? "Transkription pausiert" : "Transkript wird erstellt";
+  $("fortschritt-balken").style.width = `${prozent}%`;
+  $("fortschritt-text").textContent = z.pause === "aufnahme"
+    ? "Pausiert, solange eine Aufnahme läuft – so bleibt die CPU frei für den Call."
+    : pausiert ? "Pausiert" : z.job.phase;
+  $("fortschritt-rest").textContent = pausiert ? `${prozent} % erledigt` : `${prozent} % erledigt, ${restText(z.job.rest_s)}`;
+  const knopf = $("btn-pause");
+  knopf.textContent = z.pause === "manuell" ? "Fortsetzen" : "Pausieren";
+  knopf.disabled = z.pause === "aufnahme";
+}
+
+async function pauseUmschalten() {
+  try {
+    const z = zustand.letzterZustand;
+    await rufe(z && z.pause === "manuell" ? "fortsetzen" : "pausieren");
+    await abfragen();
+    await listeLaden();
+  } catch (e) { meldung(e.message); }
+}
+
 /* ---------- Regelmässige Abfrage ---------- */
 
 let zaehler = 0;
@@ -607,11 +665,9 @@ async function abfragen() {
     const z = await rufe("zustand");
     aufnahmeAnzeigen(z.aufnahme);
     if (z.aufnahme_fehler) meldung(z.aufnahme_fehler);
-    if (z.job && z.job.id === zustand.auswahl) {
-      const balken = $("fortschritt-balken"), text = $("fortschritt-text");
-      if (balken) balken.style.width = `${Math.round(z.job.anteil * 100)}%`;
-      if (text) text.textContent = `${z.job.phase} (${Math.round(z.job.anteil * 100)} %)`;
-    }
+    zustand.letzterZustand = z;
+    fortschrittZeigen(z);
+    inhaltZeichnen();
     if (++zaehler % 4 === 0 || z.job) await listeLaden();
   } catch (_) {
     /* einzelne Abfrage verpasst – nächste kommt gleich */
@@ -643,22 +699,44 @@ function namenSetzen() {
   $("name-gegenueber").textContent = zustand.einstellungen.gegenueber;
 }
 
+const EIGENES = "__eigenes__";
+
 function modellStatusZeigen() {
-  const wert = $("form-einstellungen").elements.modell.value.trim();
-  const m = zustand.modelle.find((x) => x.id === wert);
-  $("modell-status").textContent = m ? `${m.beschreibung}. Status: ${m.status}.` : "Eigenes Modell: Name, Hugging-Face-ID oder Ordner.";
+  const form = $("form-einstellungen");
+  const wahl = form.elements.modell_auswahl.value;
+  const eigen = form.elements.modell_eigen;
+  eigen.hidden = wahl !== EIGENES;
+  const m = zustand.modelle.find((x) => x.id === wahl);
+  $("modell-status").textContent = m
+    ? `${m.beschreibung}. Status: ${m.status}.`
+    : "Eingebauter Name (z.B. medium), Hugging-Face-ID oder lokaler Ordner. Hugging-Face-Modelle zuerst im Terminal konvertieren.";
+}
+
+function modellAuswahlFuellen(aktuell) {
+  const select = $("sel-modell");
+  const ids = zustand.modelle.map((m) => m.id);
+  select.replaceChildren(
+    ...zustand.modelle.map((m) => element("option", { value: m.id }, m.id)),
+    element("option", { value: EIGENES }, "Anderes Modell …"),
+  );
+  const form = $("form-einstellungen");
+  if (ids.includes(aktuell)) {
+    select.value = aktuell;
+    form.elements.modell_eigen.value = "";
+  } else {
+    select.value = EIGENES;
+    form.elements.modell_eigen.value = aktuell || "";
+  }
 }
 
 async function einstellungenOeffnen() {
   const form = $("form-einstellungen");
   const e = zustand.einstellungen;
-  for (const feld of ["name", "gegenueber", "modell", "stichworte", "aufnahme_ordner"]) form.elements[feld].value = e[feld] || "";
+  for (const feld of ["name", "gegenueber", "stichworte", "aufnahme_ordner"]) form.elements[feld].value = e[feld] || "";
   form.elements.qualitaet.value = e.qualitaet || "genau";
   $("ordner-hinweis").textContent = `Leer lassen für den Standard. Aktuell: ${e.ordner}`;
-  try {
-    zustand.modelle = await rufe("modelle");
-    $("modell-liste").replaceChildren(...zustand.modelle.map((m) => element("option", { value: m.id })));
-  } catch (_) { zustand.modelle = []; }
+  try { zustand.modelle = await rufe("modelle"); } catch (_) { zustand.modelle = []; }
+  modellAuswahlFuellen(e.modell);
   modellStatusZeigen();
   $("dlg-einstellungen").showModal();
 }
@@ -667,7 +745,10 @@ async function einstellungenSpeichern(ereignis) {
   ereignis.preventDefault();
   const form = $("form-einstellungen");
   const daten = {};
-  for (const feld of ["name", "gegenueber", "modell", "stichworte", "aufnahme_ordner", "qualitaet"]) daten[feld] = form.elements[feld].value;
+  for (const feld of ["name", "gegenueber", "stichworte", "aufnahme_ordner", "qualitaet"]) daten[feld] = form.elements[feld].value;
+  const wahl = form.elements.modell_auswahl.value;
+  daten.modell = wahl === EIGENES ? form.elements.modell_eigen.value.trim() : wahl;
+  if (!daten.modell) { $("modell-status").textContent = "Bitte ein Modell angeben."; return; }
   try {
     zustand.einstellungen = await rufe("einstellungen_speichern", daten);
     namenSetzen();
@@ -688,7 +769,7 @@ async function starten() {
   $("btn-ordner").addEventListener("click", () => rufe("ordner_oeffnen", "").catch((e) => meldung(e.message)));
   $("btn-abbrechen").addEventListener("click", () => $("dlg-einstellungen").close());
   $("form-einstellungen").addEventListener("submit", einstellungenSpeichern);
-  $("form-einstellungen").elements.modell.addEventListener("input", modellStatusZeigen);
+  $("sel-modell").addEventListener("change", modellStatusZeigen);
 
   try {
     zustand.einstellungen = await rufe("einstellungen");

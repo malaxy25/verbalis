@@ -147,3 +147,70 @@ def test_einstellungen_speichern_und_laden():
     e = Einstellungen.laden()
     assert e.name == "Andrea F." and e.beam_size == 1
     assert Einstellungen.aus_dict({"qualitaet": "turbo", "name": ""}).qualitaet == "genau"
+
+
+class LangsamerTranscriber(FakeTranscriber):
+    """Meldet 10 Abschnitte à 0.05 s – genug Zeit zum Pausieren."""
+    pause = 0.05
+
+    def transkribiere(self, audio, sprache="de", fortschritt=None):
+        for i in range(1, 11):
+            time.sleep(self.pause)
+            if fortschritt:
+                fortschritt(i / 10, 1.0)
+        return [Segment(0.0, 1.0, "fertig")]
+
+
+def test_pausieren_und_fortsetzen():
+    d = dienst(transcriber_fabrik=LangsamerTranscriber)
+    aid = d.aufnahme_starten(einwilligung=True)
+    d.aufnahme_stoppen()
+    assert warten_bis(lambda: (d.zustand()["job"] or {}).get("anteil", 0) > 0)
+    d.pausieren()
+    time.sleep(0.2)
+    stand = d.zustand()["job"]["anteil"]
+    time.sleep(0.4)
+    z = d.zustand()
+    assert z["pause"] == "manuell"
+    assert z["job"]["anteil"] == stand            # steht still
+    assert d.aufnahmen()[0]["status"] == "pausiert"
+    d.fortsetzen()
+    assert warten_bis(lambda: d.aufnahmen()[0]["status"] == "fertig")
+    # Pause zählt nicht zur Rechenzeit (10 × 0.05 s pro Spur ≈ 1 s, nicht 1.6 s)
+    kopf = d.transkript(aid)["kopf"]["Rechenzeit"]
+    assert kopf.startswith("0.0 min")
+
+
+class SehrLangsamerTranscriber(LangsamerTranscriber):
+    pause = 0.2  # 2 × 2 s – läuft sicher noch, wenn die zweite Aufnahme startet
+
+
+def test_automatische_pause_waehrend_aufnahme():
+    d = dienst(transcriber_fabrik=SehrLangsamerTranscriber)
+    erste = d.aufnahme_starten(einwilligung=True)
+    d.aufnahme_stoppen()
+    assert warten_bis(lambda: d.zustand()["job"] is not None)
+    time.sleep(1.1)
+    d.aufnahme_starten(einwilligung=True)          # neue Aufnahme → Transkription hält an
+    assert warten_bis(lambda: d.zustand()["pause"] == "aufnahme")
+    time.sleep(0.2)
+    stand = d.zustand()["job"]["anteil"]
+    time.sleep(0.3)
+    assert d.zustand()["job"]["anteil"] == stand
+    d.aufnahme_stoppen()
+    assert warten_bis(lambda: all(a["status"] == "fertig" for a in d.aufnahmen()), timeout=20)
+    assert d.transkript(erste) is not None
+
+
+def test_restdauer_aus_statistik_und_fortschritt():
+    d = dienst()
+    job = {"start": time.monotonic() - 20, "pausiert_s": 0.0, "pause_seit": None,
+           "anteil": 0.5, "dauer_s": 60, "faktor": None}
+    assert d._restdauer(job) == pytest.approx(20, abs=0.5)      # 20 s für 50 % → noch 20 s
+    job.update(anteil=0.02, start=time.monotonic() - 5, faktor=1.5)
+    assert d._restdauer(job) == pytest.approx(85, abs=0.5)      # 1.5 × 60 s − 5 s
+    job.update(faktor=None)
+    assert d._restdauer(job) is None                            # noch keine Grundlage
+    d._faktor_merken("m|beam5", 1.0)
+    d._faktor_merken("m|beam5", 2.0)
+    assert d._faktor("m|beam5") == 1.5
