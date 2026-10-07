@@ -1,6 +1,6 @@
 [project]
 name = "mitschrift"
-version = "0.2.0"
+version = "0.2.1"
 description = "Lokale Aufnahme und Transkription von Gesprächen (Mikrofon + Systemaudio), Deutsch und Schweizerdeutsch"
 readme = "README.md"
 requires-python = ">=3.11"

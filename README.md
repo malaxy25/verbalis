@@ -74,6 +74,16 @@ mitschrift modell-konvertieren nizarmichaud/whisper-large-v3-turbo-swissgerman
 mitschrift vergleichen aufnahmen/2026-10-07_143000   # erste 3 min, alle empfohlenen
 ```
 
+Mit Referenztext berechnet `vergleichen` zusätzlich die Wortfehlerquote (WER):
+
+```bash
+mitschrift vergleichen aufnahmen/… --referenz testdaten/referenz_hochdeutsch.txt
+```
+
+Der passende Vorlesetext liegt in `testdaten/vorlesetext_zuerich.md`. Weil die
+Modelle Schweizerdeutsch übersetzen, zählen auch korrekte Umformulierungen als
+Fehler – die WER eignet sich zum Vergleichen der Modelle, nicht als absolute Note.
+
 `vergleich.md` zeigt Lade- und Rechenzeit pro Modell, daneben liegt pro Modell
 ein `vergleich_<modell>.md` zum Lesen. `--bis 0` vergleicht die ganze Aufnahme.
 

@@ -3,7 +3,7 @@
     mitschrift geraete
     mitschrift aufnehmen [--mikrofon X] [--lautsprecher Y] [--dauer SEK]
     mitschrift transkribieren ORDNER [--modell M] [--name Andrea]
-    mitschrift vergleichen ORDNER [--modelle A B C] [--bis 180]
+    mitschrift vergleichen ORDNER [--modelle A B C] [--bis 180] [--referenz DATEI]
     mitschrift modelle
     mitschrift modell-konvertieren HF_ID
 """
@@ -185,9 +185,12 @@ def cmd_vergleichen(args) -> int:
     from .transcription.modelle import ModellFehler, slug
     from .transkript import speichern
 
+    from .auswertung import fehlerquote
+
     ordner = Path(args.ordner)
     _ordner_pruefen(ordner)
     namen = {"ich": args.name, "gegenueber": args.gegenueber}
+    referenz = Path(args.referenz).read_text(encoding="utf-8") if args.referenz else None
     zeilen = []
 
     for modell in args.modelle:
@@ -197,16 +200,21 @@ def cmd_vergleichen(args) -> int:
             tr = FasterWhisperTranscriber(modell, geraet=args.geraet, stichworte=args.stichworte)
         except ModellFehler as e:
             print(e)
-            zeilen.append(f"| {modell} | – | – | – | Fehler beim Laden |")
+            zeilen.append(f"| {modell} | – | – | – | – | Fehler beim Laden |")
             continue
         ladezeit = time.monotonic() - t
         absaetze, rechenzeit, dauer = _transkribiere_ordner(ordner, tr, namen, args.bis)
         datei = f"vergleich_{slug(modell)}"
         speichern(ordner, datei, absaetze, f"Vergleich: {modell}", _kopf(ordner, modell, rechenzeit, dauer))
         woerter = sum(len(a.text.split()) for a in absaetze)
+        wer = "–"
+        if referenz is not None:
+            quote = fehlerquote(referenz, " ".join(a.text for a in absaetze))
+            wer = f"{quote.wer:.1%}"
+            print(f"  Fehlerquote: {quote}")
         zeilen.append(
             f"| {modell} | {ladezeit:.0f} s | {rechenzeit:.0f} s | {rechenzeit / max(dauer, 1e-9):.2f}× "
-            f"| [{datei}.md]({datei}.md), {woerter} Wörter |"
+            f"| {wer} | [{datei}.md]({datei}.md), {woerter} Wörter |"
         )
         del tr  # Speicher freigeben, bevor das nächste Modell lädt
 
@@ -214,7 +222,9 @@ def cmd_vergleichen(args) -> int:
     bericht.write_text(
         "# Modellvergleich\n\n"
         f"Ausschnitt: {'erste ' + str(int(args.bis)) + ' s' if args.bis else 'ganze Aufnahme'}\n\n"
-        "| Modell | Laden | Rechnen | Echtzeitfaktor | Ergebnis |\n|---|---|---|---|---|\n"
+        + (f"Referenz: {args.referenz} – WER = Wortfehlerquote, tiefer ist besser. "
+           "Übersetzungsvarianten zählen als Fehler, also nur relativ vergleichen.\n\n" if referenz else "")
+        + "| Modell | Laden | Rechnen | Echtzeitfaktor | WER | Ergebnis |\n|---|---|---|---|---|---|\n"
         + "\n".join(zeilen) + "\n",
         encoding="utf-8",
     )
@@ -292,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("vergleichen", help="Mehrere Modelle auf derselben Aufnahme vergleichen")
     transkriptions_optionen(p)
     p.add_argument("--modelle", nargs="+", default=[m for m, _ in EMPFOHLEN], help="Zu vergleichende Modelle")
+    p.add_argument("--referenz", help="Referenztext für die Fehlerquote, z.B. testdaten/referenz_hochdeutsch.txt")
     p.set_defaults(func=cmd_vergleichen, bis=180)  # Standard: erste 3 Minuten, 0 = alles
 
     sub.add_parser("modelle", help="Empfohlene und konvertierte Modelle anzeigen").set_defaults(func=cmd_modelle)

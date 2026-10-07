@@ -62,3 +62,13 @@ def test_lade_audio_resampling(tmp_path):
     assert faster.lade_audio(tmp_path / "x.wav", bis_s=1).shape == (16000,)
     # Ton bleibt erhalten (Amplitude ~0.5)
     assert 0.45 < np.abs(audio[1000:-1000]).max() < 0.55
+
+
+def test_vergleichen_mit_referenz(tmp_path, monkeypatch):
+    monkeypatch.setattr(faster, "FasterWhisperTranscriber", FakeTranscriber)
+    ordner = _aufnahme(tmp_path)
+    ref = tmp_path / "ref.txt"
+    ref.write_text("Text von large-v3-turbo Text von large-v3-turbo", encoding="utf-8")
+    assert cli.main(["vergleichen", str(ordner), "--modelle", "large-v3-turbo", "--referenz", str(ref)]) == 0
+    bericht = (ordner / "vergleich.md").read_text(encoding="utf-8")
+    assert "| 0.0% |" in bericht
