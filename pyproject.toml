@@ -1,6 +1,6 @@
 [project]
 name = "mitschrift"
-version = "0.2.1"
+version = "0.3.0"
 description = "Lokale Aufnahme und Transkription von Gesprächen (Mikrofon + Systemaudio), Deutsch und Schweizerdeutsch"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -10,6 +10,7 @@ dependencies = [
     "soundfile>=0.12",
     "faster-whisper>=1.1",
     "scipy>=1.11",
+    "pywebview>=5",
 ]
 
 [project.optional-dependencies]

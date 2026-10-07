@@ -6,13 +6,18 @@ Lokale App, die Gespräche aufnimmt (eigenes Mikrofon **und** Systemaudio, also
 alle Teilnehmenden eines Teams-Calls) und danach ein Transkript erstellt –
 Hochdeutsch und Schweizerdeutsch. Alles läuft lokal, nichts verlässt den Rechner.
 
-**Stand: Schritt 2 – Aufnahme und Transkription** per Kommandozeile. Noch ohne Oberfläche und Sprechererkennung.
+**Stand 0.3.0:** Oberfläche für Aufnahme, Transkription und Verlauf. Sprechererkennung folgt.
+
+```bash
+mitschrift app
+```
 
 ## Architektur (Ziel)
 
 ```
-Frontend (HTML/JS in pywebview-Fenster)
-        │  lokale API (FastAPI)
+Oberfläche (HTML/JS in pywebview-Fenster)      app.py, ui/index.html   ✓
+        │  JavaScript ruft Python direkt auf
+Dienst: Aufnahme, Warteschlange, Verlauf        dienst.py               ✓
 Backend (Python)
  ├─ audio/          Aufnahme: Mikrofon + Loopback als zwei Spuren   ✓
  ├─ transcription/  austauschbare Backends (faster-whisper)          ✓
@@ -39,7 +44,25 @@ pip install -e ".[dev]"
 Ubuntu: Es braucht PipeWire mit `pipewire-pulse` (Standard bei Ubuntu) bzw.
 `libpulse0`. Windows: nichts Zusätzliches.
 
-## Bedienung
+## Oberfläche
+
+`mitschrift app` öffnet das Fenster:
+
+- **Aufnahme:** Mikrofon und Tonausgabe von Teams wählen, Zustimmung aller
+  Teilnehmenden bestätigen, mit dem roten Knopf starten und beenden.
+- **Transkript:** entsteht nach dem Beenden automatisch im Hintergrund.
+  Fortschritt in der Liste links. Das Modell bleibt geladen, die zweite
+  Transkription startet deshalb schneller.
+- **Einstellungen:** dein Name, Bezeichnung der anderen, Modell, Tempo
+  (genau/schnell), Stichworte und Aufnahmeordner.
+
+Aufnahmen landen standardmässig in `~/.mitschrift/aufnahmen` (änderbar in den
+Einstellungen) – App und Kommandozeile nutzen denselben Ordner.
+
+Unter Ubuntu braucht pywebview zusätzlich GTK oder Qt, z.B.
+`sudo apt install python3-gi gir1.2-webkit2-4.1` oder `pip install pywebview[qt]`.
+
+## Kommandozeile
 
 ```bash
 mitschrift geraete                       # Mikrofone und Lautsprecher anzeigen
@@ -48,7 +71,7 @@ mitschrift aufnehmen --lautsprecher jabra --mikrofon jabra
 mitschrift aufnehmen --dauer 30          # Testaufnahme 30 s
 ```
 
-Ergebnis in `aufnahmen/JJJJ-MM-TT_HHMMSS/`: `ich.wav`, `gegenueber.wav`, `meta.json`.
+Ergebnis in `~/.mitschrift/aufnahmen/JJJJ-MM-TT_HHMMSS/`: `ich.wav`, `gegenueber.wav`, `meta.json`.
 
 **Wichtig:** Als `--lautsprecher` das Gerät wählen, auf dem Teams den Ton
 ausgibt (Teams → Einstellungen → Geräte). Ist das nicht das Standardgerät,
@@ -62,7 +85,8 @@ mitschrift transkribieren … --modell large-v3 --stichworte "tocco, Höngg"
 ```
 
 Ergebnis: `transkript.md` (lesbar) und `transkript.json` (für die spätere App)
-im Aufnahmeordner. Standardmodell ist `large-v3-turbo`, gerechnet wird auf der CPU.
+im Aufnahmeordner. Standardmodell ist das aus den Einstellungen (Flix), gerechnet wird auf der CPU.
+`--beam 1` ist etwa doppelt so schnell, aber etwas ungenauer.
 
 ## Modelle vergleichen
 
@@ -70,7 +94,6 @@ im Aufnahmeordner. Standardmodell ist `large-v3-turbo`, gerechnet wird auf der C
 mitschrift modelle                                   # Übersicht mit Status
 pip install -e ".[konvertieren]"                     # einmalig, gross (torch)
 mitschrift modell-konvertieren Flix-AI/flix-swissgerman-full
-mitschrift modell-konvertieren nizarmichaud/whisper-large-v3-turbo-swissgerman
 mitschrift vergleichen aufnahmen/2026-10-07_143000   # erste 3 min, alle empfohlenen
 ```
 

@@ -34,13 +34,16 @@ class GeraeteAuswahl:
 
 def _waehle(kandidaten: list, auswahl: str | None, standard):
     """Gerät per Index ("2") oder Namensteil ("jabra") wählen, sonst Standard."""
-    if auswahl is None:
+    if not auswahl:
         return standard
     if auswahl.isdigit():
         index = int(auswahl)
         if not 0 <= index < len(kandidaten):
             raise ValueError(f"Kein Gerät mit Index {index}.")
         return kandidaten[index]
+    exakt = [k for k in kandidaten if k.name == auswahl]
+    if exakt:
+        return exakt[0]
     treffer = [k for k in kandidaten if auswahl.lower() in k.name.lower()]
     if not treffer:
         raise ValueError(f"Kein Gerät gefunden, das '{auswahl}' im Namen enthält.")
@@ -55,6 +58,17 @@ def loopback_fuer(sc, lautsprecher):
             return mic
     # Rückfall: soundcard sucht unscharf nach dem Namen.
     return sc.get_microphone(id=str(lautsprecher.name), include_loopback=True)
+
+
+def liste() -> dict:
+    """Gerätenamen für die Oberfläche."""
+    sc = soundcard_modul()
+    return {
+        "mikrofone": [m.name for m in sc.all_microphones()],
+        "lautsprecher": [s.name for s in sc.all_speakers()],
+        "standard_mikrofon": sc.default_microphone().name,
+        "standard_lautsprecher": sc.default_speaker().name,
+    }
 
 
 def ermittle(mikrofon: str | None = None, lautsprecher: str | None = None) -> GeraeteAuswahl:

@@ -46,11 +46,11 @@ def als_markdown(absaetze: list[Segment], titel: str, kopf: dict[str, str]) -> s
     return "\n".join(zeilen)
 
 
-def speichern(ordner: Path, dateiname: str, absaetze: list[Segment], titel: str, kopf: dict[str, str]) -> Path:
+def speichern(ordner: Path, dateiname: str, absaetze: list[Segment], titel: str, kopf: dict[str, str],
+              spuren: dict[str, str] | None = None) -> Path:
+    """spuren: Zuordnung Spur → Anzeigename, z.B. {"ich": "Andrea", "gegenueber": "Gegenüber"}."""
     md = ordner / f"{dateiname}.md"
     md.write_text(als_markdown(absaetze, titel, kopf), encoding="utf-8")
-    (ordner / f"{dateiname}.json").write_text(
-        json.dumps({"kopf": kopf, "segmente": [asdict(a) for a in absaetze]}, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    daten = {"titel": titel, "kopf": kopf, "spuren": spuren or {}, "segmente": [asdict(a) for a in absaetze]}
+    (ordner / f"{dateiname}.json").write_text(json.dumps(daten, indent=2, ensure_ascii=False), encoding="utf-8")
     return md

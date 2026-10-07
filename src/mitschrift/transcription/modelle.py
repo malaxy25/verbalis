@@ -17,11 +17,18 @@ import shutil
 from pathlib import Path
 
 EMPFOHLEN: list[tuple[str, str]] = [
-    ("large-v3-turbo", "schnell, gute Basis; Schweizerdeutsch → Hochdeutsch brauchbar"),
-    ("large-v3", "genauer, aber etwa 2–3× langsamer als turbo"),
-    ("Flix-AI/flix-swissgerman-full", "Schweizerdeutsch-Fine-Tune (large-v3), Apache 2.0 – konvertieren nötig"),
-    ("nizarmichaud/whisper-large-v3-turbo-swissgerman", "Schweizerdeutsch-Fine-Tune (turbo) – konvertieren nötig"),
+    ("Flix-AI/flix-swissgerman-full", "Schweizerdeutsch-Fine-Tune (large-v3), bestes Ergebnis im Test – konvertieren nötig"),
+    ("large-v3", "Original von OpenAI, fast gleich gut, etwas schneller"),
+    ("large-v3-turbo", "deutlich schneller, aber schwächer bei Dialekt"),
 ]
+STANDARD_MODELL = EMPFOHLEN[0][0]
+
+GEWICHTSDATEIEN = (
+    "model.safetensors",
+    "model.safetensors.index.json",
+    "pytorch_model.bin",
+    "pytorch_model.bin.index.json",
+)
 
 ZUSATZDATEIEN = ("tokenizer.json", "preprocessor_config.json")
 
@@ -86,6 +93,25 @@ def _basismodell_fuer(num_mel_bins: int) -> str:
     return "openai/whisper-large-v3" if num_mel_bins == 128 else "openai/whisper-large-v2"
 
 
+def pruefe_repo(modell_id: str, dateien: set[str]) -> None:
+    """Vor dem langen Download prüfen, ob das Repo überhaupt ein ganzes Modell enthält."""
+    if any(f in dateien for f in GEWICHTSDATEIEN) and "config.json" in dateien:
+        return
+    if "adapter_config.json" in dateien:
+        raise ModellFehler(
+            f"'{modell_id}' ist nur ein LoRA-Adapter, kein vollständiges Modell. "
+            "Bitte die vollständige Variante verwenden (z.B. Flix-AI/flix-swissgerman-full statt …-lora)."
+        )
+    if "model.bin" in dateien:
+        raise ModellFehler(
+            f"'{modell_id}' ist bereits im CTranslate2-Format und kann direkt mit --modell genutzt werden."
+        )
+    raise ModellFehler(
+        f"'{modell_id}' enthält keine Modellgewichte. Möglicherweise wurde das Modell vom Autor "
+        "zurückgezogen – auf der Hugging-Face-Seite nachsehen."
+    )
+
+
 def konvertieren(modell_id: str, quantisierung: str = "float16", erzwingen: bool = False) -> Path:
     """Hugging-Face-Whisper-Modell ins CTranslate2-Format umwandeln.
 
@@ -105,13 +131,7 @@ def konvertieren(modell_id: str, quantisierung: str = "float16", erzwingen: bool
         return ziel
 
     dateien = set(list_repo_files(modell_id))
-    if "config.json" not in dateien:
-        if "adapter_config.json" in dateien:
-            raise ModellFehler(
-                f"'{modell_id}' ist nur ein LoRA-Adapter. Bitte die vollständige Variante verwenden "
-                "(z.B. Flix-AI/flix-swissgerman-full statt …-lora)."
-            )
-        raise ModellFehler(f"'{modell_id}' enthält keine config.json – kein Transformers-Modell?")
+    pruefe_repo(modell_id, dateien)
 
     quell_config = json.loads(Path(hf_hub_download(modell_id, "config.json")).read_text())
     vorhanden = [f for f in ZUSATZDATEIEN if f in dateien]

@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mitschrift</title>
+<style>
+  :root {
+    --hintergrund: #EEF1F4;
+    --flaeche: #FFFFFF;
+    --flaeche-2: #F6F8FA;
+    --tinte: #1C2733;
+    --leise: #5F6B78;
+    --linie: #D5DBE1;
+    --rot: #C8102E;
+    --rot-hell: #FBE7EA;
+    --limmat: #2F6F8F;
+    --limmat-hell: #E3EEF3;
+    --fokus: #2F6F8F;
+    --schrift-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, "Ubuntu", "Cantarell", sans-serif;
+    --schrift-text: "Iowan Old Style", "Charter", "Cambria", "Georgia", serif;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --hintergrund: #151B22;
+      --flaeche: #1D252E;
+      --flaeche-2: #232C36;
+      --tinte: #E6EBF0;
+      --leise: #9AA6B2;
+      --linie: #2E3945;
+      --rot: #E5484D;
+      --rot-hell: #3A1F24;
+      --limmat: #6BB0CF;
+      --limmat-hell: #1F3440;
+      --fokus: #6BB0CF;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--schrift-ui);
+    font-size: 15px;
+    line-height: 1.45;
+    color: var(--tinte);
+    background: var(--hintergrund);
+    display: grid;
+    grid-template-columns: 280px 1fr;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--fokus); outline-offset: 2px; }
+
+  /* ---------- Verlauf ---------- */
+  .verlauf {
+    display: flex; flex-direction: column; min-height: 0;
+    border-right: 1px solid var(--linie);
+  }
+  .verlauf h1 {
+    font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
+    margin: 0; padding: 20px 20px 12px;
+  }
+  .liste { list-style: none; margin: 0; padding: 0 10px; overflow-y: auto; flex: 1; }
+  .liste button {
+    width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+    padding: 10px 12px; border-radius: 8px;
+  }
+  .liste button:hover { background: var(--flaeche-2); }
+  .liste button[aria-current="true"] { background: var(--flaeche); box-shadow: inset 3px 0 0 var(--tinte); }
+  .liste .datum { font-weight: 600; }
+  .liste .dauer { color: var(--leise); font-variant-numeric: tabular-nums; }
+  .liste .status { grid-column: 1 / -1; font-size: 13px; color: var(--leise); }
+  .liste .status.ist-aktiv { color: var(--limmat); }
+  .liste .status.ist-fehler, .liste .status.ist-aufnahme { color: var(--rot); }
+  .liste-leer { color: var(--leise); padding: 12px 20px; }
+  .verlauf footer { padding: 12px 10px 16px; display: grid; gap: 2px; }
+  .verlauf footer button {
+    border: 0; background: none; text-align: left; cursor: pointer;
+    padding: 8px 12px; border-radius: 8px; color: var(--leise);
+  }
+  .verlauf footer button:hover { background: var(--flaeche-2); color: var(--tinte); }
+  .version { font-size: 12px; color: var(--leise); padding: 4px 12px 0; }
+
+  /* ---------- Hauptbereich ---------- */
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  /* Aufnahme: das markante Element */
+  .aufnahme {
+    background: var(--flaeche);
+    border-bottom: 1px solid var(--linie);
+    padding: 22px 32px 18px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "knopf  spuren"
+      "knopf  geraete"
+      ".      zustimmung";
+    column-gap: 28px; row-gap: 14px;
+    align-items: center;
+  }
+  .knopf {
+    grid-area: knopf; align-self: start;
+    width: 76px; height: 76px; border-radius: 50%;
+    border: 2px solid var(--linie); background: var(--flaeche);
+    display: grid; place-items: center; cursor: pointer;
+  }
+  .knopf .symbol { width: 30px; height: 30px; border-radius: 50%; background: var(--rot); transition: border-radius .15s, width .15s, height .15s; }
+  .knopf:disabled { cursor: not-allowed; }
+  .knopf:disabled .symbol { background: var(--linie); }
+  .knopf:not(:disabled):hover { border-color: var(--rot); }
+  .laeuft .knopf { border-color: var(--rot); background: var(--rot-hell); }
+  .laeuft .knopf .symbol { width: 24px; height: 24px; border-radius: 4px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .laeuft .knopf { animation: atmen 2s ease-in-out infinite; }
+    @keyframes atmen { 50% { box-shadow: 0 0 0 8px var(--rot-hell); } }
+  }
+
+  .spuren { grid-area: spuren; display: grid; grid-template-columns: auto 1fr auto; gap: 10px 16px; align-items: center; }
+  .zeit {
+    grid-column: 1 / -1;
+    font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums;
+    line-height: 1; letter-spacing: -0.01em; color: var(--leise);
+  }
+  .laeuft .zeit { color: var(--rot); }
+  .spur-name { font-weight: 600; min-width: 7em; }
+  .spur-name.gegenueber { color: var(--limmat); }
+  .bahn { height: 10px; border-radius: 5px; background: var(--flaeche-2); border: 1px solid var(--linie); overflow: hidden; }
+  .bahn .fuellung { height: 100%; width: 0; background: var(--tinte); transition: width .12s linear; }
+  .bahn.gegenueber .fuellung { background: var(--limmat); }
+  .bahn .fuellung.laut { background: var(--rot); }
+  .db { font-size: 13px; color: var(--leise); font-variant-numeric: tabular-nums; min-width: 5em; text-align: right; }
+
+  .geraete { grid-area: geraete; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  .geraete label { display: grid; gap: 2px; font-size: 13px; color: var(--leise); }
+  .geraete select {
+    max-width: 320px; padding: 5px 8px; border-radius: 6px;
+    border: 1px solid var(--linie); background: var(--flaeche); font-size: 14px;
+  }
+  .zustimmung { grid-area: zustimmung; display: flex; gap: 10px; align-items: flex-start; }
+  .zustimmung input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--tinte); }
+  .zustimmung .hinweis { display: block; font-size: 13px; color: var(--leise); }
+  .meldung { grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--rot-hell); color: var(--tinte); }
+  .meldung[hidden] { display: none; }
+
+  /* Inhalt */
+  .inhalt { flex: 1; overflow-y: auto; padding: 28px 32px 48px; }
+  .leer { max-width: 34em; color: var(--leise); }
+  .leer h2, .fortschritt h2 { color: var(--tinte); font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+  .leer p { margin: 0 0 14px; }
+
+  .aktion {
+    border: 1px solid var(--linie); background: var(--flaeche);
+    padding: 7px 14px; border-radius: 8px; cursor: pointer;
+  }
+  .aktion:hover { border-color: var(--tinte); }
+  .aktion.primaer { background: var(--tinte); color: var(--flaeche); border-color: var(--tinte); }
+
+  .fortschritt { max-width: 34em; }
+  .fortschritt .balken { height: 6px; border-radius: 3px; background: var(--linie); overflow: hidden; margin: 12px 0 8px; }
+  .fortschritt .balken div { height: 100%; width: 0; background: var(--limmat); transition: width .3s; }
+  .fortschritt p { margin: 0; color: var(--leise); }
+
+  .transkript-kopf { max-width: 52em; margin-bottom: 24px; }
+  .transkript-kopf h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .transkript-kopf dl { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0 0 16px; font-size: 13px; }
+  .transkript-kopf dt { color: var(--leise); display: inline; }
+  .transkript-kopf dd { display: inline; margin: 0 0 0 6px; }
+  .aktionen { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .protokoll { max-width: 52em; }
+  .absatz {
+    display: grid; grid-template-columns: 9em 1fr; gap: 0 20px;
+    padding: 10px 0; border-top: 1px solid var(--linie);
+  }
+  .absatz .wer { font-weight: 600; font-size: 14px; }
+  .absatz.gegenueber .wer { color: var(--limmat); }
+  .absatz time { display: block; font-size: 13px; color: var(--leise); font-variant-numeric: tabular-nums; }
+  .absatz .text { font-family: var(--schrift-text); font-size: 17px; line-height: 1.6; max-width: 38em; margin: 0; }
+
+  /* Einstellungen */
+  dialog {
+    width: min(560px, 92vw); border: 1px solid var(--linie); border-radius: 12px;
+    padding: 0; background: var(--flaeche); color: var(--tinte);
+  }
+  dialog::backdrop { background: rgb(21 27 34 / 0.45); }
+  dialog form { padding: 24px 26px 20px; display: grid; gap: 16px; }
+  dialog h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .feld { display: grid; gap: 4px; }
+  .feld > span { font-weight: 600; font-size: 14px; }
+  .feld small { color: var(--leise); font-size: 13px; }
+  .feld input[type=text] {
+    padding: 7px 10px; border: 1px solid var(--linie); border-radius: 6px; background: var(--flaeche);
+  }
+  .feld-paar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 4px; }
+  fieldset legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 4px; }
+  fieldset label { display: flex; gap: 8px; align-items: baseline; }
+  .dialog-knoepfe { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .verlauf { border-right: 0; border-bottom: 1px solid var(--linie); max-height: 30vh; }
+    .absatz { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="verlauf" aria-label="Aufnahmen">
+  <h1>Mitschrift</h1>
+  <ol class="liste" id="liste"></ol>
+  <footer>
+    <button type="button" id="btn-einstellungen">Einstellungen</button>
+    <button type="button" id="btn-ordner">Aufnahmeordner öffnen</button>
+    <div class="version" id="version"></div>
+  </footer>
+</aside>
+
+<main>
+  <section class="aufnahme" id="aufnahme" aria-label="Aufnahme">
+    <button type="button" class="knopf" id="btn-aufnahme" aria-label="Aufnahme starten" disabled>
+      <span class="symbol"></span>
+    </button>
+
+    <div class="spuren">
+      <div class="zeit" id="zeit" aria-live="off">00:00</div>
+      <span class="spur-name ich" id="name-ich">Ich</span>
+      <div class="bahn ich"><div class="fuellung" id="pegel-ich"></div></div>
+      <span class="db" id="db-ich"></span>
+      <span class="spur-name gegenueber" id="name-gegenueber">Gegenüber</span>
+      <div class="bahn gegenueber"><div class="fuellung" id="pegel-gegenueber"></div></div>
+      <span class="db" id="db-gegenueber"></span>
+    </div>
+
+    <div class="geraete">
+      <label>Mikrofon
+        <select id="sel-mikrofon"></select>
+      </label>
+      <label>Ton der anderen kommt über
+        <select id="sel-lautsprecher"></select>
+      </label>
+    </div>
+
+    <label class="zustimmung">
+      <input type="checkbox" id="chk-zustimmung">
+      <span>Alle Teilnehmenden haben der Aufnahme zugestimmt
+        <span class="hinweis">Ohne Zustimmung ist das Aufnehmen von Gesprächen in der Schweiz strafbar.</span>
+      </span>
+    </label>
+
+    <p class="meldung" id="meldung" role="alert" hidden></p>
+  </section>
+
+  <section class="inhalt" id="inhalt" aria-live="polite"></section>
+</main>
+
+<dialog id="dlg-einstellungen">
+  <form method="dialog" id="form-einstellungen">
+    <h2>Einstellungen</h2>
+    <div class="feld-paar">
+      <label class="feld"><span>Dein Name</span>
+        <input type="text" name="name" autocomplete="off">
+        <small>für die Mikrofonspur</small>
+      </label>
+      <label class="feld"><span>Die anderen</span>
+        <input type="text" name="gegenueber" autocomplete="off">
+        <small>für die Spur aus Teams</small>
+      </label>
+    </div>
+    <label class="feld"><span>Modell</span>
+      <input type="text" name="modell" list="modell-liste" autocomplete="off" spellcheck="false">
+      <datalist id="modell-liste"></datalist>
+      <small id="modell-status"></small>
+    </label>
+    <fieldset>
+      <legend>Tempo</legend>
+      <label><input type="radio" name="qualitaet" value="genau"> Genau <small>beste Qualität, langsamer</small></label>
+      <label><input type="radio" name="qualitaet" value="schnell"> Schnell <small>etwa doppelt so schnell, etwas mehr Fehler</small></label>
+    </fieldset>
+    <label class="feld"><span>Stichworte</span>
+      <input type="text" name="stichworte" autocomplete="off">
+      <small>Namen und Fachbegriffe, mit Komma getrennt, z.B. tocco, Höngg</small>
+    </label>
+    <label class="feld"><span>Aufnahmeordner</span>
+      <input type="text" name="aufnahme_ordner" autocomplete="off" spellcheck="false">
+      <small id="ordner-hinweis"></small>
+    </label>
+    <div class="dialog-knoepfe">
+      <button type="button" class="aktion" id="btn-abbrechen">Abbrechen</button>
+      <button type="submit" class="aktion primaer">Einstellungen speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const zustand = {
+  auswahl: null,        // ID der gewählten Aufnahme
+  aufnahmen: [],
+  listeSignatur: "",
+  einstellungen: {},
+  modelle: [],
+  laeuft: false,
+  angezeigt: "",        // was im Inhaltsbereich gerade steht (id + status)
+  beschaeftigt: false,
+};
+
+async function rufe(name, ...args) {
+  const r = await window.pywebview.api[name](...args);
+  if (!r.ok) throw new Error(r.fehler);
+  return r.daten;
+}
+
+function element(tag, eigenschaften = {}, ...kinder) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(eigenschaften)) {
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v);
+  }
+  for (const kind of kinder) if (kind != null) el.append(kind);
+  return el;
+}
+
+function meldung(text) {
+  const m = $("meldung");
+  m.textContent = text || "";
+  m.hidden = !text;
+}
+
+/* ---------- Formatierung ---------- */
+
+function zeitText(sekunden) {
+  sekunden = Math.max(0, Math.floor(sekunden || 0));
+  const h = Math.floor(sekunden / 3600), m = Math.floor((sekunden % 3600) / 60), s = sekunden % 60;
+  const zwei = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${zwei(m)}:${zwei(s)}` : `${zwei(m)}:${zwei(s)}`;
+}
+
+function startDatum(a) {
+  let d = new Date(a.start);
+  if (isNaN(d)) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})$/.exec(a.id);
+    d = m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null;
+  }
+  return d;
+}
+
+function datumKurz(a) {
+  const d = startDatum(a);
+  if (!d) return a.id;
+  const tag = d.toLocaleDateString("de-CH", { weekday: "short", day: "numeric", month: "short" });
+  const zeit = d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+  return `${tag}, ${zeit}`;
+}
+
+function datumLang(a) {
+  const d = startDatum(a);
+  if (!d) return a.id;
+  return d.toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    + ", " + d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }) + " Uhr";
+}
+
+const STATUS_TEXT = {
+  aufnahme: "Aufnahme läuft",
+  wartet: "Wartet auf Transkription",
+  laeuft: "Wird transkribiert",
+  fertig: "Transkript bereit",
+  ohne: "Noch kein Transkript",
+  fehler: "Transkription fehlgeschlagen",
+};
+
+/* ---------- Verlauf ---------- */
+
+async function listeLaden() {
+  const daten = await rufe("aufnahmen");
+  const signatur = JSON.stringify(daten);
+  if (signatur === zustand.listeSignatur) return;
+  zustand.listeSignatur = signatur;
+  zustand.aufnahmen = daten;
+  if (!zustand.auswahl || !daten.some((a) => a.id === zustand.auswahl)) {
+    zustand.auswahl = daten.length ? daten[0].id : null;
+  }
+  listeZeichnen();
+  inhaltZeichnen();
+}
+
+function listeZeichnen() {
+  const liste = $("liste");
+  liste.replaceChildren();
+  if (!zustand.aufnahmen.length) {
+    liste.append(element("li", { class: "liste-leer" }, "Noch keine Aufnahmen."));
+    return;
+  }
+  for (const a of zustand.aufnahmen) {
+    const statusKlasse = { laeuft: "ist-aktiv", wartet: "ist-aktiv", fehler: "ist-fehler", aufnahme: "ist-aufnahme" }[a.status] || "";
+    const knopf = element("button", {
+        type: "button",
+        "aria-current": String(a.id === zustand.auswahl),
+        onclick: () => { zustand.auswahl = a.id; listeZeichnen(); inhaltZeichnen(); },
+      },
+      element("span", { class: "datum" }, datumKurz(a)),
+      element("span", { class: "dauer" }, a.dauer_s != null ? zeitText(a.dauer_s) : ""),
+      element("span", { class: `status ${statusKlasse}` }, STATUS_TEXT[a.status] || ""),
+    );
+    liste.append(element("li", {}, knopf));
+  }
+}
+
+/* ---------- Inhalt ---------- */
+
+function gewaehlt() {
+  return zustand.aufnahmen.find((a) => a.id === zustand.auswahl) || null;
+}
+
+async function inhaltZeichnen(erzwingen = false) {
+  const a = gewaehlt();
+  const schluessel = a ? `${a.id}:${a.status}:${a.fehler || ""}` : "leer";
+  if (!erzwingen && schluessel === zustand.angezeigt) return;
+  zustand.angezeigt = schluessel;
+  const inhalt = $("inhalt");
+
+  if (!a) {
+    inhalt.replaceChildren(element("div", { class: "leer" },
+      element("h2", {}, "Bereit für die erste Aufnahme"),
+      element("p", {}, "Mikrofon und Tonausgabe wählen, die Zustimmung aller Teilnehmenden bestätigen und mit dem roten Knopf starten. Nach dem Beenden entsteht das Transkript automatisch."),
+    ));
+    return;
+  }
+
+  const transkribierenKnopf = (text) => element("button", {
+    type: "button", class: "aktion primaer",
+    onclick: async () => { try { await rufe("transkribieren", a.id); await listeLaden(); } catch (e) { meldung(e.message); } },
+  }, text);
+
+  switch (a.status) {
+    case "aufnahme":
+      inhalt.replaceChildren(element("div", { class: "leer" },
+        element("h2", {}, "Aufnahme läuft"),
+        element("p", {}, "Das Transkript wird nach dem Beenden der Aufnahme automatisch erstellt."),
+      ));
+      return;
+    case "wartet":
+      inhalt.replaceChildren(element("div", { class: "leer" },
+        element("h2", {}, "Wartet auf Transkription"),
+        element("p", {}, "Eine andere Aufnahme wird gerade transkribiert. Diese kommt danach an die Reihe."),
+      ));
+      return;
+    case "laeuft":
+      inhalt.replaceChildren(element("div", { class: "fortschritt" },
+        element("h2", {}, "Transkript wird erstellt"),
+        element("div", { class: "balken" }, element("div", { id: "fortschritt-balken" })),
+        element("p", { id: "fortschritt-text" }, "Wird vorbereitet"),
+      ));
+      return;
+    case "fehler":
+      inhalt.replaceChildren(element("div", { class: "leer" },
+        element("h2", {}, "Transkription fehlgeschlagen"),
+        element("p", {}, a.fehler || "Unbekannter Fehler."),
+        element("div", { class: "aktionen" }, transkribierenKnopf("Erneut transkribieren"),
+          element("button", { type: "button", class: "aktion", onclick: () => $("btn-einstellungen").click() }, "Einstellungen öffnen")),
+      ));
+      return;
+    case "ohne":
+      inhalt.replaceChildren(element("div", { class: "leer" },
+        element("h2", {}, "Noch kein Transkript"),
+        element("p", {}, "Für diese Aufnahme gibt es noch kein Transkript, zum Beispiel weil die App während der Transkription geschlossen wurde."),
+        element("div", { class: "aktionen" }, transkribierenKnopf("Transkribieren"), ordnerKnopf(a.id)),
+      ));
+      return;
+    case "fertig":
+      await transkriptZeichnen(a);
+      return;
+  }
+}
+
+function ordnerKnopf(id) {
+  return element("button", { type: "button", class: "aktion", onclick: () => rufe("ordner_oeffnen", id).catch((e) => meldung(e.message)) }, "Ordner öffnen");
+}
+
+async function transkriptZeichnen(a) {
+  let t;
+  try { t = await rufe("transkript", a.id); } catch (e) { meldung(e.message); return; }
+  if (!t || zustand.auswahl !== a.id) return;
+
+  const ichName = (t.spuren && t.spuren.ich) || null;
+  const kopfListe = element("dl");
+  for (const [k, v] of Object.entries(t.kopf || {})) {
+    if (k === "Aufnahme") continue;
+    kopfListe.append(element("div", {}, element("dt", {}, k), element("dd", {}, v)));
+  }
+
+  const kopierenKnopf = element("button", { type: "button", class: "aktion" }, "Transkript kopieren");
+  kopierenKnopf.addEventListener("click", async () => {
+    await kopieren(t.markdown || "");
+    kopierenKnopf.textContent = "Kopiert";
+    setTimeout(() => (kopierenKnopf.textContent = "Transkript kopieren"), 2000);
+  });
+
+  const kopf = element("header", { class: "transkript-kopf" },
+    element("h2", {}, datumLang(a)),
+    kopfListe,
+    element("div", { class: "aktionen" },
+      kopierenKnopf,
+      element("button", { type: "button", class: "aktion",
+        onclick: async () => { try { await rufe("transkribieren", a.id); await listeLaden(); } catch (e) { meldung(e.message); } },
+      }, "Neu transkribieren"),
+      ordnerKnopf(a.id),
+    ),
+  );
+
+  const protokoll = element("div", { class: "protokoll" });
+  if (!t.segmente.length) {
+    protokoll.append(element("p", { class: "leer" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
+  }
+  for (const s of t.segmente) {
+    const spur = s.sprecher === ichName ? "ich" : "gegenueber";
+    protokoll.append(element("div", { class: `absatz ${spur}` },
+      element("div", {}, element("div", { class: "wer" }, s.sprecher || ""), element("time", {}, zeitText(s.start))),
+      element("p", { class: "text" }, s.text),
+    ));
+  }
+  $("inhalt").replaceChildren(kopf, protokoll);
+}
+
+async function kopieren(text) {
+  try { await navigator.clipboard.writeText(text); return; } catch (_) { /* Rückfall unten */ }
+  const feld = element("textarea", { style: "position:fixed;opacity:0" });
+  feld.value = text;
+  document.body.append(feld);
+  feld.select();
+  document.execCommand("copy");
+  feld.remove();
+}
+
+/* ---------- Aufnahme ---------- */
+
+function knopfAktualisieren() {
+  const knopf = $("btn-aufnahme");
+  knopf.disabled = !zustand.laeuft && !$("chk-zustimmung").checked;
+  knopf.setAttribute("aria-label", zustand.laeuft ? "Aufnahme beenden" : "Aufnahme starten");
+  knopf.title = knopf.disabled ? "Zuerst die Zustimmung aller Teilnehmenden bestätigen" : knopf.getAttribute("aria-label");
+}
+
+function pegelSetzen(spur, db) {
+  const anteil = Math.min(1, Math.max(0, (db + 60) / 60));
+  const f = $(`pegel-${spur}`);
+  f.style.width = `${(anteil * 100).toFixed(1)}%`;
+  f.classList.toggle("laut", db > -3);
+  $(`db-${spur}`).textContent = db > -90 ? `${db.toFixed(0)} dB` : "";
+}
+
+function aufnahmeAnzeigen(aufnahme) {
+  const laeuft = !!aufnahme;
+  if (laeuft !== zustand.laeuft) {
+    zustand.laeuft = laeuft;
+    $("aufnahme").classList.toggle("laeuft", laeuft);
+    $("sel-mikrofon").disabled = laeuft;
+    $("sel-lautsprecher").disabled = laeuft;
+    $("chk-zustimmung").disabled = laeuft;
+    if (!laeuft) {
+      $("chk-zustimmung").checked = false;   // Zustimmung gilt nur für eine Aufnahme
+      pegelSetzen("ich", -90);
+      pegelSetzen("gegenueber", -90);
+    }
+    knopfAktualisieren();
+  }
+  if (laeuft) {
+    $("zeit").textContent = zeitText(aufnahme.dauer_s);
+    pegelSetzen("ich", aufnahme.pegel.ich);
+    pegelSetzen("gegenueber", aufnahme.pegel.gegenueber);
+  }
+}
+
+async function aufnahmeUmschalten() {
+  const knopf = $("btn-aufnahme");
+  knopf.disabled = true;
+  meldung("");
+  try {
+    if (zustand.laeuft) {
+      const id = await rufe("aufnahme_stoppen");
+      if (id) zustand.auswahl = id;
+    } else {
+      const id = await rufe("aufnahme_starten", $("sel-mikrofon").value, $("sel-lautsprecher").value, $("chk-zustimmung").checked);
+      zustand.auswahl = id;
+      $("zeit").textContent = "00:00";
+    }
+    await abfragen();
+    await listeLaden();
+  } catch (e) {
+    meldung(e.message);
+  } finally {
+    knopfAktualisieren();
+  }
+}
+
+/* ---------- Regelmässige Abfrage ---------- */
+
+let zaehler = 0;
+async function abfragen() {
+  if (zustand.beschaeftigt) return;
+  zustand.beschaeftigt = true;
+  try {
+    const z = await rufe("zustand");
+    aufnahmeAnzeigen(z.aufnahme);
+    if (z.aufnahme_fehler) meldung(z.aufnahme_fehler);
+    if (z.job && z.job.id === zustand.auswahl) {
+      const balken = $("fortschritt-balken"), text = $("fortschritt-text");
+      if (balken) balken.style.width = `${Math.round(z.job.anteil * 100)}%`;
+      if (text) text.textContent = `${z.job.phase} (${Math.round(z.job.anteil * 100)} %)`;
+    }
+    if (++zaehler % 4 === 0 || z.job) await listeLaden();
+  } catch (_) {
+    /* einzelne Abfrage verpasst – nächste kommt gleich */
+  } finally {
+    zustand.beschaeftigt = false;
+  }
+}
+
+/* ---------- Geräte & Einstellungen ---------- */
+
+function optionen(select, namen, standard, gewaehlt) {
+  select.replaceChildren(element("option", { value: "" }, `Systemstandard (${standard})`));
+  for (const n of namen) select.append(element("option", { value: n }, n));
+  select.value = namen.includes(gewaehlt) ? gewaehlt : "";
+}
+
+async function geraeteLaden() {
+  try {
+    const g = await rufe("geraete");
+    optionen($("sel-mikrofon"), g.mikrofone, g.standard_mikrofon, zustand.einstellungen.mikrofon);
+    optionen($("sel-lautsprecher"), g.lautsprecher, g.standard_lautsprecher, zustand.einstellungen.lautsprecher);
+  } catch (e) {
+    meldung("Audiogeräte konnten nicht gelesen werden: " + e.message);
+  }
+}
+
+function namenSetzen() {
+  $("name-ich").textContent = zustand.einstellungen.name;
+  $("name-gegenueber").textContent = zustand.einstellungen.gegenueber;
+}
+
+function modellStatusZeigen() {
+  const wert = $("form-einstellungen").elements.modell.value.trim();
+  const m = zustand.modelle.find((x) => x.id === wert);
+  $("modell-status").textContent = m ? `${m.beschreibung}. Status: ${m.status}.` : "Eigenes Modell: Name, Hugging-Face-ID oder Ordner.";
+}
+
+async function einstellungenOeffnen() {
+  const form = $("form-einstellungen");
+  const e = zustand.einstellungen;
+  for (const feld of ["name", "gegenueber", "modell", "stichworte", "aufnahme_ordner"]) form.elements[feld].value = e[feld] || "";
+  form.elements.qualitaet.value = e.qualitaet || "genau";
+  $("ordner-hinweis").textContent = `Leer lassen für den Standard. Aktuell: ${e.ordner}`;
+  try {
+    zustand.modelle = await rufe("modelle");
+    $("modell-liste").replaceChildren(...zustand.modelle.map((m) => element("option", { value: m.id })));
+  } catch (_) { zustand.modelle = []; }
+  modellStatusZeigen();
+  $("dlg-einstellungen").showModal();
+}
+
+async function einstellungenSpeichern(ereignis) {
+  ereignis.preventDefault();
+  const form = $("form-einstellungen");
+  const daten = {};
+  for (const feld of ["name", "gegenueber", "modell", "stichworte", "aufnahme_ordner", "qualitaet"]) daten[feld] = form.elements[feld].value;
+  try {
+    zustand.einstellungen = await rufe("einstellungen_speichern", daten);
+    namenSetzen();
+    $("dlg-einstellungen").close();
+    zustand.listeSignatur = "";
+    await listeLaden();
+  } catch (e) {
+    $("modell-status").textContent = e.message;
+  }
+}
+
+/* ---------- Start ---------- */
+
+async function starten() {
+  $("btn-aufnahme").addEventListener("click", aufnahmeUmschalten);
+  $("chk-zustimmung").addEventListener("change", knopfAktualisieren);
+  $("btn-einstellungen").addEventListener("click", einstellungenOeffnen);
+  $("btn-ordner").addEventListener("click", () => rufe("ordner_oeffnen", "").catch((e) => meldung(e.message)));
+  $("btn-abbrechen").addEventListener("click", () => $("dlg-einstellungen").close());
+  $("form-einstellungen").addEventListener("submit", einstellungenSpeichern);
+  $("form-einstellungen").elements.modell.addEventListener("input", modellStatusZeigen);
+
+  try {
+    zustand.einstellungen = await rufe("einstellungen");
+    $("version").textContent = "Version " + (await rufe("version"));
+  } catch (e) { meldung(e.message); }
+  namenSetzen();
+  await geraeteLaden();
+  await listeLaden();
+  await inhaltZeichnen(true);
+  knopfAktualisieren();
+  setInterval(abfragen, 250);
+}
+
+if (window.pywebview && window.pywebview.api) starten();
+else window.addEventListener("pywebviewready", starten);
+</script>
+</body>
+</html>

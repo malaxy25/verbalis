@@ -1,5 +1,6 @@
 """Kommandozeile.
 
+    mitschrift app                      Oberfläche starten
     mitschrift geraete
     mitschrift aufnehmen [--mikrofon X] [--lautsprecher Y] [--dauer SEK]
     mitschrift transkribieren ORDNER [--modell M] [--name Andrea]
@@ -11,9 +12,7 @@
 from __future__ import annotations
 
 import argparse
-import json
 import math
-import platform
 import sys
 import time
 from datetime import datetime
@@ -42,6 +41,13 @@ def _einwilligung_einholen(bereits_bestaetigt: bool) -> bool:
     return antwort in {"j", "ja", "y", "yes"}
 
 
+def cmd_app(_args) -> int:
+    from .app import starten
+
+    starten()
+    return 0
+
+
 def cmd_geraete(_args) -> int:
     from .audio.devices import liste_ausgeben
 
@@ -60,7 +66,10 @@ def cmd_aufnehmen(args) -> int:
 
     geraete = ermittle(args.mikrofon, args.lautsprecher)
     start = datetime.now().astimezone()
-    ordner = Path(args.ausgabe) / start.strftime("%Y-%m-%d_%H%M%S")
+    from .einstellungen import Einstellungen
+
+    basis = Path(args.ausgabe) if args.ausgabe else Einstellungen.laden().ordner
+    ordner = basis / start.strftime("%Y-%m-%d_%H%M%S")
 
     print(f"\nMikrofon:   {geraete.mikrofon.name}")
     print(f"Loopback:   {geraete.loopback.name}")
@@ -93,25 +102,12 @@ def cmd_aufnehmen(args) -> int:
             print(f"Fehler in einer Spur: {fehler!r}")
         return 2
 
-    dauer = time.monotonic() - rec.t0
-    meta = {
-        "app_version": __version__,
-        "start": start.isoformat(timespec="seconds"),
-        "dauer_s": round(dauer, 1),
-        "samplerate": rec.samplerate,
-        "system": f"{platform.system()} {platform.release()}",
-        "einwilligung": {"bestaetigt": True, "zeitpunkt": einwilligung_zeit},
-        "spuren": {
-            s.name: {
-                "datei": s.pfad.name,
-                "geraet": (geraete.mikrofon if s.name == "ich" else geraete.loopback).name,
-                "laenge_s": round(s.geschrieben_frames / rec.samplerate, 1),
-                "aufgefuellte_stille_s": round(s.aufgefuellt_frames / rec.samplerate, 2),
-            }
-            for s in rec.status()
-        },
-    }
-    (ordner / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    from .ablauf import meta_schreiben
+
+    meta = meta_schreiben(
+        ordner, start, time.monotonic() - rec.t0, rec.samplerate, einwilligung_zeit,
+        {"ich": geraete.mikrofon.name, "gegenueber": geraete.loopback.name}, rec.status(),
+    )
 
     for name, info in meta["spuren"].items():
         print(f"{name:11s} {info['laenge_s']:7.1f} s   aufgefüllte Stille: {info['aufgefuellte_stille_s']} s")
@@ -128,35 +124,21 @@ def _ordner_pruefen(ordner: Path) -> None:
 
 
 def _transkribiere_ordner(ordner: Path, transcriber, namen: dict[str, str], bis_s: float | None):
-    """Beide Spuren transkribieren. Gibt (absätze, rechenzeit_s, aufnahmedauer_s) zurück."""
-    from .transcription.faster import SAMPLERATE_WHISPER, lade_audio
-    from .transkript import zusammenfuehren
+    from .ablauf import transkribieren
 
-    spuren = {}
-    rechenzeit = 0.0
-    aufnahmedauer = 0.0
-    for datei, anzeigename in namen.items():
-        audio = lade_audio(ordner / f"{datei}.wav", bis_s)
-        aufnahmedauer = max(aufnahmedauer, len(audio) / SAMPLERATE_WHISPER)
+    def fortschritt(name, anteil):
+        sys.stdout.write(f"\r  {name:12s} {anteil:5.0%}")
+        sys.stdout.flush()
+        if anteil >= 1:
+            print()
 
-        def fortschritt(position, gesamt, n=anzeigename):
-            sys.stdout.write(f"\r  {n:12s} {min(position / gesamt, 1.0):5.0%}")
-            sys.stdout.flush()
-
-        t = time.monotonic()
-        spuren[anzeigename] = transcriber.transkribiere(audio, fortschritt=fortschritt)
-        rechenzeit += time.monotonic() - t
-        print(f"\r  {anzeigename:12s} fertig ({len(spuren[anzeigename])} Segmente)")
-    return zusammenfuehren(spuren), rechenzeit, aufnahmedauer
+    return transkribieren(ordner, transcriber, namen, bis_s, fortschritt)
 
 
 def _kopf(ordner: Path, modell: str, rechenzeit: float, dauer: float) -> dict[str, str]:
-    kopf = {"Modell": modell, "Aufnahmedauer": f"{dauer / 60:.1f} min",
-            "Rechenzeit": f"{rechenzeit / 60:.1f} min ({rechenzeit / max(dauer, 1e-9):.2f}× Echtzeit)"}
-    meta = ordner / "meta.json"
-    if meta.exists():
-        kopf = {"Aufnahme": json.loads(meta.read_text(encoding="utf-8"))["start"], **kopf}
-    return kopf
+    from .ablauf import kopf
+
+    return kopf(ordner, modell, rechenzeit, dauer)
 
 
 def cmd_transkribieren(args) -> int:
@@ -168,14 +150,16 @@ def cmd_transkribieren(args) -> int:
     _ordner_pruefen(ordner)
     print(f"Lade Modell {args.modell} …")
     try:
-        tr = FasterWhisperTranscriber(args.modell, geraet=args.geraet, stichworte=args.stichworte)
+        tr = FasterWhisperTranscriber(args.modell, geraet=args.geraet, stichworte=args.stichworte,
+                                      beam_size=args.beam)
     except ModellFehler as e:
         print(e)
         return 1
 
     namen = {"ich": args.name, "gegenueber": args.gegenueber}
     absaetze, rechenzeit, dauer = _transkribiere_ordner(ordner, tr, namen, args.bis)
-    md = speichern(ordner, "transkript", absaetze, f"Transkript {ordner.name}", _kopf(ordner, args.modell, rechenzeit, dauer))
+    md = speichern(ordner, "transkript", absaetze, f"Transkript {ordner.name}",
+                   _kopf(ordner, args.modell, rechenzeit, dauer), spuren=namen)
     print(f"\nGespeichert: {md}  ({rechenzeit / max(dauer, 1e-9):.2f}× Echtzeit)")
     return 0
 
@@ -197,7 +181,8 @@ def cmd_vergleichen(args) -> int:
         print(f"\n=== {modell} ===")
         t = time.monotonic()
         try:
-            tr = FasterWhisperTranscriber(modell, geraet=args.geraet, stichworte=args.stichworte)
+            tr = FasterWhisperTranscriber(modell, geraet=args.geraet, stichworte=args.stichworte,
+                                          beam_size=args.beam)
         except ModellFehler as e:
             print(e)
             zeilen.append(f"| {modell} | – | – | – | – | Fehler beim Laden |")
@@ -274,12 +259,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="befehl", required=True)
 
+    sub.add_parser("app", help="Oberfläche starten").set_defaults(func=cmd_app)
     sub.add_parser("geraete", help="Mikrofone und Lautsprecher auflisten").set_defaults(func=cmd_geraete)
 
     p = sub.add_parser("aufnehmen", help="Mikrofon und Systemaudio als zwei Spuren aufnehmen")
     p.add_argument("--mikrofon", help="Index oder Namensteil (Standard: System-Standard)")
     p.add_argument("--lautsprecher", help="Index oder Namensteil des Ausgabegeräts von Teams")
-    p.add_argument("--ausgabe", default="aufnahmen", help="Zielordner (Standard: ./aufnahmen)")
+    p.add_argument("--ausgabe", help="Zielordner (Standard: Aufnahmeordner aus den Einstellungen)")
     p.add_argument("--dauer", type=float, help="Automatisch nach N Sekunden stoppen")
     p.add_argument("--einwilligung", action="store_true", help="Einwilligung bereits eingeholt (keine Rückfrage)")
     p.set_defaults(func=cmd_aufnehmen)
@@ -291,10 +277,14 @@ def main(argv: list[str] | None = None) -> int:
         q.add_argument("--geraet", default="cpu", choices=["cpu", "cuda"], help="Rechnen auf CPU oder Nvidia-GPU")
         q.add_argument("--stichworte", help="Namen/Fachbegriffe, z.B. \"tocco, Höngg\"")
         q.add_argument("--bis", type=float, help="Nur die ersten N Sekunden transkribieren")
+        q.add_argument("--beam", type=int, default=5, help="Suchbreite: 5 = genau (Standard), 1 = schneller")
 
     p = sub.add_parser("transkribieren", help="Aufnahme transkribieren")
     transkriptions_optionen(p)
-    p.add_argument("--modell", default="large-v3-turbo", help="Modellname, HF-ID oder Ordner (siehe: mitschrift modelle)")
+    from .einstellungen import Einstellungen
+
+    p.add_argument("--modell", default=Einstellungen.laden().modell,
+                   help="Modellname, HF-ID oder Ordner (Standard: Modell aus den Einstellungen)")
     p.set_defaults(func=cmd_transkribieren)
 
     from .transcription.modelle import EMPFOHLEN

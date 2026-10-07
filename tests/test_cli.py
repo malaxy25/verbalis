@@ -9,7 +9,7 @@ from mitschrift.transcription.base import Segment
 
 
 class FakeTranscriber:
-    def __init__(self, modell, geraet="cpu", stichworte=None):
+    def __init__(self, modell, geraet="cpu", stichworte=None, beam_size=5):
         self.name = modell
 
     def transkribiere(self, audio, sprache="de", fortschritt=None):

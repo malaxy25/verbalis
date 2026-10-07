@@ -38,3 +38,13 @@ def test_unbekannter_name():
 def test_mel_baender_bestimmen_basismodell():
     assert modelle._basismodell_fuer(128) == "openai/whisper-large-v3"
     assert modelle._basismodell_fuer(80) == "openai/whisper-large-v2"
+
+
+def test_repo_pruefung():
+    modelle.pruefe_repo("x/ok", {"config.json", "model.safetensors"})
+    with pytest.raises(modelle.ModellFehler, match="zurückgezogen"):
+        modelle.pruefe_repo("x/weg", {"config.json", "README.md"})
+    with pytest.raises(modelle.ModellFehler, match="LoRA"):
+        modelle.pruefe_repo("x/lora", {"adapter_config.json", "adapter_model.safetensors"})
+    with pytest.raises(modelle.ModellFehler, match="CTranslate2"):
+        modelle.pruefe_repo("x/ct2", {"config.json", "model.bin"})
