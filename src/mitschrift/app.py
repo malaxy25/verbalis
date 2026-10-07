@@ -85,25 +85,73 @@ class Api:
     def korrektur_entfernen(self, ziel, variante=None):
         return self._rufe(self._d.korrektur_entfernen, ziel, variante)
 
+    def audio_speicher(self):
+        return self._rufe(self._d.audio_speicher)
+
+    def audio_jetzt_loeschen(self, aufnahme_id):
+        return self._rufe(self._d.audio_jetzt_loeschen, aufnahme_id)
+
     def ordner_oeffnen(self, aufnahme_id=""):
         return self._rufe(self._d.ordner_oeffnen, aufnahme_id)
+
+
+STANDARD_GROESSE = (1180, 780)
+MIN_GROESSE = (860, 560)
+
+
+def fenstergroesse(gemerkt: str = "", bildschirm=None) -> tuple[int, int]:
+    """Gemerkte oder Standardgrösse, aber nie grösser als der Bildschirm.
+
+    Vom Bildschirm ziehen wir Platz für Taskleiste und Titelleiste ab. Alle
+    Werte sind logische Pixel – bei 150 % Skalierung hat ein Full-HD-Bildschirm
+    also 1280 × 720.
+    """
+    breite, hoehe = STANDARD_GROESSE
+    try:
+        b, h = (int(x) for x in gemerkt.lower().split("x"))
+        breite, hoehe = b, h
+    except ValueError:
+        pass
+    if bildschirm is not None:
+        breite = min(breite, bildschirm.width - 40)
+        hoehe = min(hoehe, bildschirm.height - 100)
+    return max(breite, MIN_GROESSE[0]), max(hoehe, MIN_GROESSE[1])
 
 
 def starten() -> None:
     import webview
 
     dienst = Dienst()
+    try:
+        bildschirm = webview.screens[0]
+    except Exception:
+        log.warning("Bildschirmgrösse unbekannt, nutze Standardgrösse", exc_info=True)
+        bildschirm = None
+    breite, hoehe = fenstergroesse(dienst.einstellungen()["fenster"], bildschirm)
+
     fenster = webview.create_window(
         "Mitschrift",
         html=UI.read_text(encoding="utf-8"),
         js_api=Api(dienst),
-        width=1180,
-        height=780,
-        min_size=(860, 560),
+        width=breite,
+        height=hoehe,
+        min_size=MIN_GROESSE,
         text_select=True,
         background_color="#EEF1F4",
     )
-    fenster.events.closing += dienst.beenden  # laufende Aufnahme sauber speichern
+
+    letzte_groesse: dict[str, str] = {}
+
+    def groesse_merken(breite: int, hoehe: int) -> None:
+        letzte_groesse["wert"] = f"{breite}x{hoehe}"
+
+    def schliessen() -> None:
+        if "wert" in letzte_groesse:
+            dienst.einstellungen_speichern({"fenster": letzte_groesse["wert"]})
+        dienst.beenden()  # laufende Aufnahme sauber speichern
+
+    fenster.events.resized += groesse_merken
+    fenster.events.closing += schliessen
     webview.start(icon=str(ICON))  # Icon wirkt unter Linux; unter Windows kommt es von der Verknüpfung
 
 

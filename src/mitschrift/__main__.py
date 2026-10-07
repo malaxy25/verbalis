@@ -111,6 +111,11 @@ def cmd_aufnehmen(args) -> int:
 
     for name, info in meta["spuren"].items():
         print(f"{name:11s} {info['laenge_s']:7.1f} s   aufgefüllte Stille: {info['aufgefuellte_stille_s']} s")
+
+    from .ablauf import audio_komprimieren
+
+    print("Komprimiere Audio (16 kHz, FLAC) …")
+    audio_komprimieren(ordner)
     print(f"\nGespeichert in {ordner}")
     return 0
 
@@ -118,9 +123,10 @@ def cmd_aufnehmen(args) -> int:
 # ---------------------------------------------------------------- Transkription
 
 def _ordner_pruefen(ordner: Path) -> None:
-    for datei in ("ich.wav", "gegenueber.wav"):
-        if not (ordner / datei).exists():
-            raise SystemExit(f"{ordner / datei} fehlt – ist das ein Aufnahmeordner?")
+    from .ablauf import hat_audio
+
+    if not hat_audio(ordner):
+        raise SystemExit(f"In {ordner} fehlen die Audiodateien (ich/gegenueber als .wav oder .flac).")
 
 
 def _transkribiere_ordner(ordner: Path, transcriber, namen: dict[str, str], bis_s: float | None):

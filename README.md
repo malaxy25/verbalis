@@ -6,7 +6,7 @@ Lokale App, die Gespräche aufnimmt (eigenes Mikrofon **und** Systemaudio, also
 alle Teilnehmenden eines Teams-Calls) und danach ein Transkript erstellt –
 Hochdeutsch und Schweizerdeutsch. Alles läuft lokal, nichts verlässt den Rechner.
 
-**Stand 0.5.0:** Oberfläche für Aufnahme, Transkription und Verlauf. Sprechererkennung folgt.
+**Stand 0.6.0:** Oberfläche für Aufnahme, Transkription und Verlauf. Sprechererkennung folgt.
 
 ```bash
 mitschrift app
@@ -71,8 +71,12 @@ das Repo – Updates wirken sofort. Fehler landen in `~/.mitschrift/protokoll.tx
 - **Korrigieren:** Absatz im Transkript anklicken, ändern, speichern. Die App
   schlägt die geänderten Wörter für die Korrekturliste vor (z.B. «Toko» →
   «tocco»); angehakte Vorschläge gelten ab dann für alle Transkripte.
+- **Audio aufbewahren:** Nach der Aufnahme wird das Audio verlustfrei auf
+  16 kHz FLAC komprimiert (eine Stunde ≈ 100 MB). Es wird nach einer Frist
+  (Standard 3 Tage) und/oder über einer Speichergrenze automatisch gelöscht,
+  älteste zuerst. Transkripte bleiben, Aufnahmen ohne Transkript sind geschützt.
 - **Einstellungen:** dein Name, Bezeichnung der anderen, Modell, Tempo
-  (genau/schnell), Stichworte, Korrekturliste und Aufnahmeordner.
+  (genau/schnell), Stichworte, Korrekturliste, Audio-Aufbewahrung und Aufnahmeordner.
 
 Aufnahmen landen standardmässig in `~/.mitschrift/aufnahmen` (änderbar in den
 Einstellungen) – App und Kommandozeile nutzen denselben Ordner.
@@ -89,7 +93,8 @@ mitschrift aufnehmen --lautsprecher jabra --mikrofon jabra
 mitschrift aufnehmen --dauer 30          # Testaufnahme 30 s
 ```
 
-Ergebnis in `~/.mitschrift/aufnahmen/JJJJ-MM-TT_HHMMSS/`: `ich.wav`, `gegenueber.wav`, `meta.json`.
+Ergebnis in `~/.mitschrift/aufnahmen/JJJJ-MM-TT_HHMMSS/`: `ich.flac`, `gegenueber.flac`, `meta.json`.
+Während der Aufnahme wird als WAV geschrieben (absturzsicher), danach komprimiert.
 
 **Wichtig:** Als `--lautsprecher` das Gerät wählen, auf dem Teams den Ton
 ausgibt (Teams → Einstellungen → Geräte). Ist das nicht das Standardgerät,

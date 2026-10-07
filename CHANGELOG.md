@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 – 2026-10-07
+- Audio wird nach der Aufnahme auf 16 kHz FLAC komprimiert (verlustfrei, rund 85 % kleiner,
+  eine Stunde ≈ 100 MB statt ≈ 700 MB); auch alte WAV-Aufnahmen werden nachträglich umgewandelt
+- Aufbewahrung in den Einstellungen: Audio nach N Tagen löschen (Standard 3) und/oder höchstens
+  N MB insgesamt (älteste zuerst). Transkripte bleiben immer, Aufnahmen ohne Transkript sind geschützt.
+- Aufräumen beim Start, nach jeder Transkription und stündlich
+- Transkriptansicht zeigt Grösse und Löschtermin des Audios, Knopf «Audio löschen»
+- Ohne Audio kein «Neu transkribieren» mehr
+
+## 0.5.1 – 2026-10-07
+- Fenster öffnet nie höher als der Bildschirm (berücksichtigt Skalierung, Taskleiste und Titelleiste)
+- Zuletzt genutzte Fenstergrösse wird gemerkt
+
 ## 0.5.0 – 2026-10-07
 - Transkript direkt in der App korrigieren (Absatz anklicken); die unbearbeitete Fassung bleibt als
   `transkript_original.json` erhalten

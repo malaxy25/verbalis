@@ -22,7 +22,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -34,6 +34,9 @@ from .transkript import als_markdown
 from .transcription.modelle import mitschrift_home
 
 GUELTIGE_ID = re.compile(r"^[\w\-]+$")
+AUFRAEUMEN = ":aufraeumen"          # Auftrag in der Warteschlange (keine gültige Aufnahme-ID)
+AUFRAEUMEN_ALLE_S = 3600            # zusätzlich stündlich, falls die App lange offen ist
+MB = 1024 * 1024                    # wie im Windows-Explorer
 log = logging.getLogger(__name__)
 
 
@@ -58,6 +61,7 @@ class Dienst:
         transcriber_fabrik: Callable | None = None,
         geraete_ermitteln: Callable | None = None,
         geraete_liste: Callable | None = None,
+        aufraeumen_beim_start: bool = True,
     ):
         self._lock = threading.RLock()
         self._e = einstellungen or Einstellungen.laden()
@@ -80,6 +84,8 @@ class Dienst:
 
         self._worker = threading.Thread(target=self._arbeiten, name="transkription", daemon=True)
         self._worker.start()
+        if aufraeumen_beim_start:
+            self._warteschlange.put(AUFRAEUMEN)  # alte Audiodateien prüfen
 
     # ------------------------------------------------------------ Standard-Bausteine
 
@@ -114,9 +120,12 @@ class Dienst:
 
     def einstellungen_speichern(self, daten: dict) -> dict:
         with self._lock:
+            alt = self._e
             neu = Einstellungen.aus_dict({**self._e.als_dict(), **daten})
             neu.speichern()
             self._e = neu
+        if (alt.audio_tage, alt.audio_max_mb) != (neu.audio_tage, neu.audio_max_mb):
+            self._warteschlange.put(AUFRAEUMEN)
         return self._e.als_dict()
 
     def geraete(self) -> dict:
@@ -190,7 +199,8 @@ class Dienst:
     # ------------------------------------------------------------ Transkription
 
     def transkribieren(self, aufnahme_id: str) -> None:
-        self._pfad(aufnahme_id)  # prüft die ID
+        if not ablauf.hat_audio(self._pfad(aufnahme_id)):
+            raise RuntimeError("Das Audio dieser Aufnahme wurde gelöscht – neu transkribieren ist nicht mehr möglich.")
         with self._lock:
             if aufnahme_id in self._wartend or (self._job and self._job["id"] == aufnahme_id):
                 return
@@ -279,9 +289,15 @@ class Dienst:
 
     def _arbeiten(self) -> None:
         while True:
-            aufnahme_id = self._warteschlange.get()
+            try:
+                aufnahme_id = self._warteschlange.get(timeout=AUFRAEUMEN_ALLE_S)
+            except queue.Empty:
+                aufnahme_id = AUFRAEUMEN
             if aufnahme_id is None:
                 return
+            if aufnahme_id == AUFRAEUMEN:
+                self._aufraeumen_sicher()
+                continue
             self._warten_falls_pausiert()
             with self._lock:
                 if aufnahme_id in self._wartend:
@@ -295,6 +311,9 @@ class Dienst:
                     "faktor": self._faktor(schluessel),
                 }
             try:
+                self._komprimieren_sicher(self._pfad(aufnahme_id))
+                with self._lock:
+                    self._job["phase"] = f"Modell {e.modell} wird geladen"
                 tr = self._modell_holen(e.modell)
                 tr.beam_size = e.beam_size
                 korrekturen = Korrekturliste.laden()
@@ -328,6 +347,95 @@ class Dienst:
             finally:
                 with self._lock:
                     self._job = None
+            self._aufraeumen_sicher()
+
+    # ------------------------------------------------------------ Audio aufbewahren
+
+    def _komprimieren_sicher(self, ordner: Path) -> None:
+        if not any((ordner / f"{s}.wav").exists() for s in ablauf.SPUREN):
+            return
+        with self._lock:
+            if self._job:
+                self._job["phase"] = "Audio wird komprimiert"
+        try:
+            ablauf.audio_komprimieren(ordner)
+        except Exception:  # nicht schlimm – dann wird eben die WAV-Datei transkribiert
+            log.exception("Komprimieren von %s fehlgeschlagen", ordner.name)
+
+    def _geschuetzt(self) -> set[str]:
+        with self._lock:
+            return {i for i in (self._rec_info.get("id"), self._job and self._job["id"], *self._wartend) if i}
+
+    def _aufraeumen_sicher(self) -> None:
+        try:
+            self.aufraeumen()
+        except Exception:
+            log.exception("Aufräumen fehlgeschlagen")
+
+    def aufraeumen(self) -> list[str]:
+        """Alte WAV-Dateien komprimieren, Audio nach Frist bzw. über der Speichergrenze löschen.
+
+        Nie angetastet werden: laufende Aufnahme, Aufnahmen in der Warteschlange
+        oder in Arbeit, und Aufnahmen ohne Transkript – deren Audio ist das
+        Einzige, was es vom Gespräch gibt.
+        """
+        e, basis = self._e, self._e.ordner
+        if not basis.exists():
+            return []
+        geschuetzt = self._geschuetzt()
+        kandidaten: list[tuple[datetime, Path]] = []
+        for ordner in basis.iterdir():
+            if not ordner.is_dir() or not GUELTIGE_ID.match(ordner.name) or ordner.name in geschuetzt:
+                continue
+            if self._pausengrund() is None:
+                self._komprimieren_sicher(ordner)  # z.B. Reste aus der Kommandozeile oder nach einem Absturz
+            if (ordner / "transkript.json").exists() and ablauf.audio_bytes(ordner):
+                start = ablauf.aufnahme_start(ordner) or datetime.fromtimestamp(ordner.stat().st_mtime).astimezone()
+                kandidaten.append((start, ordner))
+        kandidaten.sort(key=lambda k: k[0])  # älteste zuerst
+
+        geloescht: list[str] = []
+        if e.tage is not None:
+            grenze = datetime.now().astimezone() - timedelta(days=e.tage)
+            grund = "nach dem Transkribieren" if e.tage == 0 else f"älter als {e.tage} Tage"
+            for start, ordner in list(kandidaten):
+                if start <= grenze:
+                    ablauf.audio_loeschen(ordner, grund)
+                    geloescht.append(ordner.name)
+                    kandidaten.remove((start, ordner))
+        if e.max_mb is not None:
+            gesamt = self._audio_gesamt()
+            for start, ordner in kandidaten:
+                if gesamt <= e.max_mb * MB:
+                    break
+                gesamt -= ablauf.audio_loeschen(ordner, f"Speichergrenze {e.max_mb} MB")
+                geloescht.append(ordner.name)
+        if geloescht:
+            log.info("Audio gelöscht: %s", ", ".join(geloescht))
+        return geloescht
+
+    def _audio_gesamt(self) -> int:
+        basis = self._e.ordner
+        return sum(ablauf.audio_bytes(o) for o in basis.iterdir() if o.is_dir()) if basis.exists() else 0
+
+    def audio_speicher(self) -> dict:
+        return {"audio_mb": round(self._audio_gesamt() / MB, 1)}
+
+    def audio_jetzt_loeschen(self, aufnahme_id: str) -> None:
+        ordner = self._pfad(aufnahme_id)
+        if aufnahme_id in self._geschuetzt():
+            raise RuntimeError("Diese Aufnahme wird gerade aufgenommen oder transkribiert.")
+        ablauf.audio_loeschen(ordner, "von Hand")
+
+    def _loeschtermin(self, ordner: Path) -> str | None:
+        """Wann das Audio voraussichtlich gelöscht wird (nur bei Frist in Tagen)."""
+        tage = self._e.tage
+        if tage is None or not (ordner / "transkript.json").exists():
+            return None
+        if tage == 0:
+            return "sofort"
+        start = ablauf.aufnahme_start(ordner)
+        return (start + timedelta(days=tage)).isoformat(timespec="minutes") if start else None
 
     # ------------------------------------------------------------ Korrekturen
 
@@ -436,12 +544,16 @@ class Dienst:
                 if not aufnahme and not ablauf.ist_aufnahmeordner(ordner):
                     continue
                 meta = ablauf.meta_lesen(ordner)
+                audio = ablauf.audio_bytes(ordner)
                 ergebnis.append({
                     "id": ordner.name,
                     "start": meta.get("start") or ordner.name,
                     "dauer_s": meta.get("dauer_s"),
                     "status": self._status(ordner.name, ordner),
                     "fehler": self._fehler.get(ordner.name),
+                    "audio": bool(audio) or aufnahme,
+                    "audio_mb": round(audio / MB, 1),
+                    "audio_loeschen": self._loeschtermin(ordner) if audio else None,
                 })
         return ergebnis
 

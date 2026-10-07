@@ -213,6 +213,9 @@
     padding: 7px 10px; border: 1px solid var(--linie); border-radius: 6px; background: var(--flaeche);
   }
   .feld input[hidden] { display: none; }
+  .feld-reihe { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+  .feld-reihe label { display: flex; gap: 8px; align-items: center; }
+  .feld-reihe input[type=text] { width: 6em; text-align: right; font-variant-numeric: tabular-nums; }
   .feld-paar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 4px; }
   fieldset legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 4px; }
@@ -321,6 +324,14 @@
       <span>Korrekturliste</span>
       <ul class="korrekturliste" id="korrekturliste"></ul>
       <small>Wird nach jeder Transkription angewendet. Neue Einträge entstehen, wenn du im Transkript etwas korrigierst.</small>
+    </div>
+    <div class="feld">
+      <span>Audio aufbewahren</span>
+      <div class="feld-reihe">
+        <label><input type="text" name="audio_tage" inputmode="numeric" autocomplete="off" aria-label="Tage"> Tage</label>
+        <label>höchstens <input type="text" name="audio_max_mb" inputmode="numeric" autocomplete="off" aria-label="Höchstens MB"> MB</label>
+      </div>
+      <small id="audio-hinweis">Leer heisst unbegrenzt, 0 Tage heisst gleich nach dem Transkribieren. Transkripte bleiben immer erhalten, Aufnahmen ohne Transkript werden nie automatisch gelöscht.</small>
     </div>
     <label class="feld"><span>Aufnahmeordner</span>
       <input type="text" name="aufnahme_ordner" autocomplete="off" spellcheck="false">
@@ -460,7 +471,7 @@ function gewaehlt() {
 async function inhaltZeichnen(erzwingen = false) {
   const a = gewaehlt();
   const pause = (zustand.letzterZustand && zustand.letzterZustand.pause) || "";
-  const schluessel = a ? `${a.id}:${a.status}:${a.fehler || ""}:${a.status === "wartet" ? pause : ""}` : "leer";
+  const schluessel = a ? `${a.id}:${a.status}:${a.fehler || ""}:${a.audio}:${a.status === "wartet" ? pause : ""}` : "leer";
   if (!erzwingen && schluessel === zustand.angezeigt) return;
   zustand.angezeigt = schluessel;
   const inhalt = $("inhalt");
@@ -518,15 +529,17 @@ async function inhaltZeichnen(erzwingen = false) {
       inhalt.replaceChildren(element("div", { class: "leer" },
         element("h2", {}, "Transkription fehlgeschlagen"),
         element("p", {}, a.fehler || "Unbekannter Fehler."),
-        element("div", { class: "aktionen" }, transkribierenKnopf("Erneut transkribieren"),
+        element("div", { class: "aktionen" }, a.audio ? transkribierenKnopf("Erneut transkribieren") : null,
           element("button", { type: "button", class: "aktion", onclick: () => $("btn-einstellungen").click() }, "Einstellungen öffnen")),
       ));
       return;
     case "ohne":
       inhalt.replaceChildren(element("div", { class: "leer" },
         element("h2", {}, "Noch kein Transkript"),
-        element("p", {}, "Für diese Aufnahme gibt es noch kein Transkript, zum Beispiel weil die App während der Transkription geschlossen wurde."),
-        element("div", { class: "aktionen" }, transkribierenKnopf("Transkribieren"), ordnerKnopf(a.id)),
+        element("p", {}, a.audio
+          ? "Für diese Aufnahme gibt es noch kein Transkript, zum Beispiel weil die App während der Transkription geschlossen wurde."
+          : "Das Audio dieser Aufnahme wurde gelöscht, ein Transkript lässt sich nicht mehr erstellen."),
+        element("div", { class: "aktionen" }, a.audio ? transkribierenKnopf("Transkribieren") : null, ordnerKnopf(a.id)),
       ));
       return;
     case "fertig":
@@ -550,6 +563,7 @@ async function transkriptZeichnen(a) {
     if (k === "Aufnahme") continue;
     kopfListe.append(element("div", {}, element("dt", {}, k), element("dd", {}, v)));
   }
+  kopfListe.append(element("div", {}, element("dt", {}, "Audio"), element("dd", {}, audioText(a))));
 
   const kopierenKnopf = element("button", { type: "button", class: "aktion" }, "Transkript kopieren");
   kopierenKnopf.addEventListener("click", async () => {
@@ -563,7 +577,8 @@ async function transkriptZeichnen(a) {
     kopfListe,
     element("div", { class: "aktionen" },
       kopierenKnopf,
-      neuTranskribierenKnopf(a.id, !!t.bearbeitet),
+      a.audio ? neuTranskribierenKnopf(a.id, !!t.bearbeitet) : null,
+      a.audio ? audioLoeschenKnopf(a.id) : null,
       ordnerKnopf(a.id),
       element("span", { class: "bearbeiten-hinweis" }, "Zum Korrigieren einen Absatz anklicken."),
     ),
@@ -584,6 +599,32 @@ async function transkriptZeichnen(a) {
     protokoll.append(absatz);
   });
   $("inhalt").replaceChildren(kopf, protokoll);
+}
+
+function audioText(a) {
+  if (!a.audio) return "gelöscht";
+  const groesse = `${a.audio_mb.toLocaleString("de-CH")} MB`;
+  if (!a.audio_loeschen) return `${groesse}, wird nicht nach Frist gelöscht`;
+  if (a.audio_loeschen === "sofort") return `${groesse}, wird gleich gelöscht`;
+  const d = new Date(a.audio_loeschen);
+  const tag = d.toLocaleDateString("de-CH", { weekday: "short", day: "numeric", month: "short" });
+  return `${groesse}, wird am ${tag} gelöscht`;
+}
+
+function audioLoeschenKnopf(id) {
+  const knopf = element("button", { type: "button", class: "aktion" }, "Audio löschen");
+  let bestaetigt = false;
+  knopf.addEventListener("click", async () => {
+    if (!bestaetigt) {
+      bestaetigt = true;
+      knopf.textContent = "Endgültig löschen? Nochmals klicken";
+      setTimeout(() => { bestaetigt = false; knopf.textContent = "Audio löschen"; }, 4000);
+      return;
+    }
+    try { await rufe("audio_jetzt_loeschen", id); zustand.listeSignatur = ""; await listeLaden(); }
+    catch (e) { meldung(e.message); }
+  });
+  return knopf;
 }
 
 function neuTranskribierenKnopf(id, bearbeitet) {
@@ -870,7 +911,12 @@ function modellAuswahlFuellen(aktuell) {
 async function einstellungenOeffnen() {
   const form = $("form-einstellungen");
   const e = zustand.einstellungen;
-  for (const feld of ["name", "gegenueber", "stichworte", "aufnahme_ordner"]) form.elements[feld].value = e[feld] || "";
+  for (const feld of ["name", "gegenueber", "stichworte", "aufnahme_ordner", "audio_tage", "audio_max_mb"]) form.elements[feld].value = e[feld] || "";
+  rufe("audio_speicher").then((sp) => {
+    $("audio-hinweis").textContent = "Leer heisst unbegrenzt, 0 Tage heisst gleich nach dem Transkribieren. "
+      + "Transkripte bleiben immer erhalten, Aufnahmen ohne Transkript werden nie automatisch gelöscht. "
+      + `Belegt: ${sp.audio_mb.toLocaleString("de-CH")} MB.`;
+  }).catch(() => {});
   form.elements.qualitaet.value = e.qualitaet || "genau";
   $("ordner-hinweis").textContent = `Leer lassen für den Standard. Aktuell: ${e.ordner}`;
   try { zustand.modelle = await rufe("modelle"); } catch (_) { zustand.modelle = []; }
@@ -903,7 +949,13 @@ async function einstellungenSpeichern(ereignis) {
   ereignis.preventDefault();
   const form = $("form-einstellungen");
   const daten = {};
-  for (const feld of ["name", "gegenueber", "stichworte", "aufnahme_ordner", "qualitaet"]) daten[feld] = form.elements[feld].value;
+  for (const feld of ["name", "gegenueber", "stichworte", "aufnahme_ordner", "qualitaet", "audio_tage", "audio_max_mb"]) daten[feld] = form.elements[feld].value;
+  for (const feld of ["audio_tage", "audio_max_mb"]) {
+    if (daten[feld].trim() && !/^\d+$/.test(daten[feld].trim())) {
+      $("audio-hinweis").textContent = "Bitte bei Tagen und MB nur ganze Zahlen eingeben oder das Feld leer lassen.";
+      return;
+    }
+  }
   const wahl = form.elements.modell_auswahl.value;
   daten.modell = wahl === EIGENES ? form.elements.modell_eigen.value.trim() : wahl;
   if (!daten.modell) { $("modell-status").textContent = "Bitte ein Modell angeben."; return; }

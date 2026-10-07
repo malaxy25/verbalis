@@ -21,10 +21,21 @@ class Einstellungen:
     aufnahme_ordner: str = ""         # leer = ~/.mitschrift/aufnahmen
     mikrofon: str = ""                # leer = Systemstandard
     lautsprecher: str = ""
+    fenster: str = ""                 # zuletzt genutzte Fenstergrösse, z.B. "1180x700"
+    audio_tage: str = "3"             # Audio nach so vielen Tagen löschen; leer = nie, 0 = nach dem Transkript
+    audio_max_mb: str = ""            # Audio aller Aufnahmen höchstens so viele MB; leer = unbegrenzt
 
     @property
     def ordner(self) -> Path:
         return Path(self.aufnahme_ordner).expanduser() if self.aufnahme_ordner else mitschrift_home() / "aufnahmen"
+
+    @property
+    def tage(self) -> int | None:
+        return int(self.audio_tage) if self.audio_tage else None
+
+    @property
+    def max_mb(self) -> int | None:
+        return int(self.audio_max_mb) if self.audio_max_mb else None
 
     @property
     def beam_size(self) -> int:
@@ -52,6 +63,10 @@ class Einstellungen:
         e.name = e.name or "Ich"
         e.gegenueber = e.gegenueber or "Gegenüber"
         e.modell = e.modell or STANDARD_MODELL
+        for feld, standard in (("audio_tage", "3"), ("audio_max_mb", "")):
+            wert = getattr(e, feld)
+            if wert and not (wert.isdigit() and int(wert) < 100_000):
+                setattr(e, feld, standard)  # ungültige Eingabe → Standard
         return e
 
     def speichern(self) -> None:
