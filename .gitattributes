@@ -1,0 +1,5 @@
+# Einheitliche Zeilenenden im Repo, egal ob unter Windows oder Ubuntu bearbeitet
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.wav binary

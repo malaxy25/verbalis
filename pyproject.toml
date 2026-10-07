@@ -1,6 +1,6 @@
 [project]
 name = "mitschrift"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lokale Aufnahme und Transkription von Gesprächen (Mikrofon + Systemaudio), Deutsch und Schweizerdeutsch"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -8,10 +8,14 @@ dependencies = [
     "numpy>=1.26",
     "soundcard>=0.4.6",
     "soundfile>=0.12",
+    "faster-whisper>=1.1",
+    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# Nur nötig, um Hugging-Face-Modelle (z.B. Schweizerdeutsch-Fine-Tunes) umzuwandeln
+konvertieren = ["transformers>=4.40", "torch", "accelerate", "huggingface_hub"]
 
 [project.scripts]
 mitschrift = "mitschrift.__main__:main"

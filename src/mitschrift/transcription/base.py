@@ -3,14 +3,15 @@
 Jedes Backend (faster-whisper, transformers, später evtl. Cloud) setzt
 `Transcriber` um. Die App kennt nur diese Schnittstelle – so kann der User
 in den Einstellungen ein anderes Modell wählen, ohne dass sich sonst etwas
-ändert. Umsetzung folgt im nächsten Schritt.
+ändert. Erste Umsetzung: faster.py.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
+
+import numpy as np
 
 
 @dataclass
@@ -24,5 +25,10 @@ class Segment:
 class Transcriber(Protocol):
     name: str
 
-    def transkribiere(self, wav: Path, sprache: str = "de") -> list[Segment]:
+    def transkribiere(
+        self,
+        audio: np.ndarray,  # Mono float32, 16 kHz
+        sprache: str = "de",
+        fortschritt: Callable[[float, float], None] | None = None,
+    ) -> list[Segment]:
         ...

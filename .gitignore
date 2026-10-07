@@ -7,3 +7,8 @@ build/
 *.egg-info/
 # Aufnahmen enthalten Personendaten – nie committen
 aufnahmen/
+transkript*.md
+transkript*.json
+vergleich*.md
+vergleich*.json
+*.wav
