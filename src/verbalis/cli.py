@@ -215,18 +215,19 @@ def cmd_compare(args) -> int:
 
 
 def cmd_models(_args) -> int:
-    from .transcription.models import RECOMMENDED, builtin_models, converted_models, models_dir
+    from .transcription.models import RECOMMENDED, converted_models, models_dir
+
+    from .transcription.models import SIZE_GB, is_local
 
     converted = set(converted_models())
-    builtin = set(builtin_models())
     print("Empfohlene Modelle:")
     for model, description in RECOMMENDED:
-        if model in builtin:
-            status = "eingebaut"
-        elif model in converted:
-            status = "konvertiert ✓"
-        else:
-            status = "→ verbalis convert-model"
+        try:
+            local = is_local(model)
+        except Exception:
+            local = False
+        size = f", ca. {SIZE_GB[model]} GB" if model in SIZE_GB else ""
+        status = "auf diesem PC" if local else f"wird bei Bedarf heruntergeladen{size}"
         print(f"  {model}\n      {description}  [{status}]")
     others = converted - {m for m, _ in RECOMMENDED}
     if others:
@@ -307,6 +308,13 @@ def cmd_selftest(_args) -> int:
     check("Fenster (pywebview)", window_library)
     check("Audiogeräte (soundcard)", audio_devices_library)
     check("Rechtschreibung (spylls)", lambda: importlib.import_module("spylls.hunspell"))
+
+    def release_notes():
+        from .updates import changelog_path, changes_between
+        assert changelog_path() is not None, "CHANGELOG.md fehlt"
+        assert changes_between("0.0.0"), "keine Abschnitte im CHANGELOG"
+
+    check("Versionshinweise (CHANGELOG)", release_notes)
     print("\nAlles in Ordnung." if not failures else f"\n{len(failures)} Teil(e) fehlerhaft.")
     return 1 if failures else 0
 

@@ -17,7 +17,8 @@ ROOT = Path(SPECPATH).parent
 ICON = str(ROOT / "src" / "verbalis" / "ui" / "verbalis.ico")
 EXT = ".exe" if sys.platform == "win32" else ""
 
-datas = [(str(ROOT / "src" / "verbalis" / "ui"), "verbalis/ui")]
+datas = [(str(ROOT / "src" / "verbalis" / "ui"), "verbalis/ui"),
+         (str(ROOT / "CHANGELOG.md"), ".")]          # for «Was ist neu» after an update
 datas += collect_data_files("faster_whisper")   # Silero VAD model for the silence filter
 datas += collect_data_files("soundcard")        # C headers that soundcard reads at runtime (cffi)
 binaries = collect_dynamic_libs("ctranslate2") + collect_dynamic_libs("soxr")

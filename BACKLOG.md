@@ -39,10 +39,10 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 Devices at tocco are not centrally managed, so Verbalis is distributed as an
 installer via GitHub Releases with an update notice in the app.
 
-- [ ] **First installer test** – install the release of 0.7.2 on a second Windows machine (or a fresh user account) without Python; check recording, transcription, shortcut, update over an existing installation and uninstall. **[ops]**
-- [ ] **Update notice in the app** – on start, check the latest GitHub Release; if newer, show «Update verfügbar» with a button that downloads and starts the installer. Settings, models and recordings in `~/.verbalis` are kept. **[ops]** **[ux]**
+- [ ] **First installer test** – install the latest release in Windows Sandbox, on a second machine or in a fresh user account (without Python); check recording, transcription, shortcut, update over an existing installation and uninstall. **[ops]**
 - [ ] **Offline use** – the spelling dictionary is downloaded on first use like the models; for machines without internet provide both on an internal share. **[ops]**
-- [ ] **Model download on first start** – models are not part of the installer (several GB). Provide the converted Flix model once (internal share or own Hugging Face repo – Apache 2.0 allows this) and let the app download it with progress. **[ops]** **[ux]**
+- [ ] **Upload the converted Flix model** to `malaxy25/flix-swissgerman-ct2` on Hugging Face (one-time; model card in `tools/flix-model/README.md`). Until then installed copies can't download Flix. **[ops]**
+- [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
 - [ ] **Code signing** – without a signature Windows SmartScreen warns about an unknown publisher on first install. Decide whether to buy a certificate or document the warning. **[ops]**
 
 - [ ] Talk to IT and data protection: local processing, consent per recording, retention (audio deleted after N days).

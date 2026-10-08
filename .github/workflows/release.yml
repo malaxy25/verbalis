@@ -5,6 +5,7 @@ name: Release
 #   and the matching CHANGELOG section. The tag must match verbalis.__version__.
 # - Manual run (Actions → Release → Run workflow): build and self-test only; the
 #   installer is attached to the run as an artifact, nothing is published.
+#   Use it after merging dependency updates, before the next tag.
 
 on:
   push:
@@ -28,9 +29,11 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install dependencies
+      - name: Install dependencies (exact versions)
         run: |
-          pip install -e ".[build]"
+          # Exact versions from packaging/requirements-build.txt make the installer reproducible;
+          # updates come as Dependabot PRs and are verified before a release.
+          pip install -c packaging/requirements-build.txt -e ".[build]"
           if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
       - name: Read and check version

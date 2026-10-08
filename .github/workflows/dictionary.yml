@@ -1,0 +1,54 @@
+name: Dictionary check
+
+# Dependabot doesn't know the spelling dictionary (it is a data file from the
+# LibreOffice repo, not a package). This workflow does the same job monthly:
+# it compares the pinned dictionary (DICTIONARY_REVISION in src/verbalis/spelling.py)
+# with the latest LibreOffice version and opens an issue if it changed.
+
+on:
+  schedule:
+    - cron: "0 6 2 * *"   # 2nd of every month, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare pinned dictionary with the latest LibreOffice version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pinned=$(grep -oP 'DICTIONARY_REVISION = "\K[0-9a-f]{40}' src/verbalis/spelling.py)
+          latest=$(git ls-remote https://github.com/LibreOffice/dictionaries refs/heads/master | cut -f1)
+          echo "pinned $pinned, latest $latest"
+          changed=""
+          for f in de_CH_frami.dic de_CH_frami.aff; do
+            a=$(curl -sfL "https://raw.githubusercontent.com/LibreOffice/dictionaries/$pinned/de/$f" | sha256sum | cut -d' ' -f1)
+            b=$(curl -sfL "https://raw.githubusercontent.com/LibreOffice/dictionaries/$latest/de/$f" | sha256sum | cut -d' ' -f1)
+            if [ "$a" != "$b" ]; then changed="$changed $f"; fi
+          done
+          if [ -z "$changed" ]; then
+            echo "Dictionary is up to date."
+            exit 0
+          fi
+          title="Newer Swiss German spelling dictionary available"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq 'length')
+          if [ "$open" != "0" ]; then
+            echo "An issue is already open."
+            exit 0
+          fi
+          gh issue create --title "$title" --body "The LibreOffice Swiss German dictionary changed:$changed
+
+          To update Verbalis:
+          1. In \`src/verbalis/spelling.py\` set \`DICTIONARY_REVISION = \"$latest\"\`
+          2. Add a line to \`CHANGELOG.md\`, run \`pytest -q\`, release as usual.
+
+          After installing that version, every installation downloads the new dictionary once.
+          Personal words in \`~/.verbalis/words.txt\` are kept."

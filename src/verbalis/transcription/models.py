@@ -18,11 +18,26 @@ from pathlib import Path
 
 # (model id, description shown in the UI – German)
 RECOMMENDED: list[tuple[str, str]] = [
-    ("Flix-AI/flix-swissgerman-full", "Schweizerdeutsch-Fine-Tune (large-v3), bestes Ergebnis im Test – konvertieren nötig"),
+    ("Flix-AI/flix-swissgerman-full", "Schweizerdeutsch-Fine-Tune (large-v3), bestes Ergebnis im Test"),
     ("large-v3", "Original von OpenAI, fast gleich gut, etwas schneller"),
     ("large-v3-turbo", "deutlich schneller, aber schwächer bei Dialekt"),
 ]
 DEFAULT_MODEL = RECOMMENDED[0][0]
+
+# Models that only exist in Transformers format upstream are provided ready for
+# faster-whisper (CTranslate2) in our own Hugging Face repo, so nobody has to
+# convert them. Flix is Apache 2.0, redistribution with attribution is allowed.
+DOWNLOAD_REPO = {
+    "Flix-AI/flix-swissgerman-full": "malaxy25/flix-swissgerman-ct2",
+}
+# Approximate download size in GB (float16 CTranslate2), shown before downloading
+SIZE_GB = {
+    "Flix-AI/flix-swissgerman-full": 3.1,
+    "large-v3": 3.1,
+    "large-v3-turbo": 1.6,
+}
+# Same files faster-whisper downloads
+FILES = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
 
 WEIGHT_FILES = (
     "model.safetensors",
@@ -67,6 +82,9 @@ def resolve(model: str) -> str:
     if (converted / "model.bin").exists():
         return str(converted)
 
+    if model in DOWNLOAD_REPO:
+        return DOWNLOAD_REPO[model]  # ready-converted copy, faster-whisper downloads it
+
     if model in builtin_models() or "/" in model:
         return model  # faster-whisper downloads it
 
@@ -74,6 +92,83 @@ def resolve(model: str) -> str:
         f"Unbekanntes Modell '{model}'. Erlaubt sind eingebaute Namen "
         f"({', '.join(builtin_models())}), Hugging-Face-IDs oder ein lokaler Ordner."
     )
+
+
+def repo_for(model: str) -> str | None:
+    """Hugging Face repo a model is downloaded from, or None if it is local only."""
+    if Path(model).expanduser().is_dir() or (models_dir() / slug(model) / "model.bin").exists():
+        return None
+    if model in DOWNLOAD_REPO:
+        return DOWNLOAD_REPO[model]
+    try:
+        from faster_whisper.utils import _MODELS  # built-in names → repos
+    except ImportError:
+        _MODELS = {}
+    if model in _MODELS:
+        return _MODELS[model]
+    return model if "/" in model else None
+
+
+def is_local(model: str) -> bool:
+    """Is the model already on this computer (no download needed)?"""
+    repo = repo_for(model)
+    if repo is None:
+        return Path(model).expanduser().is_dir() or (models_dir() / slug(model) / "model.bin").exists()
+    from huggingface_hub import try_to_load_from_cache
+
+    return isinstance(try_to_load_from_cache(repo, "model.bin"), str)
+
+
+def _cache_folder(repo: str) -> Path:
+    from huggingface_hub import constants
+
+    return Path(constants.HF_HUB_CACHE) / ("models--" + repo.replace("/", "--"))
+
+
+def _folder_bytes(folder: Path) -> int:
+    total = 0
+    for f in folder.rglob("*"):
+        try:
+            if f.is_file() and not f.is_symlink():
+                total += f.stat().st_size
+        except FileNotFoundError:  # files move while downloading
+            pass
+    return total
+
+
+def download(model: str, progress=None) -> None:
+    """Download a model into the Hugging Face cache; progress(bytes_done) every half second.
+
+    Runs the download in a thread and measures the cache folder, because
+    huggingface_hub reports no byte progress we could pass on.
+    """
+    import threading
+
+    from huggingface_hub import snapshot_download
+
+    repo = repo_for(model)
+    if repo is None:
+        return
+    folder = _cache_folder(repo)
+    start = _folder_bytes(folder) if folder.exists() else 0
+    result: dict = {}
+
+    def run():
+        try:
+            snapshot_download(repo, allow_patterns=FILES)
+        except Exception as e:  # reported below in the calling thread
+            result["error"] = e
+
+    worker = threading.Thread(target=run, name="model-download", daemon=True)
+    worker.start()
+    while worker.is_alive():
+        worker.join(0.5)
+        if progress and folder.exists():
+            progress(max(_folder_bytes(folder) - start, 0))
+    if "error" in result:
+        raise ModelError(
+            f"Das Modell konnte nicht heruntergeladen werden ({repo}). Internetverbindung prüfen. "
+            f"Details: {result['error']}") from result["error"]
 
 
 def converted_models() -> list[str]:

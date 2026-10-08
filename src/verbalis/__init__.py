@@ -7,4 +7,4 @@ import os as _os
 _os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 _os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
-__version__ = "0.7.3"
+__version__ = "0.7.4"

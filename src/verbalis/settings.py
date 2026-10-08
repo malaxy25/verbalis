@@ -24,6 +24,8 @@ class Settings:
     window_size: str = ""             # last window size, e.g. "1180x700"
     audio_days: str = "3"             # delete audio after N days; empty = never, 0 = right after transcription
     audio_max_mb: str = ""            # all audio at most N MB; empty = unlimited
+    update_check: str = "on"          # "on" = ask GitHub for a newer version at start, "off"
+    last_seen_version: str = ""       # version whose «what's new» was shown last
 
     @property
     def recordings(self) -> Path:
@@ -63,6 +65,8 @@ class Settings:
         s.name = s.name or "Ich"
         s.others = s.others or "Gegenüber"
         s.model = s.model or DEFAULT_MODEL
+        if s.update_check not in ("on", "off"):
+            s.update_check = "on"
         for name, default in (("audio_days", "3"), ("audio_max_mb", "")):
             value = getattr(s, name)
             if value and not (value.isdigit() and int(value) < 100_000):

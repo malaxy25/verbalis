@@ -83,6 +83,9 @@ the repo, so updates take effect immediately. Errors are logged to
 - **Settings:** your name, label for the others, model, speed (accurate/fast),
   keywords, correction list (add entries by hand, click a word to add another
   variant), audio retention and recordings folder.
+- **Updates:** Verbalis checks GitHub for a newer version at start (can be
+  switched off). A notice bottom left opens the release notes and installs the
+  update. After an update, «Neu in Verbalis» shows what changed.
 - **Log:** the «Protokoll» tab in the settings shows the log with a filter for warnings and errors.
   «Exportieren …» saves a ZIP for bug reports – without names, paths or
   conversation content.
@@ -137,7 +140,14 @@ verbalis compare <folder> --reference testdata/reference_standard_german.txt
 whole recording) and writes `comparison.md` with load time, compute time,
 real-time factor and word error rate (WER), plus one transcript per model.
 
-Any Hugging Face Whisper model can be converted this way and used with
+Models are downloaded on first use, with progress in the app; the model list in
+the settings shows which ones are already on this computer. Flix only exists in
+Transformers format upstream, so a ready-converted copy is provided in
+`malaxy25/flix-swissgerman-ct2` (model card in `tools/flix-model/`). Downloaded
+models update themselves: faster-whisper fetches a newer version of the repo when
+it loads the model.
+
+Any Hugging Face Whisper model can be converted with `convert-model` and used with
 `--model <hf-id>`. The read-aloud text for tests is in
 `testdata/read_aloud_zurich.md`.
 
@@ -173,7 +183,10 @@ SmartScreen warns on first install («Weitere Informationen» → «Trotzdem aus
 The workflow can also be started manually (Actions → Release → Run workflow): it then
 only builds and attaches the installer to the run, without publishing.
 
-Local build: `pip install -e ".[build]"`, then `pyinstaller packaging/verbalis.spec --noconfirm`.
+The build uses the exact versions in `packaging/requirements-build.txt`.
+
+Local build: `pip install -c packaging/requirements-build.txt -e ".[build]"`, then
+`pyinstaller packaging/verbalis.spec --noconfirm`.
 
 ## Development
 
@@ -185,7 +198,8 @@ The GitHub Action runs the tests on Windows and Ubuntu with Python 3.11 and 3.13
 Dependabot proposes grouped dependency updates once a month as pull requests;
 merge them when the tests are green.
 Open work is tracked in [`BACKLOG.md`](BACKLOG.md), changes in
-[`CHANGELOG.md`](CHANGELOG.md).
+[`CHANGELOG.md`](CHANGELOG.md), the maintenance routine in
+[`MAINTENANCE.md`](MAINTENANCE.md).
 
 ## License
 

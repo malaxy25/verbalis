@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.7.4 – 2026-10-08
+- Fix: exporting the log failed with «ZIP-Datei (*.zip) is not a valid file filter» – pywebview
+  allows no hyphen in the filter description. Regression test uses pywebview's own check.
+- **Reproducible installer build:** exact versions of all build dependencies in
+  `packaging/requirements-build.txt` (all platforms, generated with uv); Dependabot proposes
+  updates for them monthly
+- GitHub Actions updated (checkout 7, setup-python 7, upload-artifact 6, action-gh-release 3) –
+  same as Dependabot PR #1
+- `MAINTENANCE.md`: monthly routine, security alerts, ZIP workflow, releasing
+- **Update notice:** at start Verbalis asks GitHub for the latest release (can be switched off in the
+  settings, «Jetzt prüfen» checks by hand). If newer, a notice appears bottom left; the dialog shows the
+  release notes and downloads and starts the installer, Verbalis closes itself. In a development
+  checkout it links to the release page instead.
+- **What's new:** after an update the changelog sections since the previously used version are shown
+  once. `CHANGELOG.md` is bundled with the installer.
+- **Models download on demand, with progress:** the model list shows which models are already on this
+  computer and the download size of the others. Flix is downloaded ready-converted from
+  `malaxy25/flix-swissgerman-ct2` (model card in `tools/flix-model/`) – no local conversion needed.
+  Downloaded models update themselves: faster-whisper fetches a newer version when it loads them.
+- **Spelling dictionary pinned** to a LibreOffice commit; a newer pin makes every installation download
+  it once. A monthly GitHub Action (`dictionary.yml`) opens an issue when LibreOffice has a newer one.
+- Self-test also checks the bundled changelog
+
 ## 0.7.3 – 2026-10-08
 - **Own spell checking** while correcting a transcript: misspelled words are underlined, a right-click
   shows suggestions and «Als richtig merken». Swiss German dictionary (LibreOffice de_CH, «ss»

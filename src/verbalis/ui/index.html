@@ -99,6 +99,26 @@
   .paused-label { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 12px; letter-spacing: 0; }
   .paused-label[hidden] { display: none; }
 
+  /* Updates and release notes */
+  .update-banner {
+    border: 1px solid var(--limmat) !important; background: var(--limmat-soft) !important; color: var(--ink) !important;
+    font-weight: 600; margin-bottom: 6px;
+  }
+  .update-banner[hidden] { display: none; }
+  .consent-like { display: flex; gap: 8px; align-items: center; }
+  .notes-dialog { width: min(640px, 92vw); }
+  .notes-dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
+  .notes-body { padding: 22px 26px 8px; overflow-y: auto; min-height: 0; }
+  .notes-body h2 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+  .notes-body h3 { margin: 18px 0 6px; font-size: 15px; font-weight: 600; }
+  .notes-body .lead { color: var(--muted); margin: 0 0 8px; }
+  .notes-body ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  .notes-body p { margin: 6px 0; }
+  .notes-body code { font-family: var(--font-mono); font-size: 13px; }
+  .notes-foot { padding: 12px 26px 20px; display: grid; gap: 8px; border-top: 1px solid var(--line); }
+  .notes-foot .dialog-buttons { padding-top: 0; }
+  .notes-foot .note-line { margin: 0; color: var(--muted); font-size: 13px; }
+
   /* Spelling */
   ::highlight(spelling) { text-decoration: underline wavy var(--red); text-decoration-thickness: 1px; text-underline-offset: 3px; }
   .spell-status { color: var(--muted); }
@@ -335,6 +355,7 @@
   <h1>Verbalis</h1>
   <ol class="list" id="list"></ol>
   <footer>
+    <button type="button" class="update-banner" id="btn-update" hidden></button>
     <button type="button" id="btn-settings">Einstellungen</button>
     <button type="button" id="btn-folder">Aufnahmeordner öffnen</button>
     <a href="#" class="version" id="version" title="Was ist neu? Versionshinweise auf GitHub öffnen"></a>
@@ -386,6 +407,26 @@
 
   <section class="content" id="content" aria-live="polite"></section>
 </main>
+
+<dialog id="dlg-update" class="notes-dialog" aria-labelledby="update-title">
+  <div class="notes-body" id="update-body"></div>
+  <div class="notes-foot">
+    <p class="note-line" id="update-line"></p>
+    <div class="dialog-buttons">
+      <button type="button" class="action" id="btn-update-later">Später</button>
+      <button type="button" class="action primary" id="btn-update-go"></button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-news" class="notes-dialog" aria-labelledby="news-title">
+  <div class="notes-body" id="news-body"></div>
+  <div class="notes-foot">
+    <div class="dialog-buttons">
+      <button type="button" class="action primary" id="btn-news-ok">Alles klar</button>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="dlg-settings" aria-labelledby="settings-title">
   <div class="dialog-head">
@@ -444,6 +485,14 @@
       <input type="text" name="recordings_dir" autocomplete="off" spellcheck="false">
       <small id="folder-hint"></small>
     </label>
+    <div class="field">
+      <span>Updates</span>
+      <label class="consent-like"><input type="checkbox" name="update_check"> Beim Start nach einer neuen Version suchen</label>
+      <div class="field-row">
+        <button type="button" class="action" id="btn-check-update">Jetzt prüfen</button>
+        <small id="update-result">Fragt bei GitHub nach der neuesten Version. Dabei wird nichts über dich übermittelt.</small>
+      </div>
+    </div>
     <div class="dialog-buttons">
       <button type="button" class="action" id="btn-cancel">Abbrechen</button>
       <button type="submit" class="action primary">Einstellungen speichern</button>
@@ -1009,6 +1058,7 @@ async function poll() {
     showRecording(z.recording);
     if (z.recording_error) showMessage(z.recording_error);
     state.lastState = z;
+    showUpdateBanner(z);
     showProgress(z);
     renderContent();
     if (++counter % 4 === 0 || z.job) await loadList();
@@ -1127,7 +1177,7 @@ function fillModelChoice(current) {
   const select = $("sel-model");
   const ids = state.models.map((m) => m.id);
   select.replaceChildren(
-    ...state.models.map((m) => element("option", { value: m.id }, m.id)),
+    ...state.models.map((m) => element("option", { value: m.id }, m.label || m.id)),
     element("option", { value: CUSTOM }, "Anderes Modell …"),
   );
   const form = $("form-settings");
@@ -1145,6 +1195,7 @@ async function openSettings() {
   const form = $("form-settings");
   const e = state.settings;
   for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb"]) form.elements[field].value = e[field] || "";
+  form.elements.update_check.checked = e.update_check !== "off";
   call("audio_usage").then((sp) => {
     $("audio-hint").textContent = "Leer heisst unbegrenzt, 0 Tage heisst gleich nach dem Transkribieren. "
       + "Transkripte bleiben immer erhalten, Aufnahmen ohne Transkript werden nie automatisch gelöscht. "
@@ -1197,6 +1248,115 @@ async function addCorrection() {
   } catch (e) {
     result.textContent = e.message;
   }
+}
+
+/* ---------- Release notes (small Markdown subset) ---------- */
+
+function inlineMarkdown(text) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
+  return parts.map((part) => part.startsWith("**") ? element("strong", {}, part.slice(2, -2))
+    : part.startsWith("`") ? element("code", {}, part.slice(1, -1)) : document.createTextNode(part));
+}
+
+function renderNotes(markdown) {
+  const fragment = document.createDocumentFragment();
+  let list = null, item = null;
+  for (const raw of markdown.split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim()) { item = null; continue; }
+    if (/^#+ /.test(line)) { list = item = null; fragment.append(element("h3", {}, ...inlineMarkdown(line.replace(/^#+ /, "")))); continue; }
+    if (/^\s*[-*] /.test(line) && !/^\s{2,}/.test(line)) {
+      if (!list) { list = element("ul"); fragment.append(list); }
+      item = element("li", {}, ...inlineMarkdown(line.replace(/^\s*[-*] /, "")));
+      list.append(item);
+      continue;
+    }
+    if (item && /^\s+/.test(line)) { item.append(" ", ...inlineMarkdown(line.trim())); continue; }
+    list = item = null;
+    fragment.append(element("p", {}, ...inlineMarkdown(line.trim())));
+  }
+  return fragment;
+}
+
+/* ---------- Updates ---------- */
+
+function showUpdateBanner(z) {
+  const banner = $("btn-update");
+  banner.hidden = !z.update;
+  if (z.update) banner.textContent = `Update: Version ${z.update.latest} verfügbar`;
+  if (z.update_progress != null && $("dlg-update").open && !state.updateStarted) {
+    $("update-line").textContent = `Wird heruntergeladen … ${Math.round(z.update_progress * 100)} %`;
+  }
+}
+
+async function openUpdate() {
+  let info;
+  try { info = await call("update_info"); } catch (e) { showMessage(e.message); return; }
+  if (!info) return;
+  state.update = info;
+  $("update-body").replaceChildren(
+    element("h2", { id: "update-title" }, `Verbalis ${info.latest} ist verfügbar`),
+    element("p", { class: "lead" }, `Installiert ist Version ${info.current}. Das ist neu:`),
+    renderNotes(info.notes || "Keine Versionshinweise."),
+  );
+  const go = $("btn-update-go");
+  go.disabled = false;
+  if (info.can_install) {
+    go.textContent = "Herunterladen und installieren";
+    $("update-line").textContent = `Download ca. ${info.installer_mb} MB. Verbalis schliesst sich danach, der Installer übernimmt. Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten.`;
+  } else {
+    go.textContent = "Release-Seite öffnen";
+    $("update-line").textContent = "Diese Verbalis läuft aus dem Quellcode (Entwicklungsversion): bitte mit git aktualisieren.";
+  }
+  $("dlg-update").showModal();
+}
+
+async function startUpdate() {
+  const info = state.update;
+  if (!info) return;
+  if (!info.can_install) { call("open_project_page").catch(() => {}); $("dlg-update").close(); return; }
+  const go = $("btn-update-go");
+  go.disabled = true;
+  $("btn-update-later").disabled = true;
+  $("update-line").textContent = "Wird heruntergeladen …";
+  try {
+    await call("install_update");
+    state.updateStarted = true;
+    $("update-line").textContent = "Der Installer startet. Verbalis wird jetzt geschlossen.";
+  } catch (e) {
+    $("update-line").textContent = e.message;
+    go.disabled = false;
+    $("btn-update-later").disabled = false;
+  }
+}
+
+async function checkUpdateNow() {
+  const result = $("update-result");
+  result.textContent = "Wird geprüft …";
+  try {
+    const info = await call("check_updates");
+    result.textContent = info.available ? `Version ${info.latest} ist verfügbar – siehe Hinweis unten links.`
+      : `Du hast die neueste Version (${info.current}).`;
+    await poll();
+  } catch (e) { result.textContent = e.message; }
+}
+
+async function showWhatsNew() {
+  let sections;
+  try { sections = await call("whats_new"); } catch (_) { return; }
+  if (!sections || !sections.length) return;
+  const body = $("news-body");
+  body.replaceChildren(element("h2", { id: "news-title" }, `Neu in Verbalis ${sections[0].version}`));
+  if (sections.length > 1) body.append(element("p", { class: "lead" }, `Seit deiner letzten Version (${sections.length} Versionen):`));
+  for (const s of sections) {
+    if (sections.length > 1) body.append(element("h3", {}, s.title));
+    body.append(renderNotes(s.body));
+  }
+  $("dlg-news").showModal();
+}
+
+function closeWhatsNew() {
+  $("dlg-news").close();   // the close event marks it as seen (also for Esc)
 }
 
 /* ---------- Spelling ---------- */
@@ -1357,6 +1517,7 @@ async function saveSettings(event) {
   const form = $("form-settings");
   const data = {};
   for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "audio_days", "audio_max_mb"]) data[field] = form.elements[field].value;
+  data.update_check = form.elements.update_check.checked ? "on" : "off";
   for (const field of ["audio_days", "audio_max_mb"]) {
     if (data[field].trim() && !/^\d+$/.test(data[field].trim())) {
       $("audio-hint").textContent = "Bitte bei Tagen und MB nur ganze Zahlen eingeben oder das Feld leer lassen.";
@@ -1406,6 +1567,12 @@ async function init() {
     call("open_project_page").catch((e) => showMessage(e.message));
   });
   $("btn-corr-add").addEventListener("click", addCorrection);
+  $("btn-update").addEventListener("click", openUpdate);
+  $("btn-update-later").addEventListener("click", () => $("dlg-update").close());
+  $("btn-update-go").addEventListener("click", startUpdate);
+  $("btn-news-ok").addEventListener("click", closeWhatsNew);
+  $("dlg-news").addEventListener("close", () => call("whats_new_seen").catch(() => {}));
+  $("btn-check-update").addEventListener("click", checkUpdateNow);
   for (const id of ["corr-variant", "corr-target"]) {
     $(id).addEventListener("keydown", (event) => {   // Enter adds instead of saving the settings
       if (event.key === "Enter") { event.preventDefault(); addCorrection(); }
@@ -1425,6 +1592,7 @@ async function init() {
   await renderContent(true);
   updateRecordButton();
   setInterval(poll, 250);
+  showWhatsNew();
 }
 
 if (window.pywebview && window.pywebview.api) init();

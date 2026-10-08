@@ -38,3 +38,12 @@ def test_log_replacement_handles_progress_bars():
     for _ in tqdm(range(3), file=replacement):
         pass
     assert replacement.write("x\n") == 2 and not replacement.isatty()
+
+
+def test_zip_filter_is_valid_for_pywebview():
+    """Regression 0.7.3: «ZIP-Datei (*.zip)» was rejected by the save dialog."""
+    from webview.util import parse_file_type
+
+    from verbalis.app import ZIP_FILTER
+
+    assert parse_file_type(ZIP_FILTER) == ("ZIP Archiv", "*.zip")

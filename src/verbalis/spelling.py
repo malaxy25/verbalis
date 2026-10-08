@@ -8,6 +8,11 @@ slow n-gram phase can take seconds for badly garbled words.
 The dictionary is GPL licensed, so it is not part of this MIT project: it is
 downloaded on first use into ~/.verbalis/dictionaries/ (like the models).
 
+It is pinned to a fixed commit of the LibreOffice repo (DICTIONARY_REVISION).
+A monthly GitHub Action (.github/workflows/dictionary.yml) compares it with the
+latest version and opens an issue when there is a newer one. Raising the
+revision here makes every installation download the new dictionary once.
+
 Words the user marks as correct go to ~/.verbalis/words.txt. Keywords and
 correction-list targets count as correct too (e.g. «tocco»).
 """
@@ -26,7 +31,9 @@ from .transcription.models import verbalis_home
 log = logging.getLogger(__name__)
 
 DICTIONARY = "de_CH_frami"
-SOURCE = "https://raw.githubusercontent.com/LibreOffice/dictionaries/master/de/"
+DICTIONARY_REVISION = "32b006a2c22a4ac7e8ed3f03346f7b3d85a970a4"   # LibreOffice/dictionaries commit
+SOURCE = f"https://raw.githubusercontent.com/LibreOffice/dictionaries/{DICTIONARY_REVISION}/de/"
+REVISION_FILE = "revision.txt"
 FILES = (f"{DICTIONARY}.aff", f"{DICTIONARY}.dic", "README_de_DE_frami.txt")
 WORD = re.compile(r"[^\W\d_]+(?:[-'’][^\W\d_]+)*")
 QUIET_S = 0.25  # stop searching once no new suggestion came for this long
@@ -73,23 +80,23 @@ class Speller:
         folder.mkdir(parents=True, exist_ok=True)
         for name in FILES:
             target = folder / name
-            if target.exists():
-                continue
             tmp = target.with_suffix(target.suffix + ".tmp")
             with urllib.request.urlopen(SOURCE + name, timeout=60) as response:
                 tmp.write_bytes(response.read())
             tmp.replace(target)
-        log.info("Dictionary %s downloaded", DICTIONARY)
+        (folder / REVISION_FILE).write_text(DICTIONARY_REVISION, encoding="utf-8")
+        log.info("Dictionary %s downloaded (revision %s)", DICTIONARY, DICTIONARY_REVISION[:8])
 
     def _load(self) -> None:
         try:
             from spylls.hunspell import Dictionary
 
             folder = self._folder()
-            if not all((folder / name).exists() for name in FILES[:2]):
-                if not self.download:
-                    raise FileNotFoundError(f"Wörterbuch fehlt in {folder}")
-                self._download(folder)
+            complete = all((folder / name).exists() for name in FILES[:2])
+            if not complete and not self.download:
+                raise FileNotFoundError(f"Wörterbuch fehlt in {folder}")
+            if self.download and (not complete or self.installed_revision(folder) != DICTIONARY_REVISION):
+                self._download(folder)   # missing, or an older revision than this version expects
             t = time.monotonic()
             self._dictionary = Dictionary.from_files(str(folder / DICTIONARY))
             log.info("Dictionary loaded in %.1f s", time.monotonic() - t)
@@ -99,6 +106,13 @@ class Speller:
             self.error = ("Das Wörterbuch konnte nicht geladen werden – für den ersten Gebrauch braucht es "
                           f"eine Internetverbindung. ({e})")
             self.status = "error"
+
+    @staticmethod
+    def installed_revision(folder: Path) -> str:
+        try:
+            return (folder / REVISION_FILE).read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return ""
 
     # ------------------------------------------------------------ personal words
 

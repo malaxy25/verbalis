@@ -18,6 +18,8 @@ from .service import Service
 
 UI = Path(__file__).parent / "ui" / "index.html"
 PROJECT_URL = "https://github.com/malaxy25/verbalis/releases"
+# pywebview only accepts letters, digits and spaces before the brackets (no hyphen)
+ZIP_FILTER = "ZIP Archiv (*.zip)"
 ICON = Path(__file__).parent / "ui" / "verbalis.ico"
 log = logging.getLogger("verbalis")
 _MUTEX = None  # holds the Windows lock against opening the app twice
@@ -104,6 +106,25 @@ class Api:
     def spelling_add(self, word):
         return self._call(self._s.spelling_add, word)
 
+    def update_info(self):
+        return self._call(self._s.update_info)
+
+    def check_updates(self):
+        return self._call(self._s.check_updates)
+
+    def install_update(self):
+        result = self._call(self._s.install_update)
+        if result["ok"] and self._window is not None:
+            # give the UI a moment to show the message, then close so the installer can replace files
+            threading.Timer(1.5, self._window.destroy).start()
+        return result
+
+    def whats_new(self):
+        return self._call(self._s.whats_new)
+
+    def whats_new_seen(self):
+        return self._call(self._s.whats_new_seen)
+
     def open_project_page(self):
         import webbrowser
 
@@ -138,7 +159,7 @@ class Api:
 
             result = self._window.create_file_dialog(
                 webview.FileDialog.SAVE, directory=str(downloads if downloads.exists() else Path.home()),
-                save_filename=name, file_types=("ZIP-Datei (*.zip)",))
+                save_filename=name, file_types=(ZIP_FILTER,))
             if not result:
                 return None
             target = Path(result if isinstance(result, str) else result[0])
@@ -192,7 +213,7 @@ def window_position(width: int, height: int, screen) -> tuple[int | None, int | 
 def start() -> None:
     import webview
 
-    service = Service()
+    service = Service(check_updates_on_start=True)
     try:
         screen = webview.screens[0]
     except Exception:

@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import pipeline
+from . import __version__, pipeline, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
@@ -68,6 +68,7 @@ class Service:
         list_devices: Callable | None = None,
         cleanup_on_start: bool = True,
         speller: Speller | None = None,
+        check_updates_on_start: bool = False,
     ):
         self._lock = threading.RLock()
         self._s = settings or Settings.load()
@@ -89,11 +90,15 @@ class Service:
         self._transcriber_model: str | None = None
         self._manual_pause = False
         self._speller = speller or Speller()   # loads the dictionary on first use
+        self._update: dict | None = None        # result of the last update check
+        self._update_progress: float | None = None
 
         self._worker = threading.Thread(target=self._work, name="transcription", daemon=True)
         self._worker.start()
         if cleanup_on_start:
             self._queue.put(CLEANUP)  # check old audio files
+        if check_updates_on_start and self._s.update_check == "on":
+            threading.Thread(target=self._check_updates_safely, name="update-check", daemon=True).start()
 
     # ------------------------------------------------------------ default building blocks
 
@@ -140,22 +145,49 @@ class Service:
         return self._list_devices()
 
     def models(self) -> list[dict]:
-        from .transcription.models import RECOMMENDED, builtin_models, converted_models
+        """Recommended and own models, with whether they are already on this computer."""
+        from .transcription.models import RECOMMENDED, SIZE_GB, converted_models, is_local
 
-        converted = set(converted_models())
-        builtin = set(builtin_models())
+        entries = list(RECOMMENDED) + [(m, "selbst konvertiert") for m in sorted(
+            set(converted_models()) - {m for m, _ in RECOMMENDED})]
         result = []
-        for model, description in RECOMMENDED:
-            if model in converted:
-                status = "bereit"
-            elif model in builtin:
-                status = "wird beim ersten Gebrauch heruntergeladen"
+        for model, description in entries:
+            try:
+                local = is_local(model)
+            except Exception:  # cache unreadable – treat as "will be downloaded"
+                local = False
+            size = SIZE_GB.get(model)
+            if local:
+                status = "auf diesem PC"
+            elif size:
+                status = f"wird bei Bedarf heruntergeladen (ca. {size:.1f} GB)".replace(".", ",", 1)
             else:
-                status = f"noch nicht konvertiert – im Terminal: verbalis convert-model {model}"
-            result.append({"id": model, "description": description, "status": status})
-        for model in sorted(converted - {m for m, _ in RECOMMENDED}):
-            result.append({"id": model, "description": "selbst konvertiert", "status": "bereit"})
+                status = "wird bei Bedarf heruntergeladen"
+            result.append({"id": model, "description": description, "status": status, "local": local,
+                           "size_gb": size, "label": f"{model} – {status}"})
         return result
+
+    def _ensure_model(self, model: str) -> None:
+        """Download a missing model before loading it, with progress in the job."""
+        from .transcription.models import SIZE_GB, download, is_local, repo_for
+
+        try:
+            if repo_for(model) is None or is_local(model):
+                return
+        except Exception:
+            return  # can't tell – faster-whisper will download it itself
+        size = SIZE_GB.get(model)
+
+        def progress(done: int) -> None:
+            gb = done / 1e9
+            with self._lock:
+                if self._job:
+                    total = f" von ca. {size:.1f} GB" if size else " GB"
+                    self._job["phase"] = f"Modell wird heruntergeladen: {gb:.1f}{total}".replace(".", ",")
+                    self._job["progress"] = min(gb / size, 0.99) if size else 0.0
+
+        log.info("Downloading model %s", model)
+        download(model, progress)
 
     # ------------------------------------------------------------ recording
 
@@ -334,8 +366,10 @@ class Service:
                 }
             try:
                 self._compress_safely(self._path(recording_id))
+                self._ensure_model(s.model)
                 with self._lock:
                     self._job["phase"] = f"Modell {s.model} wird geladen"
+                    self._job["progress"] = 0.0
                 tr = self._get_model(s.model)
                 tr.beam_size = s.beam_size
                 corrections = CorrectionList.load()
@@ -562,6 +596,64 @@ class Service:
         corrections.save()
         return corrections.as_list()
 
+    # ------------------------------------------------------------ updates
+
+    def _check_updates_safely(self) -> None:
+        try:
+            self._update = updates.check()
+            log.info("Update check: latest %s, current %s", self._update["latest"], __version__)
+        except Exception as e:  # offline or GitHub unreachable – not worth bothering the user
+            log.warning("Update check failed: %s", e)
+
+    def check_updates(self) -> dict:
+        """Manual check from the settings."""
+        try:
+            self._update = updates.check()
+        except Exception as e:
+            raise RuntimeError(f"GitHub ist nicht erreichbar – später nochmals versuchen. ({e})") from e
+        return self._update
+
+    def update_info(self) -> dict | None:
+        return self._update
+
+    def install_update(self) -> dict:
+        """Download the installer and start it. The app closes afterwards (see app.py)."""
+        info = self._update
+        if not info or not info.get("available"):
+            raise RuntimeError("Es ist kein Update verfügbar.")
+        if not info.get("can_install"):
+            raise RuntimeError("In dieser Installation (Entwicklungsversion) bitte über git aktualisieren.")
+        if self._rec is not None or self._job is not None or self._queued:
+            raise RuntimeError("Bitte zuerst die Aufnahme beenden bzw. die Transkription abwarten.")
+        import tempfile
+
+        target = Path(tempfile.gettempdir()) / f"Verbalis-{info['latest']}-setup.exe"
+        self._update_progress = 0.0
+
+        def progress(fraction: float) -> None:
+            self._update_progress = fraction
+
+        try:
+            updates.download_installer(info["installer_url"], target, progress)
+        except Exception as e:
+            self._update_progress = None
+            raise RuntimeError(f"Der Download des Updates ist fehlgeschlagen. ({e})") from e
+        log.info("Starting installer %s", target)
+        subprocess.Popen([str(target)], close_fds=True)
+        self._update_progress = None
+        return {"started": True}
+
+    def whats_new(self) -> list[dict]:
+        """Changelog sections since the version seen last – empty on the very first start."""
+        last = self._s.last_seen_version
+        if not last:
+            self.save_settings({"last_seen_version": __version__})
+            return []
+        return updates.changes_between(last, __version__)
+
+    def whats_new_seen(self) -> None:
+        self.save_settings({"last_seen_version": __version__})
+
     # ------------------------------------------------------------ recordings
 
     def _path(self, recording_id: str) -> Path:
@@ -661,8 +753,11 @@ class Service:
             pause = self._pause_reason()
         if rec is not None and recording is None:
             self.stop_recording()
+        update = self._update
         return {"recording": recording, "job": job, "queued": queued, "pause": pause,
-                "recording_error": self._recording_error}
+                "recording_error": self._recording_error,
+                "update": {"latest": update["latest"]} if update and update.get("available") else None,
+                "update_progress": self._update_progress}
 
     def shutdown(self, wait_s: float = 0.0) -> None:
         """When the window closes: save a running recording properly.

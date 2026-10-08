@@ -45,3 +45,26 @@ def test_missing_dictionary_without_download(tmp_path):
     assert s.status == "error" and "Wörterbuch" in s.error
     assert s.check(["Wort"])["status"] == "error"
     assert s.suggest("Wort") == []
+
+
+def test_outdated_revision_triggers_new_download(tmp_path, monkeypatch):
+    from verbalis import spelling
+
+    folder = tmp_path / "dict"
+    folder.mkdir()
+    (folder / "de_CH_frami.aff").write_text(AFF, encoding="utf-8")
+    (folder / "de_CH_frami.dic").write_text("1\nBudget\n", encoding="utf-8")
+    (folder / "revision.txt").write_text("old", encoding="utf-8")
+    downloaded = []
+
+    def fake_download(self, target):
+        downloaded.append(target)
+        (target / "revision.txt").write_text(spelling.DICTIONARY_REVISION, encoding="utf-8")
+
+    monkeypatch.setattr(spelling.Speller, "_download", fake_download)
+    s = spelling.Speller(folder=folder)
+    s.load_now()
+    assert downloaded == [folder] and s.status == "ready"
+    s2 = spelling.Speller(folder=folder)
+    s2.load_now()
+    assert downloaded == [folder]          # current revision → no second download
