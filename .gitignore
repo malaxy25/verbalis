@@ -5,10 +5,11 @@ __pycache__/
 dist/
 build/
 *.egg-info/
-# Aufnahmen enthalten Personendaten – nie committen
+# Recordings contain personal data – never commit
+recordings/
 aufnahmen/
-transkript*.md
-transkript*.json
-vergleich*.md
-vergleich*.json
+transcript*.md
+transcript*.json
+comparison*.md
 *.wav
+*.flac

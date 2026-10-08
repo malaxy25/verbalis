@@ -1,107 +1,131 @@
-"""Komprimieren und Aufbewahren der Audiodateien."""
+"""Compressing and retaining the audio files."""
 
 import json
+import threading
 from datetime import datetime, timedelta
 
 import numpy as np
 import pytest
 import soundfile as sf
 
-from mitschrift import ablauf
-from mitschrift.dienst import MB, Dienst
-from mitschrift.einstellungen import Einstellungen
+from verbalis import pipeline
+from verbalis.service import MB, Service
+from verbalis.settings import Settings
 
 
-@pytest.fixture(autouse=True)
-def home(tmp_path, monkeypatch):
-    monkeypatch.setenv("MITSCHRIFT_HOME", str(tmp_path))
-    return tmp_path
+def _wav(path, seconds=3.0, sr=48000):
+    t = np.arange(int(seconds * sr)) / sr
+    sf.write(path, (0.4 * np.sin(2 * np.pi * 440 * t)).astype(np.float32), sr)
 
 
-def _wav(pfad, sekunden=3.0, sr=48000):
-    t = np.arange(int(sekunden * sr)) / sr
-    sf.write(pfad, (0.4 * np.sin(2 * np.pi * 440 * t)).astype(np.float32), sr)
+def _recording(base, days_old: float, transcript=True, mb=0.5):
+    start = datetime.now().astimezone() - timedelta(days=days_old)
+    folder = base / start.strftime("%Y-%m-%d_%H%M%S")
+    folder.mkdir(parents=True)
+    (folder / "meta.json").write_text(json.dumps({"start": start.isoformat(timespec="seconds")}))
+    for track in pipeline.TRACKS:
+        (folder / f"{track}.flac").write_bytes(b"x" * int(mb * MB / 2))
+    if transcript:
+        (folder / "transcript.json").write_text('{"segments": []}')
+    return folder
 
 
-def _aufnahme(basis, tage_alt: float, transkript=True, mb=0.5):
-    start = datetime.now().astimezone() - timedelta(days=tage_alt)
-    ordner = basis / start.strftime("%Y-%m-%d_%H%M%S")
-    ordner.mkdir(parents=True)
-    (ordner / "meta.json").write_text(json.dumps({"start": start.isoformat(timespec="seconds")}))
-    for spur in ablauf.SPUREN:
-        (ordner / f"{spur}.flac").write_bytes(b"x" * int(mb * MB / 2))
-    if transkript:
-        (ordner / "transkript.json").write_text('{"segmente": []}')
-    return ordner
+def _service(**settings):
+    return Service(settings=Settings(**settings), list_devices=lambda: {}, cleanup_on_start=False)
 
 
-def test_komprimieren_wav_zu_flac(tmp_path):
-    for spur in ablauf.SPUREN:
-        _wav(tmp_path / f"{spur}.wav")
-    vorher = ablauf.audio_bytes(tmp_path)
-    assert ablauf.audio_komprimieren(tmp_path) == 2
-    assert not (tmp_path / "ich.wav").exists()
-    daten, sr = sf.read(tmp_path / "ich.flac")
-    assert sr == 16000 and abs(len(daten) - 48000) < 10
-    assert 0.35 < np.abs(daten[1000:-1000]).max() < 0.45     # Ton bleibt erhalten
-    assert ablauf.audio_bytes(tmp_path) < vorher / 3
-    assert ablauf.meta_lesen(tmp_path)["audio"]["samplerate"] == 16000
-    assert ablauf.audio_datei(tmp_path, "ich").suffix == ".flac"
+def test_compress_wav_to_flac(tmp_path):
+    for track in pipeline.TRACKS:
+        _wav(tmp_path / f"{track}.wav")
+    before = pipeline.audio_bytes(tmp_path)
+    assert pipeline.compress_audio(tmp_path) == 2
+    assert not (tmp_path / "me.wav").exists()
+    data, sr = sf.read(tmp_path / "me.flac")
+    assert sr == 16000 and abs(len(data) - 48000) < 10
+    assert 0.35 < np.abs(data[1000:-1000]).max() < 0.45     # tone preserved
+    assert pipeline.audio_bytes(tmp_path) < before / 3
+    assert pipeline.read_meta(tmp_path)["audio"]["samplerate"] == 16000
+    assert pipeline.audio_file(tmp_path, "me").suffix == ".flac"
 
 
-def test_audio_loeschen_behaelt_transkript(tmp_path):
-    ordner = _aufnahme(tmp_path, 0, mb=1)
-    assert ablauf.audio_loeschen(ordner, "Test") == MB
-    assert not ablauf.hat_audio(ordner) and ablauf.ist_aufnahmeordner(ordner)
-    assert (ordner / "transkript.json").exists()
-    assert ablauf.meta_lesen(ordner)["audio_geloescht"]["grund"] == "Test"
+def test_delete_audio_keeps_transcript(tmp_path):
+    folder = _recording(tmp_path, 0, mb=1)
+    assert pipeline.delete_audio(folder, "Test") == MB
+    assert not pipeline.has_audio(folder) and pipeline.is_recording_folder(folder)
+    assert (folder / "transcript.json").exists()
+    assert pipeline.read_meta(folder)["audio_deleted"]["reason"] == "Test"
 
 
-def _dienst(**einstellungen):
-    return Dienst(einstellungen=Einstellungen(**einstellungen), geraete_liste=lambda: {}, aufraeumen_beim_start=False)
+def test_retention_in_days(home):
+    base = home / "recordings"
+    old = _recording(base, 4)
+    new = _recording(base, 1)
+    without_transcript = _recording(base, 10, transcript=False)
+    s = _service(audio_days="3")
+    assert s.cleanup() == [old.name]
+    assert pipeline.has_audio(new) and pipeline.has_audio(without_transcript)   # protected without transcript
+    entry = {r["id"]: r for r in s.recordings()}
+    assert entry[old.name]["audio"] is False
+    assert entry[new.name]["audio_delete"][:10] == (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
 
 
-def test_frist_in_tagen(home):
-    basis = home / "aufnahmen"
-    alt = _aufnahme(basis, 4)
-    neu = _aufnahme(basis, 1)
-    ohne_transkript = _aufnahme(basis, 10, transkript=False)
-    d = _dienst(audio_tage="3")
-    assert d.aufraeumen() == [alt.name]
-    assert ablauf.hat_audio(neu) and ablauf.hat_audio(ohne_transkript)   # Schutz ohne Transkript
-    eintrag = {a["id"]: a for a in d.aufnahmen()}
-    assert eintrag[alt.name]["audio"] is False
-    assert eintrag[neu.name]["audio_loeschen"][:10] == (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
+def test_zero_days_and_unlimited(home):
+    r = _recording(home / "recordings", 0.01)
+    assert _service(audio_days="").cleanup() == []
+    assert _service(audio_days="0").cleanup() == [r.name]
 
 
-def test_null_tage_und_unbegrenzt(home):
-    basis = home / "aufnahmen"
-    a = _aufnahme(basis, 0.01)
-    assert _dienst(audio_tage="").aufraeumen() == []
-    assert _dienst(audio_tage="0").aufraeumen() == [a.name]
+def test_size_limit_deletes_oldest_first(home):
+    base = home / "recordings"
+    a = _recording(base, 2.0, mb=4)
+    b = _recording(base, 1.5, mb=4)
+    c = _recording(base, 1.0, mb=4)
+    s = _service(audio_days="", audio_max_mb="9")
+    assert s.audio_usage() == {"audio_mb": 12.0}
+    assert s.cleanup() == [a.name]
+    assert s.audio_usage() == {"audio_mb": 8.0}
+    assert pipeline.has_audio(b) and pipeline.has_audio(c)
 
 
-def test_speichergrenze_loescht_aelteste_zuerst(home):
-    basis = home / "aufnahmen"
-    a = _aufnahme(basis, 2.0, mb=4)
-    b = _aufnahme(basis, 1.5, mb=4)
-    c = _aufnahme(basis, 1.0, mb=4)
-    d = _dienst(audio_tage="", audio_max_mb="9")
-    assert d.audio_speicher() == {"audio_mb": 12.0}
-    assert d.aufraeumen() == [a.name]
-    assert d.audio_speicher() == {"audio_mb": 8.0}
-    assert ablauf.hat_audio(b) and ablauf.hat_audio(c)
-
-
-def test_ohne_audio_nicht_neu_transkribieren(home):
-    ordner = _aufnahme(home / "aufnahmen", 0)
-    d = _dienst()
-    d.audio_jetzt_loeschen(ordner.name)
+def test_no_retranscription_without_audio(home):
+    folder = _recording(home / "recordings", 0)
+    s = _service()
+    s.delete_audio(folder.name)
     with pytest.raises(RuntimeError, match="gelöscht"):
-        d.transkribieren(ordner.name)
+        s.transcribe(folder.name)
 
 
-def test_einstellungen_pruefen_eingaben():
-    e = Einstellungen.aus_dict({"audio_tage": "abc", "audio_max_mb": "-5"})
-    assert (e.tage, e.max_mb) == (3, None)
-    assert Einstellungen.aus_dict({"audio_tage": "", "audio_max_mb": "500"}).max_mb == 500
+def test_settings_validate_input():
+    s = Settings.from_dict({"audio_days": "abc", "audio_max_mb": "-5"})
+    assert (s.days, s.max_mb) == (3, None)
+    assert Settings.from_dict({"audio_days": "", "audio_max_mb": "500"}).max_mb == 500
+
+
+def test_size_query_while_compressing(tmp_path):
+    """Regression: GitHub Action on Windows – FileNotFoundError for gegenueber.wav.
+
+    The UI queries the size while the background thread deletes the WAV after
+    compressing.
+    """
+    errors = []
+    for round_ in range(20):
+        folder = tmp_path / f"r{round_}"
+        folder.mkdir()
+        for track in pipeline.TRACKS:
+            _wav(folder / f"{track}.wav", seconds=1)
+        stop = threading.Event()
+
+        def query():
+            while not stop.is_set():
+                try:
+                    pipeline.audio_bytes(folder)
+                except FileNotFoundError as e:
+                    errors.append(e)
+                    return
+
+        t = threading.Thread(target=query)
+        t.start()
+        pipeline.compress_audio(folder)
+        stop.set()
+        t.join()
+    assert errors == []

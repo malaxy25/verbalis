@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verbalis</title>
+<style>
+  :root {
+    --bg: #EEF1F4;
+    --surface: #FFFFFF;
+    --surface-2: #F6F8FA;
+    --ink: #1C2733;
+    --muted: #5F6B78;
+    --line: #D5DBE1;
+    --red: #C8102E;
+    --red-soft: #FBE7EA;
+    --limmat: #2F6F8F;
+    --limmat-soft: #E3EEF3;
+    --focus: #2F6F8F;
+    --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, "Ubuntu", "Cantarell", sans-serif;
+    --font-text: "Iowan Old Style", "Charter", "Cambria", "Georgia", serif;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151B22;
+      --surface: #1D252E;
+      --surface-2: #232C36;
+      --ink: #E6EBF0;
+      --muted: #9AA6B2;
+      --line: #2E3945;
+      --red: #E5484D;
+      --red-soft: #3A1F24;
+      --limmat: #6BB0CF;
+      --limmat-soft: #1F3440;
+      --focus: #6BB0CF;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.45;
+    color: var(--ink);
+    background: var(--bg);
+    display: grid;
+    grid-template-columns: 280px 1fr;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* ---------- History ---------- */
+  .history {
+    display: flex; flex-direction: column; min-height: 0;
+    border-right: 1px solid var(--line);
+  }
+  .history h1 {
+    font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
+    margin: 0; padding: 20px 20px 12px;
+  }
+  .list { list-style: none; margin: 0; padding: 0 10px; overflow-y: auto; flex: 1; }
+  .list button {
+    width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+    padding: 10px 12px; border-radius: 8px;
+  }
+  .list button:hover { background: var(--surface-2); }
+  .list button[aria-current="true"] { background: var(--surface); box-shadow: inset 3px 0 0 var(--ink); }
+  .list .date { font-weight: 600; }
+  .list .duration { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .list .status { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+  .list .status.is-active { color: var(--limmat); }
+  .list .status.is-error, .list .status.is-recording { color: var(--red); }
+  .list-empty { color: var(--muted); padding: 12px 20px; }
+  .history footer { padding: 12px 10px 16px; display: grid; gap: 2px; }
+  .history footer button {
+    border: 0; background: none; text-align: left; cursor: pointer;
+    padding: 8px 12px; border-radius: 8px; color: var(--muted);
+  }
+  .history footer button:hover { background: var(--surface-2); color: var(--ink); }
+  .version { font-size: 12px; color: var(--muted); padding: 4px 12px 0; }
+
+  /* ---------- Hauptbereich ---------- */
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  /* Recorder: the distinctive element */
+  .recorder {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    padding: 22px 32px 18px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "knopf  spuren"
+      "knopf  geraete"
+      ".      zustimmung";
+    column-gap: 28px; row-gap: 14px;
+    align-items: center;
+  }
+  .record-button {
+    grid-area: knopf; align-self: start;
+    width: 76px; height: 76px; border-radius: 50%;
+    border: 2px solid var(--line); background: var(--surface);
+    display: grid; place-items: center; cursor: pointer;
+  }
+  .record-button .symbol { width: 30px; height: 30px; border-radius: 50%; background: var(--red); transition: border-radius .15s, width .15s, height .15s; }
+  .record-button:disabled { cursor: not-allowed; }
+  .record-button:disabled .symbol { background: var(--line); }
+  .record-button:not(:disabled):hover { border-color: var(--red); }
+  .running .record-button { border-color: var(--red); background: var(--red-soft); }
+  .running .record-button .symbol { width: 24px; height: 24px; border-radius: 4px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .running .record-button { animation: breathe 2s ease-in-out infinite; }
+    @keyframes breathe { 50% { box-shadow: 0 0 0 8px var(--red-soft); } }
+  }
+
+  .tracks { grid-area: spuren; display: grid; grid-template-columns: auto 1fr auto; gap: 10px 16px; align-items: center; }
+  .time {
+    grid-column: 1 / -1;
+    font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums;
+    line-height: 1; letter-spacing: -0.01em; color: var(--muted);
+  }
+  .running .time { color: var(--red); }
+  .track-name { font-weight: 600; min-width: 7em; }
+  .track-name.others { color: var(--limmat); }
+  .lane { height: 10px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+  .lane .fill { height: 100%; width: 0; background: var(--ink); transition: width .12s linear; }
+  .lane.others .fill { background: var(--limmat); }
+  .lane .fill.loud { background: var(--red); }
+  .db { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 5em; text-align: right; }
+
+  .devices { grid-area: geraete; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  .devices label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
+  .devices select {
+    max-width: 320px; padding: 5px 8px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--surface); font-size: 14px;
+  }
+  .consent { grid-area: zustimmung; display: flex; gap: 10px; align-items: flex-start; }
+  .consent input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--ink); }
+  .consent .hint { display: block; font-size: 13px; color: var(--muted); }
+  .message { grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--red-soft); color: var(--ink); }
+  .message[hidden] { display: none; }
+
+  /* Content */
+  .content { flex: 1; overflow-y: auto; padding: 28px 32px 48px; }
+  .empty { max-width: 34em; color: var(--muted); }
+  .empty h2, .progress h2 { color: var(--ink); font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+  .empty p { margin: 0 0 14px; }
+
+  .action {
+    border: 1px solid var(--line); background: var(--surface);
+    padding: 7px 14px; border-radius: 8px; cursor: pointer;
+  }
+  .action:hover { border-color: var(--ink); }
+  .action.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+  .progress { max-width: 34em; }
+  .progress .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 12px 0 8px; }
+  .progress .bar div { height: 100%; width: 0; background: var(--limmat); transition: width .3s; }
+  .progress p { margin: 0; color: var(--muted); }
+  .progress .remaining { color: var(--ink); font-variant-numeric: tabular-nums; margin-bottom: 14px; }
+  .progress.paused .bar div { background: var(--muted); }
+
+  .transcript-header { max-width: 52em; margin-bottom: 24px; }
+  .transcript-header h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .transcript-header dl { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0 0 16px; font-size: 13px; }
+  .transcript-header dt { color: var(--muted); display: inline; }
+  .transcript-header dd { display: inline; margin: 0 0 0 6px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .transcript { max-width: 52em; }
+  .paragraph {
+    display: grid; grid-template-columns: 9em 1fr; gap: 0 20px;
+    padding: 10px 0; border-top: 1px solid var(--line);
+  }
+  .paragraph .who { font-weight: 600; font-size: 14px; }
+  .paragraph.others .who { color: var(--limmat); }
+  .paragraph time { display: block; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .paragraph .text {
+    font-family: var(--font-text); font-size: 17px; line-height: 1.6; max-width: 38em; margin: 0;
+    padding: 2px 8px; margin-left: -8px; border-radius: 6px; cursor: text;
+  }
+  .paragraph .text:hover { background: var(--surface-2); }
+  .paragraph .text[contenteditable] { background: var(--surface); outline: 2px solid var(--limmat); outline-offset: 0; cursor: auto; }
+  .paragraph .edit-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 2px; }
+  .paragraph .edit-bar small { color: var(--muted); }
+  .edit-hint { color: var(--muted); font-size: 13px; align-self: center; margin-left: 4px; }
+
+  .suggestions {
+    grid-column: 2; margin: 12px 0 4px; padding: 14px 16px; border-radius: 8px;
+    background: var(--limmat-soft); max-width: 38em;
+  }
+  .suggestions h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .suggestions p { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+  .suggestions label { display: flex; gap: 8px; align-items: baseline; margin: 4px 0; }
+  .suggestions .actions { margin-top: 12px; }
+  .suggestions .result { margin: 0; color: var(--ink); }
+
+  /* Settings */
+  dialog {
+    width: min(560px, 92vw); max-height: 90vh; border: 1px solid var(--line); border-radius: 12px;
+    padding: 0; background: var(--surface); color: var(--ink);
+  }
+  dialog::backdrop { background: rgb(21 27 34 / 0.45); }
+  dialog form { padding: 24px 26px 20px; display: grid; gap: 16px; }
+  dialog h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .field { display: grid; gap: 4px; }
+  .field > span, .field > label > span { font-weight: 600; font-size: 14px; }
+  .field small { color: var(--muted); font-size: 13px; }
+  .field input[type=text], .field select {
+    padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  }
+  .field input[hidden] { display: none; }
+  .field-row { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+  .field-row label { display: flex; gap: 8px; align-items: center; }
+  .field-row input[type=text] { width: 6em; text-align: right; font-variant-numeric: tabular-nums; }
+  .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 4px; }
+  fieldset legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 4px; }
+  fieldset label { display: flex; gap: 8px; align-items: baseline; }
+  .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+  .correction-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 180px; overflow-y: auto; }
+  .correction-list li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .correction-list .target { font-weight: 600; font-size: 14px; margin-right: 4px; }
+  .variant {
+    display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px;
+    border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--muted);
+  }
+  .variant button {
+    border: 0; background: none; cursor: pointer; color: var(--muted);
+    width: 22px; height: 22px; border-radius: 50%; line-height: 1;
+  }
+  .variant button:hover { background: var(--red-soft); color: var(--red); }
+  .correction-list-empty { color: var(--muted); font-size: 13px; margin: 0; }
+
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .history { border-right: 0; border-bottom: 1px solid var(--line); max-height: 30vh; }
+    .paragraph { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="history" aria-label="Aufnahmen">
+  <h1>Verbalis</h1>
+  <ol class="list" id="list"></ol>
+  <footer>
+    <button type="button" id="btn-settings">Einstellungen</button>
+    <button type="button" id="btn-folder">Aufnahmeordner öffnen</button>
+    <div class="version" id="version"></div>
+  </footer>
+</aside>
+
+<main>
+  <section class="recorder" id="recorder" aria-label="Aufnahme">
+    <button type="button" class="record-button" id="btn-record" aria-label="Aufnahme starten" disabled>
+      <span class="symbol"></span>
+    </button>
+
+    <div class="tracks">
+      <div class="time" id="time" aria-live="off">00:00</div>
+      <span class="track-name me" id="name-me">Ich</span>
+      <div class="lane me"><div class="fill" id="level-me"></div></div>
+      <span class="db" id="db-me"></span>
+      <span class="track-name others" id="name-others">Gegenüber</span>
+      <div class="lane others"><div class="fill" id="level-others"></div></div>
+      <span class="db" id="db-others"></span>
+    </div>
+
+    <div class="devices">
+      <label>Mikrofon
+        <select id="sel-microphone"></select>
+      </label>
+      <label>Ton der anderen kommt über
+        <select id="sel-speakers"></select>
+      </label>
+    </div>
+
+    <label class="consent">
+      <input type="checkbox" id="chk-consent">
+      <span>Alle Teilnehmenden haben der Aufnahme zugestimmt
+        <span class="hint">Ohne Zustimmung ist das Aufnehmen von Gesprächen in der Schweiz strafbar.</span>
+      </span>
+    </label>
+
+    <p class="message" id="message" role="alert" hidden></p>
+  </section>
+
+  <section class="content" id="content" aria-live="polite"></section>
+</main>
+
+<dialog id="dlg-settings">
+  <form method="dialog" id="form-settings">
+    <h2>Einstellungen</h2>
+    <div class="field-pair">
+      <label class="field"><span>Dein Name</span>
+        <input type="text" name="name" autocomplete="off">
+        <small>für die Mikrofonspur</small>
+      </label>
+      <label class="field"><span>Die anderen</span>
+        <input type="text" name="others" autocomplete="off">
+        <small>für die Spur aus Teams</small>
+      </label>
+    </div>
+    <div class="field">
+      <label for="sel-model"><span>Modell</span></label>
+      <select id="sel-model" name="model_choice"></select>
+      <input type="text" name="model_custom" placeholder="Name, Hugging-Face-ID oder Ordner" autocomplete="off" spellcheck="false" hidden aria-label="Eigenes Modell">
+      <small id="model-status"></small>
+    </div>
+    <fieldset>
+      <legend>Tempo</legend>
+      <label><input type="radio" name="quality" value="accurate"> Genau <small>beste Qualität, langsamer</small></label>
+      <label><input type="radio" name="quality" value="fast"> Schnell <small>etwa doppelt so schnell, etwas mehr Fehler</small></label>
+    </fieldset>
+    <label class="field"><span>Stichworte</span>
+      <input type="text" name="keywords" autocomplete="off">
+      <small>Namen und Fachbegriffe, mit Komma getrennt, z.B. tocco, Höngg</small>
+    </label>
+    <div class="field">
+      <span>Korrekturliste</span>
+      <ul class="correction-list" id="correction-list"></ul>
+      <small>Wird nach jeder Transkription angewendet. Neue Einträge entstehen, wenn du im Transkript etwas korrigierst.</small>
+    </div>
+    <div class="field">
+      <span>Audio aufbewahren</span>
+      <div class="field-row">
+        <label><input type="text" name="audio_days" inputmode="numeric" autocomplete="off" aria-label="Tage"> Tage</label>
+        <label>höchstens <input type="text" name="audio_max_mb" inputmode="numeric" autocomplete="off" aria-label="Höchstens MB"> MB</label>
+      </div>
+      <small id="audio-hint">Leer heisst unbegrenzt, 0 Tage heisst gleich nach dem Transkribieren. Transkripte bleiben immer erhalten, Aufnahmen ohne Transkript werden nie automatisch gelöscht.</small>
+    </div>
+    <label class="field"><span>Aufnahmeordner</span>
+      <input type="text" name="recordings_dir" autocomplete="off" spellcheck="false">
+      <small id="folder-hint"></small>
+    </label>
+    <div class="dialog-buttons">
+      <button type="button" class="action" id="btn-cancel">Abbrechen</button>
+      <button type="submit" class="action primary">Einstellungen speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  selected: null,        // ID of the selected recording
+  recordings: [],
+  listSignature: "",
+  settings: {},
+  models: [],
+  running: false,
+  shown: "",        // what the content area currently shows (id + status)
+  busy: false,
+};
+
+async function call(name, ...args) {
+  const r = await window.pywebview.api[name](...args);
+  if (!r.ok) throw new Error(r.error);
+  return r.data;
+}
+
+function element(day, attributes = {}, ...children) {
+  const el = document.createElement(day);
+  for (const [k, v] of Object.entries(attributes)) {
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v);
+  }
+  for (const child of children) if (child != null) el.append(child);
+  return el;
+}
+
+function showMessage(text) {
+  const m = $("message");
+  m.textContent = text || "";
+  m.hidden = !text;
+}
+
+/* ---------- Formatting ---------- */
+
+function timeText(seconds) {
+  seconds = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
+  const two = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${two(m)}:${two(s)}` : `${two(m)}:${two(s)}`;
+}
+
+function startDate(a) {
+  let d = new Date(a.start);
+  if (isNaN(d)) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})$/.exec(a.id);
+    d = m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null;
+  }
+  return d;
+}
+
+function shortDate(a) {
+  const d = startDate(a);
+  if (!d) return a.id;
+  const day = d.toLocaleDateString("de-CH", { weekday: "short", day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+  return `${day}, ${time}`;
+}
+
+function longDate(a) {
+  const d = startDate(a);
+  if (!d) return a.id;
+  return d.toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    + ", " + d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }) + " Uhr";
+}
+
+const STATUS_TEXT = {
+  recording: "Aufnahme läuft",
+  queued: "Wartet auf Transkription",
+  running: "Wird transkribiert",
+  done: "Transkript bereit",
+  none: "Noch kein Transkript",
+  error: "Transkription fehlgeschlagen",
+  paused: "Transkription pausiert",
+};
+
+/* ---------- History ---------- */
+
+async function loadList() {
+  const data = await call("recordings");
+  const signature = JSON.stringify(data);
+  if (signature === state.listSignature) return;
+  state.listSignature = signature;
+  state.recordings = data;
+  if (!state.selected || !data.some((a) => a.id === state.selected)) {
+    state.selected = data.length ? data[0].id : null;
+  }
+  renderList();
+  renderContent();
+}
+
+function renderList() {
+  const list = $("list");
+  list.replaceChildren();
+  if (!state.recordings.length) {
+    list.append(element("li", { class: "list-empty" }, "Noch keine Aufnahmen."));
+    return;
+  }
+  for (const a of state.recordings) {
+    const statusClass = { running: "is-active", paused: "is-active", queued: "is-active", error: "is-error", recording: "is-recording" }[a.status] || "";
+    const button = element("button", {
+        type: "button",
+        "aria-current": String(a.id === state.selected),
+        onclick: () => { state.selected = a.id; renderList(); renderContent(); },
+      },
+      element("span", { class: "date" }, shortDate(a)),
+      element("span", { class: "duration" }, a.duration_s != null ? timeText(a.duration_s) : ""),
+      element("span", { class: `status ${statusClass}` }, STATUS_TEXT[a.status] || ""),
+    );
+    list.append(element("li", {}, button));
+  }
+}
+
+/* ---------- Content ---------- */
+
+function chosen() {
+  return state.recordings.find((a) => a.id === state.selected) || null;
+}
+
+async function renderContent(force = false) {
+  const a = chosen();
+  const pause = (state.lastState && state.lastState.pause) || "";
+  const key = a ? `${a.id}:${a.status}:${a.error || ""}:${a.audio}:${a.status === "queued" ? pause : ""}` : "empty";
+  if (!force && key === state.shown) return;
+  state.shown = key;
+  const content = $("content");
+
+  if (!a) {
+    content.replaceChildren(element("div", { class: "empty" },
+      element("h2", {}, "Bereit für die erste Aufnahme"),
+      element("p", {}, "Mikrofon und Tonausgabe wählen, die Zustimmung aller Teilnehmenden bestätigen und mit dem roten Knopf starten. Nach dem Beenden entsteht das Transkript automatisch."),
+    ));
+    return;
+  }
+
+  const transcribeButton = (text) => element("button", {
+    type: "button", class: "action primary",
+    onclick: async () => { try { await call("transcribe", a.id); await loadList(); } catch (e) { showMessage(e.message); } },
+  }, text);
+
+  switch (a.status) {
+    case "recording":
+      content.replaceChildren(element("div", { class: "empty" },
+        element("h2", {}, "Aufnahme läuft"),
+        element("p", {}, "Das Transkript wird nach dem Beenden der Aufnahme automatisch erstellt."),
+      ));
+      return;
+    case "queued":
+      if (pause === "manual") {
+        content.replaceChildren(element("div", { class: "empty" },
+          element("h2", {}, "Transkriptionen sind pausiert"),
+          element("p", {}, "Diese Aufnahme wird transkribiert, sobald die Transkription fortgesetzt wird."),
+          element("div", { class: "actions" },
+            element("button", { type: "button", class: "action primary", onclick: togglePause }, "Fortsetzen")),
+        ));
+      } else {
+        content.replaceChildren(element("div", { class: "empty" },
+          element("h2", {}, "Wartet auf Transkription"),
+          element("p", {}, pause === "recording"
+            ? "Wird transkribiert, sobald die laufende Aufnahme beendet ist."
+            : "Eine andere Aufnahme wird gerade transkribiert. Diese kommt danach an die Reihe."),
+        ));
+      }
+      return;
+    case "running":
+    case "paused":
+      content.replaceChildren(element("div", { class: "progress", id: "progress" },
+        element("h2", {}, "Transkript wird erstellt"),
+        element("div", { class: "bar" }, element("div", { id: "progress-bar" })),
+        element("p", { id: "progress-text" }, "Wird vorbereitet"),
+        element("p", { class: "remaining", id: "progress-remaining" }, ""),
+        element("div", { class: "actions" },
+          element("button", { type: "button", class: "action", id: "btn-pause", onclick: togglePause }, "Pausieren")),
+      ));
+      if (state.lastState) showProgress(state.lastState);
+      return;
+    case "error":
+      content.replaceChildren(element("div", { class: "empty" },
+        element("h2", {}, "Transkription fehlgeschlagen"),
+        element("p", {}, a.error || "Unbekannter Fehler."),
+        element("div", { class: "actions" }, a.audio ? transcribeButton("Erneut transkribieren") : null,
+          element("button", { type: "button", class: "action", onclick: () => $("btn-settings").click() }, "Einstellungen öffnen")),
+      ));
+      return;
+    case "none":
+      content.replaceChildren(element("div", { class: "empty" },
+        element("h2", {}, "Noch kein Transkript"),
+        element("p", {}, a.audio
+          ? "Für diese Aufnahme gibt es noch kein Transkript, zum Beispiel weil die App während der Transkription geschlossen wurde."
+          : "Das Audio dieser Aufnahme wurde gelöscht, ein Transkript lässt sich nicht mehr erstellen."),
+        element("div", { class: "actions" }, a.audio ? transcribeButton("Transkribieren") : null, folderButton(a.id)),
+      ));
+      return;
+    case "done":
+      await renderTranscript(a);
+      return;
+  }
+}
+
+function folderButton(id) {
+  return element("button", { type: "button", class: "action", onclick: () => call("open_folder", id).catch((e) => showMessage(e.message)) }, "Ordner öffnen");
+}
+
+async function renderTranscript(a) {
+  let t;
+  try { t = await call("transcript", a.id); } catch (e) { showMessage(e.message); return; }
+  if (!t || state.selected !== a.id) return;
+
+  const meName = (t.tracks && t.tracks.me) || null;
+  const headerList = element("dl");
+  for (const [k, v] of Object.entries(t.header || {})) {
+    if (k === "Aufnahme") continue;
+    headerList.append(element("div", {}, element("dt", {}, k), element("dd", {}, v)));
+  }
+  headerList.append(element("div", {}, element("dt", {}, "Audio"), element("dd", {}, audioText(a))));
+
+  const copyButton = element("button", { type: "button", class: "action" }, "Transkript kopieren");
+  copyButton.addEventListener("click", async () => {
+    await copyText(t.markdown || "");
+    copyButton.textContent = "Kopiert";
+    setTimeout(() => (copyButton.textContent = "Transkript kopieren"), 2000);
+  });
+
+  const header = element("header", { class: "transcript-header" },
+    element("h2", {}, longDate(a)),
+    headerList,
+    element("div", { class: "actions" },
+      copyButton,
+      a.audio ? retranscribeButton(a.id, !!t.edited) : null,
+      a.audio ? deleteAudioButton(a.id) : null,
+      folderButton(a.id),
+      element("span", { class: "edit-hint" }, "Zum Korrigieren einen Absatz anklicken."),
+    ),
+  );
+
+  const body = element("div", { class: "transcript" });
+  if (!t.segments.length) {
+    body.append(element("p", { class: "empty" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
+  }
+  t.segments.forEach((s, index) => {
+    const track = s.speaker === meName ? "me" : "others";
+    const text = element("p", { class: "text", title: "Zum Korrigieren klicken" }, s.text);
+    const paragraph = element("div", { class: `paragraph ${track}` },
+      element("div", {}, element("div", { class: "who" }, s.speaker || ""), element("time", {}, timeText(s.start))),
+      element("div", {}, text),
+    );
+    text.addEventListener("click", () => editParagraph(a.id, index, paragraph, text));
+    body.append(paragraph);
+  });
+  $("content").replaceChildren(header, body);
+}
+
+function audioText(a) {
+  if (!a.audio) return "gelöscht";
+  const size = `${a.audio_mb.toLocaleString("de-CH")} MB`;
+  if (!a.audio_delete) return `${size}, wird nicht nach Frist gelöscht`;
+  if (a.audio_delete === "now") return `${size}, wird gleich gelöscht`;
+  const d = new Date(a.audio_delete);
+  const day = d.toLocaleDateString("de-CH", { weekday: "short", day: "numeric", month: "short" });
+  return `${size}, wird am ${day} gelöscht`;
+}
+
+function deleteAudioButton(id) {
+  const button = element("button", { type: "button", class: "action" }, "Audio löschen");
+  let confirmed = false;
+  button.addEventListener("click", async () => {
+    if (!confirmed) {
+      confirmed = true;
+      button.textContent = "Endgültig löschen? Nochmals klicken";
+      setTimeout(() => { confirmed = false; button.textContent = "Audio löschen"; }, 4000);
+      return;
+    }
+    try { await call("delete_audio", id); state.listSignature = ""; await loadList(); }
+    catch (e) { showMessage(e.message); }
+  });
+  return button;
+}
+
+function retranscribeButton(id, edited) {
+  const button = element("button", { type: "button", class: "action" }, "Neu transkribieren");
+  let confirmed = false;
+  button.addEventListener("click", async () => {
+    if (edited && !confirmed) {   // corrections would be overwritten – a second click confirms
+      confirmed = true;
+      button.textContent = "Korrekturen gehen verloren – nochmals klicken";
+      setTimeout(() => { confirmed = false; button.textContent = "Neu transkribieren"; }, 4000);
+      return;
+    }
+    try { await call("transcribe", id); await loadList(); } catch (e) { showMessage(e.message); }
+  });
+  return button;
+}
+
+/* ---------- Correcting ---------- */
+
+let editing = null;  // { cancel } of the paragraph being edited
+
+function editParagraph(id, index, paragraph, textEl) {
+  if (textEl.hasAttribute("contenteditable")) return;
+  if (editing) editing.cancel();
+  paragraph.querySelectorAll(".vorschlaege").forEach((v) => v.remove());
+  const before = textEl.textContent;
+  textEl.setAttribute("contenteditable", "plaintext-only");
+  textEl.removeAttribute("title");
+  textEl.focus();
+
+  const bar = element("div", { class: "edit-bar" });
+  const saveButton = element("button", { type: "button", class: "action primary" }, "Korrektur speichern");
+  const cancelButton = element("button", { type: "button", class: "action" }, "Abbrechen");
+  bar.append(saveButton, cancelButton, element("small", {}, "Strg+Enter speichert, Esc bricht ab"));
+  textEl.after(bar);
+
+  function finish(text) {
+    textEl.removeAttribute("contenteditable");
+    textEl.title = "Zum Korrigieren klicken";
+    textEl.textContent = text;
+    textEl.removeEventListener("keydown", onKey);
+    bar.remove();
+    editing = null;
+  }
+  async function save() {
+    const newText = textEl.textContent.replace(/\s+/g, " ").trim();
+    if (newText === before.trim()) { finish(before); return; }
+    saveButton.disabled = true;
+    try {
+      const r = await call("edit_transcript", id, index, newText);
+      finish(newText);
+      if (r.suggestions.length) showSuggestions(id, paragraph, r.suggestions);
+    } catch (e) {
+      saveButton.disabled = false;
+      showMessage(e.message);
+    }
+  }
+  function onKey(ev) {
+    if (ev.key === "Escape") { ev.preventDefault(); finish(before); }
+    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); }
+    if (ev.key === "Enter" && !ev.ctrlKey && !ev.metaKey) ev.preventDefault();  // a paragraph stays one paragraph
+  }
+  textEl.addEventListener("keydown", onKey);
+  saveButton.addEventListener("click", save);
+  cancelButton.addEventListener("click", () => finish(before));
+  editing = { cancel: () => finish(before) };
+}
+
+function suggestionText(v) {
+  if (v.kind === "added") return `«${v.variant}» zu «${v.target}» hinzufügen`;
+  if (v.kind === "replaces") return `«${v.variant}» → «${v.target}» (ersetzt bisher «${v.variant}» → «${v.previous}»)`;
+  return `«${v.variant}» → «${v.target}»`;
+}
+
+function showSuggestions(id, paragraph, suggestions) {
+  const boxes = suggestions.map((v) => {
+    const box = element("input", { type: "checkbox" });   // deliberately not pre-selected
+    return { v, box, row: element("label", {}, box, element("span", {}, suggestionText(v))) };
+  });
+  const rememberButton = element("button", { type: "button", class: "action primary" }, "Ausgewählte merken");
+  const closeButton = element("button", { type: "button", class: "action" }, "Nicht merken");
+  const panel = element("div", { class: "suggestions", role: "group", "aria-label": "Korrekturen merken" },
+    element("h3", {}, "Für künftige Transkripte merken?"),
+    element("p", {}, "Nur anhaken, was immer gilt – etwa Namen und Fachbegriffe. Wörter, die je nach Satz anders gemeint sind, besser nicht."),
+    ...boxes.map((k) => k.row),
+    element("div", { class: "actions" }, rememberButton, closeButton),
+  );
+  paragraph.append(panel);
+  closeButton.addEventListener("click", () => panel.remove());
+  rememberButton.addEventListener("click", async () => {
+    const rules = boxes.filter((k) => k.box.checked).map((k) => ({ variant: k.v.variant, target: k.v.target }));
+    if (!rules.length) { panel.remove(); return; }
+    try {
+      const r = await call("remember_corrections", id, rules);
+      const more = r.replaced ? ` ${r.replaced} weitere ${r.replaced === 1 ? "Stelle" : "Stellen"} in diesem Transkript korrigiert.` : "";
+      panel.replaceChildren(element("p", { class: "result" }, `Gemerkt.${more}`));
+      setTimeout(() => panel.remove(), 3500);
+      if (r.replaced) setTimeout(() => renderContent(true), 1200);
+    } catch (e) { showMessage(e.message); }
+  });
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return; } catch (_) { /* fallback below */ }
+  const field = element("textarea", { style: "position:fixed;opacity:0" });
+  field.value = text;
+  document.body.append(field);
+  field.select();
+  document.execCommand("copy");
+  field.remove();
+}
+
+/* ---------- Recording ---------- */
+
+function updateRecordButton() {
+  const button = $("btn-record");
+  button.disabled = !state.running && !$("chk-consent").checked;
+  button.setAttribute("aria-label", state.running ? "Aufnahme beenden" : "Aufnahme starten");
+  button.title = button.disabled ? "Zuerst die Zustimmung aller Teilnehmenden bestätigen" : button.getAttribute("aria-label");
+}
+
+function setLevel(track, db) {
+  const progress = Math.min(1, Math.max(0, (db + 60) / 60));
+  const fill = $(`level-${track}`);
+  fill.style.width = `${(progress * 100).toFixed(1)}%`;
+  fill.classList.toggle("loud", db > -3);
+  $(`db-${track}`).textContent = db > -90 ? `${db.toFixed(0)} dB` : "";
+}
+
+function showRecording(recording) {
+  const running = !!recording;
+  if (running !== state.running) {
+    state.running = running;
+    $("recorder").classList.toggle("running", running);
+    $("sel-microphone").disabled = running;
+    $("sel-speakers").disabled = running;
+    $("chk-consent").disabled = running;
+    if (!running) {
+      $("chk-consent").checked = false;   // consent applies to one recording only
+      setLevel("me", -90);
+      setLevel("others", -90);
+    }
+    updateRecordButton();
+  }
+  if (running) {
+    $("time").textContent = timeText(recording.duration_s);
+    setLevel("me", recording.levels.me);
+    setLevel("others", recording.levels.others);
+  }
+}
+
+async function toggleRecording() {
+  const button = $("btn-record");
+  button.disabled = true;
+  showMessage("");
+  try {
+    if (state.running) {
+      const id = await call("stop_recording");
+      if (id) state.selected = id;
+    } else {
+      const id = await call("start_recording", $("sel-microphone").value, $("sel-speakers").value, $("chk-consent").checked);
+      state.selected = id;
+      $("time").textContent = "00:00";
+    }
+    await poll();
+    await loadList();
+  } catch (e) {
+    showMessage(e.message);
+  } finally {
+    updateRecordButton();
+  }
+}
+
+/* ---------- Progress & pause ---------- */
+
+function remainingText(seconds) {
+  if (seconds == null) return "Restdauer wird geschätzt";
+  const minutes = Math.round(seconds / 60);
+  if (seconds < 60) return "noch weniger als eine Minute";
+  if (minutes < 60) return `noch etwa ${minutes} Min.`;
+  return `noch etwa ${Math.floor(minutes / 60)} Std. ${minutes % 60} Min.`;
+}
+
+function showProgress(z) {
+  const box = $("progress");
+  if (!box || !z.job || z.job.id !== state.selected) return;
+  const percent = Math.round(z.job.progress * 100);
+  const paused = !!z.pause;
+  box.classList.toggle("paused", paused);
+  box.querySelector("h2").textContent = paused ? "Transkription pausiert" : "Transkript wird erstellt";
+  $("progress-bar").style.width = `${percent}%`;
+  $("progress-text").textContent = z.pause === "recording"
+    ? "Pausiert, solange eine Aufnahme läuft – so bleibt die CPU frei für den Call."
+    : paused ? "Pausiert" : z.job.phase;
+  $("progress-remaining").textContent = paused ? `${percent} % erledigt` : `${percent} % erledigt, ${remainingText(z.job.remaining_s)}`;
+  const button = $("btn-pause");
+  button.textContent = z.pause === "manual" ? "Fortsetzen" : "Pausieren";
+  button.disabled = z.pause === "recording";
+}
+
+async function togglePause() {
+  try {
+    const z = state.lastState;
+    await call(z && z.pause === "manual" ? "resume" : "pause");
+    await poll();
+    await loadList();
+  } catch (e) { showMessage(e.message); }
+}
+
+/* ---------- Polling ---------- */
+
+let counter = 0;
+async function poll() {
+  if (state.busy) return;
+  state.busy = true;
+  try {
+    const z = await call("state");
+    showRecording(z.recording);
+    if (z.recording_error) showMessage(z.recording_error);
+    state.lastState = z;
+    showProgress(z);
+    renderContent();
+    if (++counter % 4 === 0 || z.job) await loadList();
+  } catch (_) {
+    /* missed one poll – the next one follows shortly */
+  } finally {
+    state.busy = false;
+  }
+}
+
+/* ---------- Devices & settings ---------- */
+
+function fillOptions(select, names, fallback, chosen) {
+  select.replaceChildren(element("option", { value: "" }, `Systemstandard (${fallback})`));
+  for (const n of names) select.append(element("option", { value: n }, n));
+  select.value = names.includes(chosen) ? chosen : "";
+}
+
+async function loadDevices() {
+  try {
+    const g = await call("devices");
+    fillOptions($("sel-microphone"), g.microphones, g.default_microphone, state.settings.microphone);
+    fillOptions($("sel-speakers"), g.speakers, g.default_speakers, state.settings.speakers);
+  } catch (e) {
+    showMessage("Audiogeräte konnten nicht gelesen werden: " + e.message);
+  }
+}
+
+function setNames() {
+  $("name-me").textContent = state.settings.name;
+  $("name-others").textContent = state.settings.others;
+}
+
+const CUSTOM = "__custom__";
+
+function showModelStatus() {
+  const form = $("form-settings");
+  const choice = form.elements.model_choice.value;
+  const custom = form.elements.model_custom;
+  custom.hidden = choice !== CUSTOM;
+  const m = state.models.find((x) => x.id === choice);
+  $("model-status").textContent = m
+    ? `${m.description}. Status: ${m.status}.`
+    : "Eingebauter Name (z.B. medium), Hugging-Face-ID oder lokaler Ordner. Hugging-Face-Modelle zuerst im Terminal konvertieren.";
+}
+
+function fillModelChoice(current) {
+  const select = $("sel-model");
+  const ids = state.models.map((m) => m.id);
+  select.replaceChildren(
+    ...state.models.map((m) => element("option", { value: m.id }, m.id)),
+    element("option", { value: CUSTOM }, "Anderes Modell …"),
+  );
+  const form = $("form-settings");
+  if (ids.includes(current)) {
+    select.value = current;
+    form.elements.model_custom.value = "";
+  } else {
+    select.value = CUSTOM;
+    form.elements.model_custom.value = current || "";
+  }
+}
+
+async function openSettings() {
+  const form = $("form-settings");
+  const e = state.settings;
+  for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb"]) form.elements[field].value = e[field] || "";
+  call("audio_usage").then((sp) => {
+    $("audio-hint").textContent = "Leer heisst unbegrenzt, 0 Tage heisst gleich nach dem Transkribieren. "
+      + "Transkripte bleiben immer erhalten, Aufnahmen ohne Transkript werden nie automatisch gelöscht. "
+      + `Belegt: ${sp.audio_mb.toLocaleString("de-CH")} MB.`;
+  }).catch(() => {});
+  form.elements.quality.value = e.quality || "accurate";
+  $("folder-hint").textContent = `Leer lassen für den Standard. Aktuell: ${e.recordings_path}`;
+  try { state.models = await call("models"); } catch (_) { state.models = []; }
+  fillModelChoice(e.model);
+  try { renderCorrectionList(await call("corrections")); } catch (_) { renderCorrectionList([]); }
+  showModelStatus();
+  $("dlg-settings").showModal();
+}
+
+function renderCorrectionList(list) {
+  const ul = $("correction-list");
+  if (!list.length) {
+    ul.replaceChildren(element("li", {}, element("p", { class: "correction-list-empty" }, "Noch keine Korrekturen gemerkt.")));
+    return;
+  }
+  ul.replaceChildren(...list.map((entry) => element("li", {},
+    element("span", { class: "target" }, entry.target),
+    element("span", { class: "edit-hint" }, "statt"),
+    ...entry.variants.map((v) => element("span", { class: "variant" }, v,
+      element("button", {
+        type: "button", "aria-label": `«${v}» → «${entry.target}» entfernen`, title: "Entfernen",
+        onclick: async () => {
+          try { renderCorrectionList(await call("remove_correction", entry.target, v)); } catch (e) { $("model-status").textContent = e.message; }
+        },
+      }, "×"))),
+  )));
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  const form = $("form-settings");
+  const data = {};
+  for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "audio_days", "audio_max_mb"]) data[field] = form.elements[field].value;
+  for (const field of ["audio_days", "audio_max_mb"]) {
+    if (data[field].trim() && !/^\d+$/.test(data[field].trim())) {
+      $("audio-hint").textContent = "Bitte bei Tagen und MB nur ganze Zahlen eingeben oder das Feld leer lassen.";
+      return;
+    }
+  }
+  const choice = form.elements.model_choice.value;
+  data.model = choice === CUSTOM ? form.elements.model_custom.value.trim() : choice;
+  if (!data.model) { $("model-status").textContent = "Bitte ein Modell angeben."; return; }
+  try {
+    state.settings = await call("save_settings", data);
+    setNames();
+    $("dlg-settings").close();
+    state.listSignature = "";
+    await loadList();
+  } catch (e) {
+    $("model-status").textContent = e.message;
+  }
+}
+
+/* ---------- Start ---------- */
+
+async function init() {
+  $("btn-record").addEventListener("click", toggleRecording);
+  $("chk-consent").addEventListener("change", updateRecordButton);
+  $("btn-settings").addEventListener("click", openSettings);
+  $("btn-folder").addEventListener("click", () => call("open_folder", "").catch((e) => showMessage(e.message)));
+  $("btn-cancel").addEventListener("click", () => $("dlg-settings").close());
+  $("form-settings").addEventListener("submit", saveSettings);
+  $("sel-model").addEventListener("change", showModelStatus);
+
+  try {
+    state.settings = await call("settings");
+    $("version").textContent = "Version " + (await call("version"));
+  } catch (e) { showMessage(e.message); }
+  setNames();
+  await loadDevices();
+  await loadList();
+  await renderContent(true);
+  updateRecordButton();
+  setInterval(poll, 250);
+}
+
+if (window.pywebview && window.pywebview.api) init();
+else window.addEventListener("pywebviewready", init);
+</script>
+</body>
+</html>

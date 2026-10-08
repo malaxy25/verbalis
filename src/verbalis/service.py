@@ -1,0 +1,615 @@
+"""The logic behind the UI – independent of the window.
+
+The UI polls `state()` regularly and calls actions. Transcriptions run one
+after another in a background thread so recording and UI never block. The
+loaded model stays in memory as long as the setting doesn't change (loading
+takes ~15 s).
+
+Pausing: the thread stops after each finished text segment while paused
+manually or while a recording is running (otherwise both compete for the CPU,
+which can cause dropouts in the recording).
+
+User-facing strings (errors, phases) are German – the UI is German.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import math
+import os
+import queue
+import re
+import subprocess
+import sys
+import threading
+import time
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Callable
+
+from . import pipeline
+from .corrections import CorrectionList, suggestions
+from .settings import Settings
+from .transcript import to_markdown
+from .transcription.base import Segment
+from .transcription.models import verbalis_home
+
+VALID_ID = re.compile(r"^[\w\-]+$")
+CLEANUP = ":cleanup"          # queue task (not a valid recording ID)
+CLEANUP_EVERY_S = 3600        # additionally every hour while the app stays open
+MB = 1024 * 1024              # as shown in Windows Explorer
+log = logging.getLogger(__name__)
+
+
+def _db(rms: float) -> float:
+    return round(max(20 * math.log10(rms), -90.0), 1) if rms > 1e-9 else -90.0
+
+
+def open_in_file_manager(path: Path) -> None:
+    if sys.platform == "win32":
+        os.startfile(path)  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
+
+
+class Service:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        recorder_factory: Callable | None = None,
+        transcriber_factory: Callable | None = None,
+        select_devices: Callable | None = None,
+        list_devices: Callable | None = None,
+        cleanup_on_start: bool = True,
+    ):
+        self._lock = threading.RLock()
+        self._s = settings or Settings.load()
+        self._recorder_factory = recorder_factory or self._default_recorder
+        self._transcriber_factory = transcriber_factory or self._default_transcriber
+        self._select_devices = select_devices or self._default_select
+        self._list_devices = list_devices or self._default_list
+
+        self._rec = None
+        self._rec_info: dict = {}
+        self._recording_error: str | None = None
+
+        self._queue: queue.Queue[str | None] = queue.Queue()
+        self._queued: list[str] = []
+        self._job: dict | None = None
+        self._errors: dict[str, str] = {}
+        self._transcriber = None
+        self._transcriber_model: str | None = None
+        self._manual_pause = False
+
+        self._worker = threading.Thread(target=self._work, name="transcription", daemon=True)
+        self._worker.start()
+        if cleanup_on_start:
+            self._queue.put(CLEANUP)  # check old audio files
+
+    # ------------------------------------------------------------ default building blocks
+
+    @staticmethod
+    def _default_recorder(microphone, loopback, folder):
+        from .audio.recorder import TwoTrackRecorder
+
+        return TwoTrackRecorder(microphone, loopback, folder)
+
+    @staticmethod
+    def _default_transcriber(model: str):
+        from .transcription.faster import FasterWhisperTranscriber
+
+        return FasterWhisperTranscriber(model)
+
+    @staticmethod
+    def _default_select(microphone, speakers):
+        from .audio.devices import select
+
+        return select(microphone, speakers)
+
+    @staticmethod
+    def _default_list():
+        from .audio.devices import device_names
+
+        return device_names()
+
+    # ------------------------------------------------------------ settings & devices
+
+    def settings(self) -> dict:
+        return self._s.as_dict()
+
+    def save_settings(self, data: dict) -> dict:
+        with self._lock:
+            old = self._s
+            new = Settings.from_dict({**self._s.as_dict(), **data})
+            new.save()
+            self._s = new
+        if (old.audio_days, old.audio_max_mb) != (new.audio_days, new.audio_max_mb):
+            self._queue.put(CLEANUP)
+        return self._s.as_dict()
+
+    def devices(self) -> dict:
+        return self._list_devices()
+
+    def models(self) -> list[dict]:
+        from .transcription.models import RECOMMENDED, builtin_models, converted_models
+
+        converted = set(converted_models())
+        builtin = set(builtin_models())
+        result = []
+        for model, description in RECOMMENDED:
+            if model in converted:
+                status = "bereit"
+            elif model in builtin:
+                status = "wird beim ersten Gebrauch heruntergeladen"
+            else:
+                status = f"noch nicht konvertiert – im Terminal: verbalis convert-model {model}"
+            result.append({"id": model, "description": description, "status": status})
+        for model in sorted(converted - {m for m, _ in RECOMMENDED}):
+            result.append({"id": model, "description": "selbst konvertiert", "status": "bereit"})
+        return result
+
+    # ------------------------------------------------------------ recording
+
+    def start_recording(self, microphone: str = "", speakers: str = "", consent: bool = False) -> str:
+        with self._lock:
+            if self._rec is not None:
+                raise RuntimeError("Es läuft bereits eine Aufnahme.")
+            if not consent:
+                raise RuntimeError("Bitte zuerst bestätigen, dass alle Teilnehmenden der Aufnahme zugestimmt haben.")
+
+            devices = self._select_devices(microphone or None, speakers or None)
+            start = datetime.now().astimezone()
+            folder = self._s.recordings / start.strftime("%Y-%m-%d_%H%M%S")
+            rec = self._recorder_factory(devices.microphone, devices.loopback, folder)
+            rec.start()
+
+            self._rec = rec
+            self._recording_error = None
+            self._rec_info = {
+                "id": folder.name,
+                "folder": folder,
+                "start": start,
+                "consent": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "devices": {"me": devices.microphone.name, "others": devices.loopback.name},
+            }
+            # Remember the chosen devices for next time
+            if (microphone, speakers) != (self._s.microphone, self._s.speakers):
+                self.save_settings({"microphone": microphone, "speakers": speakers})
+            return folder.name
+
+    def stop_recording(self) -> str | None:
+        with self._lock:
+            rec, info = self._rec, self._rec_info
+            if rec is None:
+                return None
+            rec.stop()
+            self._rec, self._rec_info = None, {}
+
+        errors = [repr(e) for e in rec.errors]
+        if errors:
+            self._recording_error = "Die Aufnahme wurde wegen eines Gerätefehlers abgebrochen: " + "; ".join(errors)
+        duration = time.monotonic() - rec.t0
+        pipeline.write_meta(info["folder"], info["start"], duration, rec.samplerate,
+                            info["consent"], info["devices"], rec.status())
+        if duration >= 1:
+            self.transcribe(info["id"])
+        return info["id"]
+
+    # ------------------------------------------------------------ transcription
+
+    def transcribe(self, recording_id: str) -> None:
+        if not pipeline.has_audio(self._path(recording_id)):
+            raise RuntimeError("Das Audio dieser Aufnahme wurde gelöscht – neu transkribieren ist nicht mehr möglich.")
+        with self._lock:
+            if recording_id in self._queued or (self._job and self._job["id"] == recording_id):
+                return
+            self._errors.pop(recording_id, None)
+            self._queued.append(recording_id)
+        self._queue.put(recording_id)
+
+    def _get_model(self, model: str):
+        if self._transcriber is None or self._transcriber_model != model:
+            self._transcriber = None  # free the old one first
+            self._transcriber = self._transcriber_factory(model)
+            self._transcriber_model = model
+        return self._transcriber
+
+    # ------------------------------------------------------------ pause
+
+    def _pause_reason(self) -> str | None:
+        if self._manual_pause:
+            return "manual"
+        if self._rec is not None:
+            return "recording"
+        return None
+
+    def pause(self) -> None:
+        with self._lock:
+            self._manual_pause = True
+
+    def resume(self) -> None:
+        with self._lock:
+            self._manual_pause = False
+
+    def _wait_while_paused(self) -> None:
+        """Call from the worker thread: blocks while paused."""
+        since = None
+        while True:
+            with self._lock:
+                if self._pause_reason() is None:
+                    if since is not None and self._job:
+                        self._job["paused_s"] += time.monotonic() - since
+                        self._job["paused_since"] = None
+                    return
+                if since is None:
+                    since = time.monotonic()
+                    if self._job:
+                        self._job["paused_since"] = since
+            time.sleep(0.1)
+
+    # ------------------------------------------------------------ remaining time
+
+    @staticmethod
+    def _stats_path() -> Path:
+        return verbalis_home() / "stats.json"
+
+    def _factor(self, key: str) -> float | None:
+        try:
+            return json.loads(self._stats_path().read_text(encoding="utf-8"))["realtime_factor"].get(key)
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            return None
+
+    def _remember_factor(self, key: str, factor: float) -> None:
+        path = self._stats_path()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {}
+        factors = data.setdefault("realtime_factor", {})
+        old = factors.get(key)
+        factors[key] = round(factor if old is None else (old + factor) / 2, 3)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    def _remaining(self, job: dict) -> float | None:
+        if job["start"] is None:
+            return None
+        now = job["paused_since"] or time.monotonic()
+        active = max(now - job["start"] - job["paused_s"], 0.0)
+        progress = job["progress"]
+        if progress >= 0.1 and active >= 10:
+            return active * (1 - progress) / progress
+        if job["factor"] and job["duration_s"]:
+            rest = job["factor"] * job["duration_s"] - active
+            return rest if rest > 0 else None
+        return None
+
+    # ------------------------------------------------------------ worker
+
+    def _work(self) -> None:
+        while True:
+            try:
+                recording_id = self._queue.get(timeout=CLEANUP_EVERY_S)
+            except queue.Empty:
+                recording_id = CLEANUP
+            if recording_id is None:
+                return
+            if recording_id == CLEANUP:
+                self._cleanup_safely()
+                continue
+            self._wait_while_paused()
+            with self._lock:
+                if recording_id in self._queued:
+                    self._queued.remove(recording_id)
+                s = self._s
+                key = f"{s.model}|beam{s.beam_size}"
+                self._job = {
+                    "id": recording_id, "phase": f"Modell {s.model} wird geladen", "progress": 0.0,
+                    "start": None, "paused_s": 0.0, "paused_since": None,
+                    "duration_s": pipeline.read_meta(self._path(recording_id)).get("duration_s"),
+                    "factor": self._factor(key),
+                }
+            try:
+                self._compress_safely(self._path(recording_id))
+                with self._lock:
+                    self._job["phase"] = f"Modell {s.model} wird geladen"
+                tr = self._get_model(s.model)
+                tr.beam_size = s.beam_size
+                corrections = CorrectionList.load()
+                tr.keywords = self._keywords(s.keywords, corrections) or None
+                names = {"me": s.name, "others": s.others}
+                order = list(names.values())
+                with self._lock:
+                    self._job["start"] = time.monotonic()
+                    self._job["phase"] = "Transkription beginnt"
+
+                def progress(name: str, fraction: float):
+                    index = order.index(name) if name in order else 0
+                    with self._lock:
+                        if self._job:
+                            self._job["phase"] = f"Spur «{name}» wird transkribiert"
+                            self._job["progress"] = (index + fraction) / len(order)
+                    self._wait_while_paused()
+
+                def paused_time() -> float:
+                    with self._lock:
+                        return self._job["paused_s"] if self._job else 0.0
+
+                _, compute, duration = pipeline.create_transcript(
+                    self._path(recording_id), tr, s.model, names, progress, paused_time, corrections)
+                if duration > 0 and compute > 0:
+                    self._remember_factor(key, compute / duration)
+            except Exception as ex:  # show the error per recording, the worker keeps running
+                log.exception("Transcription of %s failed", recording_id)
+                with self._lock:
+                    self._errors[recording_id] = str(ex) or repr(ex)
+            finally:
+                with self._lock:
+                    self._job = None
+            self._cleanup_safely()
+
+    # ------------------------------------------------------------ audio retention
+
+    def _compress_safely(self, folder: Path) -> None:
+        if not any((folder / f"{t}.wav").exists() for t in pipeline.TRACKS):
+            return
+        with self._lock:
+            if self._job:
+                self._job["phase"] = "Audio wird komprimiert"
+        try:
+            pipeline.compress_audio(folder)
+        except Exception:  # not critical – the WAV gets transcribed instead
+            log.exception("Compressing %s failed", folder.name)
+
+    def _protected(self) -> set[str]:
+        with self._lock:
+            return {i for i in (self._rec_info.get("id"), self._job and self._job["id"], *self._queued) if i}
+
+    def _cleanup_safely(self) -> None:
+        try:
+            self.cleanup()
+        except Exception:
+            log.exception("Cleanup failed")
+
+    def cleanup(self) -> list[str]:
+        """Compress leftover WAVs, delete audio past the retention period or over the size limit.
+
+        Never touched: the running recording, recordings queued or in progress,
+        and recordings without a transcript – their audio is all there is of
+        the conversation.
+        """
+        s, base = self._s, self._s.recordings
+        if not base.exists():
+            return []
+        protected = self._protected()
+        candidates: list[tuple[datetime, Path]] = []
+        for folder in base.iterdir():
+            if not folder.is_dir() or not VALID_ID.match(folder.name) or folder.name in protected:
+                continue
+            if self._pause_reason() is None:
+                self._compress_safely(folder)  # e.g. leftovers from the CLI or after a crash
+            if (folder / "transcript.json").exists() and pipeline.audio_bytes(folder):
+                start = pipeline.recording_start(folder) or datetime.fromtimestamp(folder.stat().st_mtime).astimezone()
+                candidates.append((start, folder))
+        candidates.sort(key=lambda c: c[0])  # oldest first
+
+        deleted: list[str] = []
+        if s.days is not None:
+            limit = datetime.now().astimezone() - timedelta(days=s.days)
+            reason = "nach dem Transkribieren" if s.days == 0 else f"älter als {s.days} Tage"
+            for start, folder in list(candidates):
+                if start <= limit:
+                    pipeline.delete_audio(folder, reason)
+                    deleted.append(folder.name)
+                    candidates.remove((start, folder))
+        if s.max_mb is not None:
+            total = self._audio_total()
+            for start, folder in candidates:
+                if total <= s.max_mb * MB:
+                    break
+                total -= pipeline.delete_audio(folder, f"Speichergrenze {s.max_mb} MB")
+                deleted.append(folder.name)
+        if deleted:
+            log.info("Audio deleted: %s", ", ".join(deleted))
+        return deleted
+
+    def _audio_total(self) -> int:
+        base = self._s.recordings
+        return sum(pipeline.audio_bytes(f) for f in base.iterdir() if f.is_dir()) if base.exists() else 0
+
+    def audio_usage(self) -> dict:
+        return {"audio_mb": round(self._audio_total() / MB, 1)}
+
+    def delete_audio(self, recording_id: str) -> None:
+        folder = self._path(recording_id)
+        if recording_id in self._protected():
+            raise RuntimeError("Diese Aufnahme wird gerade aufgenommen oder transkribiert.")
+        pipeline.delete_audio(folder, "von Hand")
+
+    def _deletion_date(self, folder: Path) -> str | None:
+        """When the audio will probably be deleted (only with a retention period in days)."""
+        days = self._s.days
+        if days is None or not (folder / "transcript.json").exists():
+            return None
+        if days == 0:
+            return "now"
+        start = pipeline.recording_start(folder)
+        return (start + timedelta(days=days)).isoformat(timespec="minutes") if start else None
+
+    # ------------------------------------------------------------ corrections
+
+    @staticmethod
+    def _keywords(own: str, corrections: CorrectionList) -> str:
+        """Own keywords plus all correction targets, without duplicates."""
+        words: list[str] = []
+        for w in [*own.split(","), *corrections.targets()]:
+            w = w.strip()
+            if w and w.lower() not in (x.lower() for x in words):
+                words.append(w)
+        return ", ".join(words)
+
+    def _write_transcript(self, folder: Path, data: dict) -> None:
+        data.pop("markdown", None)
+        (folder / "transcript.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        paragraphs = [Segment(s["start"], s["end"], s["text"], s.get("speaker")) for s in data["segments"]]
+        (folder / "transcript.md").write_text(
+            to_markdown(paragraphs, data.get("title") or f"Transkript {folder.name}", data.get("header", {})),
+            encoding="utf-8")
+
+    def edit_transcript(self, recording_id: str, index: int, text: str) -> dict:
+        """Change one paragraph. Returns suggestions for the correction list."""
+        folder = self._path(recording_id)
+        data = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))
+        segments = data["segments"]
+        if not 0 <= index < len(segments):
+            raise ValueError("Diesen Absatz gibt es nicht (mehr).")
+        text = " ".join(text.split())
+        if not text:
+            raise ValueError("Ein Absatz darf nicht leer sein.")
+        old = segments[index]["text"]
+        if text == old:
+            return {"suggestions": []}
+
+        original = folder / "transcript_original.json"
+        if not original.exists():  # keep the unedited version once
+            original.write_text((folder / "transcript.json").read_text(encoding="utf-8"), encoding="utf-8")
+        segments[index]["text"] = text
+        data["edited"] = True
+        self._write_transcript(folder, data)
+
+        corrections = CorrectionList.load()
+        proposals = [corrections.classify(v, t) for v, t in suggestions(old, text)]
+        return {"suggestions": [p for p in proposals if p["kind"] != "known"]}
+
+    def remember_corrections(self, recording_id: str, rules: list[dict]) -> dict:
+        """Save the chosen suggestions and apply them to the whole transcript right away."""
+        corrections = CorrectionList.load()
+        new = CorrectionList()
+        for r in rules:
+            info = corrections.add(r["variant"], r["target"])
+            if info["kind"] != "ignored":
+                new.add(r["variant"], info["target"])
+        corrections.save()
+
+        replaced = 0
+        if recording_id:
+            folder = self._path(recording_id)
+            data = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))
+            for s in data["segments"]:
+                s["text"], n = new.apply(s["text"])
+                replaced += n
+            if replaced:
+                data["edited"] = True
+                self._write_transcript(folder, data)
+        return {"remembered": sum(len(v) for v in new.rules.values()), "replaced": replaced}
+
+    def corrections(self) -> list[dict]:
+        return CorrectionList.load().as_list()
+
+    def remove_correction(self, target: str, variant: str | None = None) -> list[dict]:
+        corrections = CorrectionList.load()
+        corrections.remove(target, variant)
+        corrections.save()
+        return corrections.as_list()
+
+    # ------------------------------------------------------------ recordings
+
+    def _path(self, recording_id: str) -> Path:
+        if not VALID_ID.match(recording_id or ""):
+            raise ValueError(f"Ungültige Aufnahme: {recording_id!r}")
+        return self._s.recordings / recording_id
+
+    def _status(self, recording_id: str, folder: Path) -> str:
+        if self._rec_info.get("id") == recording_id:
+            return "recording"
+        if self._job and self._job["id"] == recording_id:
+            return "paused" if self._pause_reason() and self._job["start"] is not None else "running"
+        if recording_id in self._queued:
+            return "queued"
+        if recording_id in self._errors:
+            return "error"
+        return "done" if (folder / "transcript.json").exists() else "none"
+
+    def recordings(self) -> list[dict]:
+        base = self._s.recordings
+        if not base.exists():
+            return []
+        result = []
+        with self._lock:
+            for folder in sorted(base.iterdir(), reverse=True):
+                if not folder.is_dir() or not VALID_ID.match(folder.name):
+                    continue
+                recording = self._rec_info.get("id") == folder.name
+                if not recording and not pipeline.is_recording_folder(folder):
+                    continue
+                meta = pipeline.read_meta(folder)
+                audio = pipeline.audio_bytes(folder)
+                result.append({
+                    "id": folder.name,
+                    "start": meta.get("start") or folder.name,
+                    "duration_s": meta.get("duration_s"),
+                    "status": self._status(folder.name, folder),
+                    "error": self._errors.get(folder.name),
+                    "audio": bool(audio) or recording,
+                    "audio_mb": round(audio / MB, 1),
+                    "audio_delete": self._deletion_date(folder) if audio else None,
+                })
+        return result
+
+    def transcript(self, recording_id: str) -> dict | None:
+        folder = self._path(recording_id)
+        try:
+            data = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        md = folder / "transcript.md"
+        data["markdown"] = md.read_text(encoding="utf-8") if md.exists() else ""
+        return data
+
+    def open_folder(self, recording_id: str = "") -> None:
+        path = self._path(recording_id) if recording_id else self._s.recordings
+        path.mkdir(parents=True, exist_ok=True)
+        open_in_file_manager(path)
+
+    # ------------------------------------------------------------ state for the UI
+
+    def state(self) -> dict:
+        with self._lock:
+            rec, info = self._rec, self._rec_info
+            recording = None
+            if rec is not None and rec.running:  # stopped by itself = a track failed
+                me, others = rec.status()
+                recording = {
+                    "id": info["id"],
+                    "duration_s": round(time.monotonic() - rec.t0, 1),
+                    "levels": {"me": _db(me.level_rms), "others": _db(others.level_rms)},
+                }
+            job = None
+            if self._job:
+                rest = self._remaining(self._job)
+                job = {"id": self._job["id"], "phase": self._job["phase"], "progress": self._job["progress"],
+                       "remaining_s": round(rest) if rest is not None else None}
+            queued = list(self._queued)
+            pause = self._pause_reason()
+        if rec is not None and recording is None:
+            self.stop_recording()
+        return {"recording": recording, "job": job, "queued": queued, "pause": pause,
+                "recording_error": self._recording_error}
+
+    def shutdown(self, wait_s: float = 0.0) -> None:
+        """When the window closes: save a running recording properly.
+
+        wait_s: how long to wait for the background thread to end (tests).
+        """
+        if self._rec is not None:
+            rec, info = self._rec, self._rec_info
+            rec.stop()
+            self._rec, self._rec_info = None, {}
+            pipeline.write_meta(info["folder"], info["start"], time.monotonic() - rec.t0, rec.samplerate,
+                                info["consent"], info["devices"], rec.status())
+        self._queue.put(None)
+        if wait_s:
+            self._worker.join(wait_s)

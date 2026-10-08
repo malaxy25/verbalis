@@ -1,38 +1,46 @@
-# Mitschrift
+# Verbalis
 
-[![Tests](https://github.com/malaxy25/mitschrift/actions/workflows/tests.yml/badge.svg)](https://github.com/malaxy25/mitschrift/actions/workflows/tests.yml)
+[![Tests](https://github.com/malaxy25/verbalis/actions/workflows/tests.yml/badge.svg)](https://github.com/malaxy25/verbalis/actions/workflows/tests.yml)
 
-Lokale App, die Gespräche aufnimmt (eigenes Mikrofon **und** Systemaudio, also
-alle Teilnehmenden eines Teams-Calls) und danach ein Transkript erstellt –
-Hochdeutsch und Schweizerdeutsch. Alles läuft lokal, nichts verlässt den Rechner.
+Verbalis records conversations – your own microphone **and** the system audio,
+i.e. everyone in a Teams call – and turns them into a transcript. It understands
+Standard German and Swiss German. Everything runs locally; nothing leaves the
+computer.
 
-**Stand 0.6.0:** Oberfläche für Aufnahme, Transkription und Verlauf. Sprechererkennung folgt.
+The user interface and all user-facing messages are German, the code and the
+documentation English.
 
-```bash
-mitschrift app
+## Features
+
+- **Two-track recording:** microphone (`me`) and system audio (`others`) in sync,
+  so "me vs. the others" is clear without speaker recognition.
+- **Transcription in the background** with faster-whisper; Swiss German
+  fine-tunes supported. Pause/resume, remaining time, automatic pause while
+  recording.
+- **Correcting in the transcript:** click a paragraph, fix it; Verbalis suggests
+  rules for a correction list (e.g. «Toko» → «tocco») that apply to all future
+  transcripts.
+- **Audio retention:** compressed to 16 kHz FLAC after recording (one hour ≈
+  100 MB), deleted after N days and/or above a size limit. Transcripts stay.
+- **Consent** is confirmed before every recording and stored with it.
+
+## Architecture
+
+```
+UI (HTML/JS in a pywebview window)        app.py, ui/index.html
+        │  JavaScript calls Python directly
+Service: recording, queue, history        service.py
+Pipeline: audio files, metadata           pipeline.py
+ ├─ audio/          two-track recording (microphone + loopback)
+ ├─ transcription/  exchangeable backends (faster-whisper), model management
+ ├─ transcript.py   merge tracks, Markdown/JSON
+ ├─ corrections.py  correction list
+ └─ evaluation.py   word error rate for model comparisons
 ```
 
-## Architektur (Ziel)
+## Setup
 
-```
-Oberfläche (HTML/JS in pywebview-Fenster)      app.py, ui/index.html   ✓
-        │  JavaScript ruft Python direkt auf
-Dienst: Aufnahme, Warteschlange, Verlauf        dienst.py               ✓
-Backend (Python)
- ├─ audio/          Aufnahme: Mikrofon + Loopback als zwei Spuren   ✓
- ├─ transcription/  austauschbare Backends (faster-whisper)          ✓
- ├─ transkript.py   Spuren zusammenführen, Markdown/JSON            ✓
- └─ diarization/    Sprechererkennung (pyannote), Namen vergeben
-```
-
-Die zwei Spuren sind bewusst getrennt: `ich.wav` (Mikrofon) und
-`gegenueber.wav` (Systemaudio). Damit ist «Ich vs. die anderen» ohne
-Sprechererkennung klar, und pyannote muss nur noch die Remote-Teilnehmenden
-auseinanderhalten.
-
-## Einrichtung
-
-Python 3.11 oder neuer.
+Python 3.11 or newer.
 
 ```bash
 python -m venv .venv
@@ -41,132 +49,111 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
-Ubuntu: Es braucht PipeWire mit `pipewire-pulse` (Standard bei Ubuntu) bzw.
-`libpulse0`. Windows: nichts Zusätzliches.
+Ubuntu additionally needs PipeWire with `pipewire-pulse` (default on Ubuntu) and
+GTK or Qt for the window, e.g. `sudo apt install python3-gi gir1.2-webkit2-4.1`
+or `pip install pywebview[qt]`.
 
-## Start per Doppelklick (Windows)
+## Start by double-click (Windows)
 
-Einmalig im Repo ausführen, mit aktivierter `.venv`:
+Once, inside the repo with the `.venv` activated:
 
 ```powershell
 pip install -e ".[dev]"
-.\werkzeuge\verknuepfung-erstellen.ps1
+.\tools\create-shortcut.ps1
 ```
 
-Danach gibt es «Mitschrift» auf dem Desktop und im Startmenü. Die Verknüpfung
-startet `.venv\Scripts\mitschrift-app.exe` ohne Konsolenfenster und zeigt auf
-das Repo – Updates wirken sofort. Fehler landen in `~/.mitschrift/protokoll.txt`.
+This creates «Verbalis» on the desktop and in the Start menu. The shortcut
+starts `.venv\Scripts\verbalis-app.exe` without a console window and points to
+the repo, so updates take effect immediately. Errors are logged to
+`~/.verbalis/verbalis.log`. The app can only be opened once at a time.
 
-## Oberfläche
+## Using the app
 
-`mitschrift app` oder die Verknüpfung öffnet das Fenster:
+- **Record:** pick the microphone and the device Teams plays sound on, confirm
+  that all participants consent, start and stop with the red button.
+- **Transcript:** created automatically in the background after stopping, with
+  progress and remaining time. The model stays loaded, so the next
+  transcription starts faster.
+- **Correct:** click a paragraph, edit, save. Verbalis suggests the changed
+  words for the correction list; ticked suggestions apply from then on.
+- **Settings:** your name, label for the others, model, speed (accurate/fast),
+  keywords, correction list, audio retention and recordings folder.
 
-- **Aufnahme:** Mikrofon und Tonausgabe von Teams wählen, Zustimmung aller
-  Teilnehmenden bestätigen, mit dem roten Knopf starten und beenden.
-- **Transkript:** entsteht nach dem Beenden automatisch im Hintergrund.
-  Fortschritt und Restdauer in der Ansicht, Status in der Liste links. Das
-  Modell bleibt geladen, die zweite Transkription startet deshalb schneller.
-- **Pausieren:** Transkriptionen lassen sich pausieren und fortsetzen. Während
-  einer Aufnahme pausieren sie automatisch, damit die CPU frei bleibt.
-- **Korrigieren:** Absatz im Transkript anklicken, ändern, speichern. Die App
-  schlägt die geänderten Wörter für die Korrekturliste vor (z.B. «Toko» →
-  «tocco»); angehakte Vorschläge gelten ab dann für alle Transkripte.
-- **Audio aufbewahren:** Nach der Aufnahme wird das Audio verlustfrei auf
-  16 kHz FLAC komprimiert (eine Stunde ≈ 100 MB). Es wird nach einer Frist
-  (Standard 3 Tage) und/oder über einer Speichergrenze automatisch gelöscht,
-  älteste zuerst. Transkripte bleiben, Aufnahmen ohne Transkript sind geschützt.
-- **Einstellungen:** dein Name, Bezeichnung der anderen, Modell, Tempo
-  (genau/schnell), Stichworte, Korrekturliste, Audio-Aufbewahrung und Aufnahmeordner.
+## Data
 
-Aufnahmen landen standardmässig in `~/.mitschrift/aufnahmen` (änderbar in den
-Einstellungen) – App und Kommandozeile nutzen denselben Ordner.
+Everything lives in `~/.verbalis` (override with the `VERBALIS_HOME` environment
+variable):
 
-Unter Ubuntu braucht pywebview zusätzlich GTK oder Qt, z.B.
-`sudo apt install python3-gi gir1.2-webkit2-4.1` oder `pip install pywebview[qt]`.
+| Path | Content |
+|---|---|
+| `settings.json` | settings |
+| `corrections.json` | correction list |
+| `stats.json` | speed per model, for the remaining-time estimate |
+| `models/` | converted models |
+| `recordings/YYYY-MM-DD_HHMMSS/` | `me.flac`, `others.flac`, `meta.json`, `transcript.md/.json` |
+| `verbalis.log` | log file |
 
-## Kommandozeile
+During a recording audio is written as WAV (crash-safe) and compressed afterwards.
+
+**Upgrading from «Mitschrift» (≤ 0.6):** on first start Verbalis moves settings,
+correction list, models and recordings from `~/.mitschrift` to `~/.verbalis` and
+renames files and fields. A note file is left in the old folder, which can then
+be deleted.
+
+## Command line
+
+Commands and options are English, output is German.
 
 ```bash
-mitschrift geraete                       # Mikrofone und Lautsprecher anzeigen
-mitschrift aufnehmen                     # Standardgeräte, Ctrl+C beendet
-mitschrift aufnehmen --lautsprecher jabra --mikrofon jabra
-mitschrift aufnehmen --dauer 30          # Testaufnahme 30 s
+verbalis app                                   # open the UI
+verbalis devices                               # list microphones and speakers
+verbalis record --speakers jabra --duration 30 # record (asks for consent)
+verbalis transcribe ~/.verbalis/recordings/2026-10-07_143000 --name Andrea
+verbalis transcribe … --model large-v3 --keywords "tocco, Höngg" --beam 1
 ```
 
-Ergebnis in `~/.mitschrift/aufnahmen/JJJJ-MM-TT_HHMMSS/`: `ich.flac`, `gegenueber.flac`, `meta.json`.
-Während der Aufnahme wird als WAV geschrieben (absturzsicher), danach komprimiert.
+`--beam 1` is about twice as fast but slightly less accurate.
 
-**Wichtig:** Als `--lautsprecher` das Gerät wählen, auf dem Teams den Ton
-ausgibt (Teams → Einstellungen → Geräte). Ist das nicht das Standardgerät,
-bleibt die Gegenüber-Spur sonst stumm.
-
-## Transkription
+## Models and comparison
 
 ```bash
-mitschrift transkribieren aufnahmen/2026-10-07_143000 --name Andrea
-mitschrift transkribieren … --modell large-v3 --stichworte "tocco, Höngg"
+verbalis models                                # overview with status
+pip install -e ".[convert]"                    # once, large (torch)
+verbalis convert-model Flix-AI/flix-swissgerman-full
+verbalis compare <folder> --reference testdata/reference_standard_german.txt
 ```
 
-Ergebnis: `transkript.md` (lesbar) und `transkript.json` (für die spätere App)
-im Aufnahmeordner. Standardmodell ist das aus den Einstellungen (Flix), gerechnet wird auf der CPU.
-`--beam 1` ist etwa doppelt so schnell, aber etwas ungenauer.
+`compare` runs all recommended models on the first 3 minutes (`--until 0` for the
+whole recording) and writes `comparison.md` with load time, compute time,
+real-time factor and word error rate (WER), plus one transcript per model.
 
-## Modelle vergleichen
+Any Hugging Face Whisper model can be converted this way and used with
+`--model <hf-id>`. The read-aloud text for tests is in
+`testdata/read_aloud_zurich.md`.
 
-```bash
-mitschrift modelle                                   # Übersicht mit Status
-pip install -e ".[konvertieren]"                     # einmalig, gross (torch)
-mitschrift modell-konvertieren Flix-AI/flix-swissgerman-full
-mitschrift vergleichen aufnahmen/2026-10-07_143000   # erste 3 min, alle empfohlenen
-```
+All models write Swiss German as **Standard German**. That is usually what you
+want for minutes, but it is a translation, not a verbatim record – correct
+translations worded differently also count as errors in the WER, so compare
+models relative to each other.
 
-Mit Referenztext berechnet `vergleichen` zusätzlich die Wortfehlerquote (WER):
+## Privacy and law
 
-```bash
-mitschrift vergleichen aufnahmen/… --referenz testdaten/referenz_hochdeutsch.txt
-```
+Recording a conversation without the consent of all participants is a criminal
+offence in Switzerland (StGB Art. 179ter). Verbalis asks for consent before
+every recording and stores it in `meta.json`. Recordings contain personal data;
+they are excluded from the repo via `.gitignore` and deleted after the retention
+period. See `BACKLOG.md` for what is still open before use at tocco.
 
-Der passende Vorlesetext liegt in `testdaten/vorlesetext_zuerich.md`. Weil die
-Modelle Schweizerdeutsch übersetzen, zählen auch korrekte Umformulierungen als
-Fehler – die WER eignet sich zum Vergleichen der Modelle, nicht als absolute Note.
-
-`vergleich.md` zeigt Lade- und Rechenzeit pro Modell, daneben liegt pro Modell
-ein `vergleich_<modell>.md` zum Lesen. `--bis 0` vergleicht die ganze Aufnahme.
-
-Jedes Whisper-Modell von Hugging Face lässt sich so konvertieren und danach mit
-`--modell <hf-id>` nutzen. Konvertierte Modelle liegen in `~/.mitschrift/modelle/`
-(änderbar über die Umgebungsvariable `MITSCHRIFT_HOME`).
-
-Hinweis: Alle Modelle schreiben Schweizerdeutsch als **Hochdeutsch** auf.
-Das ist für Protokolle meist gewünscht, aber es ist eine Übersetzung, kein Wortlaut.
-
-## Testplan Aufnahme
-
-1. `mitschrift geraete` – erscheinen Headset und Lautsprecher?
-2. Kurzer Test ohne Teams: YouTube-Video abspielen und reden. Bewegen sich beide Pegel?
-3. Echter Teams-Call (mit Einwilligung!), 2–3 Minuten:
-   - Beide Spuren in Audacity nebeneinander öffnen: Ist die Gegenüber-Spur gut verständlich?
-   - Sind die Spuren synchron? (Wer auf wen antwortet, sollte zeitlich passen.)
-   - Ohne Headset: Wie stark hört man die anderen auch auf `ich.wav` (Echo)?
-4. Dasselbe unter Ubuntu.
-5. `aufgefuellte_stille_s` in `meta.json` anschauen: Sollte bei 0 oder sehr klein sein.
-
-## Testplan Transkription
-
-1. `mitschrift transkribieren` auf einer kurzen Aufnahme: Stimmt die Reihenfolge Ich/Gegenüber?
-2. `mitschrift vergleichen` auf einem Call mit viel Schweizerdeutsch.
-3. Pro Modell beurteilen: Inhalt richtig? Namen und Fachbegriffe? Erfundene Sätze in Pausen?
-4. Echtzeitfaktor notieren: 0.5× heisst, eine Stunde Call braucht 30 Minuten.
-
-## Rechtliches
-
-Gespräche ohne Einwilligung aller Teilnehmenden aufzunehmen, ist in der
-Schweiz strafbar (StGB Art. 179ter). Die App fragt deshalb vor jeder Aufnahme
-nach der Einwilligung und vermerkt sie in `meta.json`. Aufnahmen enthalten
-Personendaten und sind über `.gitignore` vom Repo ausgeschlossen (Ordner `aufnahmen/`, alle `.wav` sowie Transkripte).
-
-## Tests
+## Development
 
 ```bash
 pytest
 ```
+
+The GitHub Action runs the tests on Windows and Ubuntu with Python 3.11 and 3.13.
+Open work is tracked in [`BACKLOG.md`](BACKLOG.md), changes in
+[`CHANGELOG.md`](CHANGELOG.md).
+
+## License
+
+MIT

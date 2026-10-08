@@ -1,7 +1,7 @@
 [project]
-name = "mitschrift"
-version = "0.6.0"
-description = "Lokale Aufnahme und Transkription von Gesprächen (Mikrofon + Systemaudio), Deutsch und Schweizerdeutsch"
+name = "verbalis"
+version = "0.7.0"
+description = "Record and transcribe conversations locally (microphone + system audio), Standard and Swiss German"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -16,22 +16,22 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
-# Nur nötig, um Hugging-Face-Modelle (z.B. Schweizerdeutsch-Fine-Tunes) umzuwandeln
-konvertieren = ["transformers>=4.40", "torch", "accelerate", "huggingface_hub"]
+# Only needed to convert Hugging Face models (e.g. Swiss German fine-tunes)
+convert = ["transformers>=4.40", "torch", "accelerate", "huggingface_hub"]
 
 [project.scripts]
-mitschrift = "mitschrift.__main__:main"
+verbalis = "verbalis.cli:main"
 
 [project.gui-scripts]
-# Startet die Oberfläche ohne Konsolenfenster – Ziel der Desktop-Verknüpfung
-mitschrift-app = "mitschrift.app:hauptprogramm"
+# Starts the UI without a console window – target of the desktop shortcut
+verbalis-app = "verbalis.app:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mitschrift"]
+packages = ["src/verbalis"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
