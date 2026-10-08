@@ -163,3 +163,30 @@ def test_check_update_ignores_documentation_only_changes(monkeypatch):
     assert models.check_update("large-v3")["revision"] == "new"   # model.bin changed
     state["latest"] = "old"
     assert models.check_update("large-v3") is None              # same revision
+
+
+
+def test_subfolder_model(tmp_path, monkeypatch):
+    """gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root."""
+    import huggingface_hub
+    import huggingface_hub.constants as c
+    monkeypatch.setattr(c, "HF_HUB_CACHE", str(tmp_path))
+    gcoli = "gcoli/whisper-large-v3-turbo-swiss-german-mit"
+    assert models.repo_for(gcoli) == gcoli and models._patterns(gcoli)[0] == "ct2/config.json"
+    assert not models.is_local(gcoli)
+
+    snap = tmp_path / "models--gcoli--whisper-large-v3-turbo-swiss-german-mit" / "snapshots" / "abc"
+    (snap / "ct2").mkdir(parents=True)
+    (snap / "ct2" / "model.bin").write_bytes(b"x")
+    (snap.parents[1] / "refs").mkdir()
+    (snap.parents[1] / "refs" / "main").write_text("abc")
+    assert models.is_local(gcoli)
+
+    asked = {}
+
+    def fake_snapshot(repo, allow_patterns):
+        asked["patterns"] = allow_patterns
+        return str(snap)
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot)
+    assert models.resolve(gcoli) == str(snap / "ct2")
+    assert all(p.startswith("ct2/") for p in asked["patterns"])

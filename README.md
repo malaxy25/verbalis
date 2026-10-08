@@ -162,6 +162,27 @@ want for minutes, but it is a translation, not a verbatim record – correct
 translations worded differently also count as errors in the WER, so compare
 models relative to each other.
 
+## Choosing the best model for your calls
+
+Benchmarks of other people measure other audio. What counts is how well a model
+understands *your* calls:
+
+1. Record a real call, let Verbalis transcribe it and **correct the transcript
+   completely** in the app – this becomes the reference.
+2. Compare the candidates on that recording:
+   ```bash
+   verbalis compare <folder> --reference transcript \
+       --models Flix-AI/flix-swissgerman-full gcoli/whisper-large-v3-turbo-swiss-german-mit large-v3
+   ```
+   `comparison.md` shows the word error rate overall and per track (your voice vs.
+   Teams) plus the speed on this computer. Repeat with two or three calls of
+   different kinds before deciding.
+3. Pick the default on the model tiles in the settings.
+
+To compare an old and a new Flix: the old conversion stays available as
+`malaxy/flix-swissgerman-ct2`, a fresh local conversion is used for
+`Flix-AI/flix-swissgerman-full`.
+
 ## Privacy and law
 
 Recording a conversation without the consent of all participants is a criminal

@@ -75,3 +75,30 @@ def test_load_audio_resampling(tmp_path):
 def test_selftest_passes(capsys):
     assert cli.main(["selftest"]) == 0
     assert "Alles in Ordnung" in capsys.readouterr().out
+
+
+def test_compare_with_corrected_transcript_per_track(tmp_path, monkeypatch, capsys):
+    import json
+    monkeypatch.setattr(faster, "FasterWhisperTranscriber", FakeTranscriber)
+    folder = _recording(tmp_path)
+    reference = {"tracks": {"me": "Andrea", "others": "Gegenüber"}, "edited": True, "segments": [
+        {"start": 0.0, "end": 2.0, "text": "Text von large-v3", "speaker": "Andrea"},
+        {"start": 3.0, "end": 5.0, "text": "ganz anders gesagt", "speaker": "Gegenüber"}]}
+    (folder / "transcript.json").write_text(json.dumps(reference), encoding="utf-8")
+    assert cli.main(["compare", str(folder), "--models", "large-v3", "--reference", "transcript"]) == 0
+    report = (folder / "comparison.md").read_text(encoding="utf-8")
+    assert "| WER Ich | WER Gegenüber |" in report
+    row = next(line for line in report.splitlines() if line.startswith("| large-v3 |"))
+    cells = [c.strip() for c in row.split("|")]
+    # own track perfect; others: 3 wrong + 1 extra word against 3 reference words = 133 %
+    assert cells[6] == "0.0%" and cells[7] == "133.3%"
+    assert "nicht korrigiert" not in capsys.readouterr().out
+
+
+def test_compare_warns_about_uncorrected_reference(tmp_path, monkeypatch, capsys):
+    import json
+    monkeypatch.setattr(faster, "FasterWhisperTranscriber", FakeTranscriber)
+    folder = _recording(tmp_path)
+    (folder / "transcript.json").write_text(json.dumps({"tracks": {}, "segments": []}), encoding="utf-8")
+    assert cli.main(["compare", str(folder), "--models", "large-v3", "--reference", "transcript"]) == 0
+    assert "nicht korrigiert" in capsys.readouterr().out

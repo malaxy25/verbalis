@@ -20,6 +20,9 @@ from pathlib import Path
 # (model id, description shown in the UI – German)
 RECOMMENDED: list[tuple[str, str]] = [
     ("Flix-AI/flix-swissgerman-full", "Schweizerdeutsch-Fine-Tune (large-v3), bestes Ergebnis im Test"),
+    ("gcoli/whisper-large-v3-turbo-swiss-german-mit",
+     "Schweizerdeutsch-Fine-Tune von large-v3-turbo: etwa dreimal so schnell wie large-v3, "
+     "MIT-Lizenz auch für Trainingsdaten"),
     ("large-v3", "Original von OpenAI, fast gleich gut, etwas schneller"),
     ("large-v3-turbo", "Deutlich schneller, aber schwächer bei Dialekt"),
 ]
@@ -27,6 +30,7 @@ DEFAULT_MODEL = RECOMMENDED[0][0]
 # Readable names for the model tiles in the settings (the id is shown below)
 DISPLAY_NAMES = {
     "Flix-AI/flix-swissgerman-full": "Flix Schweizerdeutsch",
+    "gcoli/whisper-large-v3-turbo-swiss-german-mit": "Schweizerdeutsch turbo (gcoli)",
     "large-v3": "Whisper large-v3",
     "large-v3-turbo": "Whisper large-v3 turbo",
 }
@@ -47,11 +51,22 @@ HF_PAGE = "https://huggingface.co/"
 # Approximate download size in GB (float16 CTranslate2), shown before downloading
 SIZE_GB = {
     "Flix-AI/flix-swissgerman-full": 3.1,
+    "gcoli/whisper-large-v3-turbo-swiss-german-mit": 1.6,
     "large-v3": 3.1,
     "large-v3-turbo": 1.6,
 }
 # Same files faster-whisper downloads
 FILES = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
+# Repos that keep the CTranslate2 version in a subfolder (the root holds the Transformers format)
+SUBFOLDER = {
+    "gcoli/whisper-large-v3-turbo-swiss-german-mit": "ct2",
+}
+
+
+def _patterns(model: str) -> list[str]:
+    """Files to download/compare for a model – inside its subfolder if it has one."""
+    sub = SUBFOLDER.get(model)
+    return [f"{sub}/{f}" for f in FILES] if sub else FILES
 
 WEIGHT_FILES = (
     "model.safetensors",
@@ -99,6 +114,13 @@ def resolve(model: str) -> str:
     if model in DOWNLOAD_REPO:
         return DOWNLOAD_REPO[model]  # ready-converted copy, faster-whisper downloads it
 
+    if model in SUBFOLDER:
+        # faster-whisper can't pick a subfolder itself: fetch it (from the cache if there) and pass the path
+        from huggingface_hub import snapshot_download
+
+        folder = snapshot_download(model, allow_patterns=_patterns(model))
+        return str(Path(folder) / SUBFOLDER[model])
+
     if model in builtin_models() or "/" in model:
         return model  # faster-whisper downloads it
 
@@ -130,7 +152,8 @@ def is_local(model: str) -> bool:
         return Path(model).expanduser().is_dir() or (models_dir() / slug(model) / "model.bin").exists()
     from huggingface_hub import try_to_load_from_cache
 
-    return isinstance(try_to_load_from_cache(repo, "model.bin"), str)
+    model_bin = f"{SUBFOLDER[model]}/model.bin" if model in SUBFOLDER else "model.bin"
+    return isinstance(try_to_load_from_cache(repo, model_bin), str)
 
 
 def _cache_folder(repo: str) -> Path:
@@ -169,7 +192,7 @@ def download(model: str, progress=None) -> None:
 
     def run():
         try:
-            snapshot_download(repo, allow_patterns=FILES)
+            snapshot_download(repo, allow_patterns=_patterns(model))
         except Exception as e:  # reported below in the calling thread
             result["error"] = e
 
@@ -220,12 +243,12 @@ def remote_revision(model: str, timeout: float = 6.0) -> dict | None:
     return {"revision": info.sha, "changed": changed}
 
 
-def _model_files(info) -> dict[str, str]:
+def _model_files(info, patterns: list[str] = FILES) -> dict[str, str]:
     """{file name: content id} for the files Verbalis downloads – README & co. don't count."""
     import fnmatch
 
     return {s.rfilename: s.blob_id for s in (info.siblings or [])
-            if any(fnmatch.fnmatch(s.rfilename, pattern) for pattern in FILES)}
+            if any(fnmatch.fnmatch(s.rfilename, pattern) for pattern in patterns)}
 
 
 def check_update(model: str, timeout: float = 6.0) -> dict | None:
@@ -246,7 +269,7 @@ def check_update(model: str, timeout: float = 6.0) -> dict | None:
     if latest.sha == local["revision"]:
         return None
     ours = api.model_info(repo, revision=local["revision"], timeout=timeout, files_metadata=True)
-    if _model_files(latest) == _model_files(ours):
+    if _model_files(latest, _patterns(model)) == _model_files(ours, _patterns(model)):
         return None   # only documentation changed
     changed = latest.last_modified.astimezone().isoformat(timespec="minutes") if latest.last_modified else None
     return {"revision": latest.sha, "changed": changed}

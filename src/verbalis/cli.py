@@ -163,7 +163,7 @@ def cmd_transcribe(args) -> int:
 
 
 def cmd_compare(args) -> int:
-    from .evaluation import error_rate
+    from .evaluation import error_rate, load_reference
     from .pipeline import header
     from .transcript import save
     from .transcription.faster import FasterWhisperTranscriber
@@ -172,7 +172,11 @@ def cmd_compare(args) -> int:
     folder = Path(args.folder)
     _check_folder(folder)
     names = {"me": args.name, "others": args.others}
-    reference = Path(args.reference).read_text(encoding="utf-8") if args.reference else None
+    reference = load_reference(args.reference, folder, args.until) if args.reference else None
+    per_track = bool(reference and reference.tracks)
+    if reference and reference.edited is False:
+        print("Achtung: Das Referenz-Transkript wurde nicht korrigiert. Die Fehlerquote zeigt dann nur, "
+              "wie ähnlich die Modelle dem Modell sind, das es erstellt hat.\n")
     rows = []
 
     for model in args.models:
@@ -182,7 +186,7 @@ def cmd_compare(args) -> int:
             tr = FasterWhisperTranscriber(model, device=args.device, keywords=args.keywords, beam_size=args.beam)
         except ModelError as e:
             print(e)
-            rows.append(f"| {model} | – | – | – | – | Fehler beim Laden |")
+            rows.append(f"| {model} | – | – | – | – |{' – | – |' if per_track else ''} Fehler beim Laden |")
             continue
         load_time = time.monotonic() - t
         paragraphs, compute, duration = _transcribe_folder(folder, tr, names, args.until)
@@ -190,13 +194,21 @@ def cmd_compare(args) -> int:
         save(folder, filename, paragraphs, f"Vergleich: {model}", header(folder, model, compute, duration))
         words = sum(len(p.text.split()) for p in paragraphs)
         wer = "–"
+        track_cells = ""
         if reference is not None:
-            rate = error_rate(reference, " ".join(p.text for p in paragraphs))
+            rate = error_rate(reference.text, " ".join(p.text for p in paragraphs))
             wer = f"{rate.wer:.1%}"
             print(f"  Fehlerquote: {rate}")
+            if per_track:
+                for track, display in names.items():
+                    ref_text = reference.tracks.get(track, "")
+                    hyp_text = " ".join(p.text for p in paragraphs if p.speaker == display)
+                    cell = f"{error_rate(ref_text, hyp_text).wer:.1%}" if ref_text.strip() else "–"
+                    track_cells += f" {cell} |"
+                    print(f"  {display}: {cell}")
         rows.append(
             f"| {model} | {load_time:.0f} s | {compute:.0f} s | {compute / max(duration, 1e-9):.2f}× "
-            f"| {wer} | [{filename}.md]({filename}.md), {words} Wörter |"
+            f"| {wer} |{track_cells} [{filename}.md]({filename}.md), {words} Wörter |"
         )
         del tr  # free memory before loading the next model
 
@@ -204,9 +216,13 @@ def cmd_compare(args) -> int:
     report.write_text(
         "# Modellvergleich\n\n"
         f"Ausschnitt: {'erste ' + str(int(args.until)) + ' s' if args.until else 'ganze Aufnahme'}\n\n"
-        + (f"Referenz: {args.reference} – WER = Wortfehlerquote, tiefer ist besser. "
+        + (f"Referenz: {reference.source} – WER = Wortfehlerquote, tiefer ist besser. "
            "Übersetzungsvarianten zählen als Fehler, also nur relativ vergleichen.\n\n" if reference else "")
-        + "| Modell | Laden | Rechnen | Echtzeitfaktor | WER | Ergebnis |\n|---|---|---|---|---|---|\n"
+        + ("**Achtung:** Das Referenz-Transkript wurde nicht korrigiert.\n\n"
+           if reference and reference.edited is False else "")
+        + (f"| Modell | Laden | Rechnen | Echtzeitfaktor | WER | WER {args.name} | WER {args.others} | Ergebnis |\n"
+           "|---|---|---|---|---|---|---|---|\n" if per_track else
+           "| Modell | Laden | Rechnen | Echtzeitfaktor | WER | Ergebnis |\n|---|---|---|---|---|---|\n")
         + "\n".join(rows) + "\n",
         encoding="utf-8",
     )
@@ -360,7 +376,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("compare", help="Mehrere Modelle auf derselben Aufnahme vergleichen")
     transcription_options(p)
     p.add_argument("--models", nargs="+", default=[m for m, _ in RECOMMENDED], help="Zu vergleichende Modelle")
-    p.add_argument("--reference", help="Referenztext für die Fehlerquote, z.B. testdata/reference_standard_german.txt")
+    p.add_argument("--reference", help="Referenz für die Fehlerquote: «transcript» (das in der App korrigierte "
+                                        "Transkript der Aufnahme), eine transcript.json oder ein Text wie "
+                                        "testdata/reference_standard_german.txt")
     p.set_defaults(func=cmd_compare, until=180)  # default: first 3 minutes, 0 = everything
 
     sub.add_parser("models", help="Empfohlene und konvertierte Modelle anzeigen").set_defaults(func=cmd_models)

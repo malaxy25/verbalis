@@ -409,7 +409,8 @@ def test_model_updates_are_listed_and_cached(monkeypatch):
     s = make_service()
     first = s.model_updates()
     assert first["large-v3"]["revision"] == "ccccccc"
-    assert s.model_updates() == first and len(calls) == 3     # cached: no second round of requests
+    from verbalis.transcription.models import RECOMMENDED
+    assert s.model_updates() == first and len(calls) == len(RECOMMENDED)   # cached: no second round
 
 
 

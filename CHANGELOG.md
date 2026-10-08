@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.8 – 2026-10-08
+- **New recommended model «Schweizerdeutsch turbo (gcoli)»**
+  (`gcoli/whisper-large-v3-turbo-swiss-german-mit`): Swiss German fine-tune of large-v3-turbo,
+  on its 17-dialect test set about as accurate as large-v3 at roughly three times the speed; MIT licence
+  for model and training data. Downloads ready-converted (1.6 GB).
+- Models whose repo keeps the CTranslate2 version in a subfolder (`ct2/`) are supported for loading,
+  download, «on this computer» and update checks
+- **`compare` against your own corrected transcript:** `--reference transcript` uses the recording's
+  transcript corrected in the app (also any `transcript.json`); only paragraphs within `--until` count.
+  Warns if the reference was never corrected.
+- **Word error rate per track** (own voice vs. Teams) when the reference is a transcript
+
 ## 0.7.7 – 2026-10-08
 - **Model tiles instead of a dropdown** in the settings: one tile per model with a readable name
   («Flix Schweizerdeutsch», «Whisper large-v3 turbo»), the technical id, description, whether it is

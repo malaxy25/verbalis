@@ -15,7 +15,7 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 - [ ] **Audio playback** – click a timestamp/paragraph to hear that part; makes correcting much easier. **[ux]**
 - [ ] **Standard German reference text** – second read-aloud text with reference, check that the Swiss German model does not get worse on Standard German. **[quality]**
 - [ ] **WER per track** in `compare`, so microphone and Teams tests are evaluated separately. **[quality]**
-- [ ] **Decide default model** after Teams tests (currently Flix-AI/flix-swissgerman-full). **[quality]**
+- [ ] **Decide default model** after Teams tests: compare Flix, gcoli and large-v3 on 2–3 corrected real calls (`verbalis compare --reference transcript`, see README); also check the licence situation for tocco (gcoli: MIT chain). **[quality]** **[tocco]**
 - [ ] **Remove the migration from «Mitschrift»** once no old installations remain (≥ 1.0). **[ops]**
 
 ## Later
