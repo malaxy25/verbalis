@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.7 – 2026-10-08
+- **Model tiles instead of a dropdown** in the settings: one tile per model with a readable name
+  («Flix Schweizerdeutsch», «Whisper large-v3 turbo»), the technical id, description, whether it is
+  on this computer or the download size, revision and download date, an available update and a link
+  to the model page. Click a tile (or use the arrow keys) and save to make it the default. The last
+  tile is «Anderes Modell …» with the input field as before.
+
 ## 0.7.6 – 2026-10-08
 - **Model updates become visible:** before transcribing, Verbalis checks whether the model files on
   Hugging Face are newer than the ones on this computer. If so, it downloads them with progress

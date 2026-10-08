@@ -21,9 +21,15 @@ from pathlib import Path
 RECOMMENDED: list[tuple[str, str]] = [
     ("Flix-AI/flix-swissgerman-full", "Schweizerdeutsch-Fine-Tune (large-v3), bestes Ergebnis im Test"),
     ("large-v3", "Original von OpenAI, fast gleich gut, etwas schneller"),
-    ("large-v3-turbo", "deutlich schneller, aber schwächer bei Dialekt"),
+    ("large-v3-turbo", "Deutlich schneller, aber schwächer bei Dialekt"),
 ]
 DEFAULT_MODEL = RECOMMENDED[0][0]
+# Readable names for the model tiles in the settings (the id is shown below)
+DISPLAY_NAMES = {
+    "Flix-AI/flix-swissgerman-full": "Flix Schweizerdeutsch",
+    "large-v3": "Whisper large-v3",
+    "large-v3-turbo": "Whisper large-v3 turbo",
+}
 
 # Models that only exist in Transformers format upstream are provided ready for
 # faster-whisper (CTranslate2) in our own Hugging Face repo, so nobody has to

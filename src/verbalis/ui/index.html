@@ -216,9 +216,27 @@
   .notice span { flex: 1; }
   .notice button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
   .notice button:hover { color: var(--ink); }
-  .model-info { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
-  .model-info .update { color: var(--limmat); font-weight: 600; }
-  .model-info .link-button { justify-self: start; padding: 2px 0; }
+  .model-cards { display: grid; gap: 8px; }
+  .model-card {
+    display: grid; grid-template-columns: auto 1fr; gap: 0 12px; align-items: start; cursor: pointer;
+    padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+  }
+  .model-card:hover { border-color: var(--muted); }
+  .model-card.chosen { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); background: var(--surface-2); }
+  .model-card:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .model-card input[type="radio"] { margin: 3px 0 0; width: 16px; height: 16px; accent-color: var(--ink); }
+  .card-body { display: grid; gap: 3px; font-size: 13px; color: var(--muted); min-width: 0; }
+  .card-head { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+  .card-name { font-size: 15px; font-weight: 600; color: var(--ink); margin-right: 2px; }
+  .card-id { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+  .card-text { color: var(--ink); }
+  .card-body .update { color: var(--limmat); font-weight: 600; }
+  .card-body .link-button { justify-self: start; padding: 2px 0; }
+  .card-body input[type=text] { margin-top: 4px; }
+  .badge { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+  .badge.ok { color: var(--ink); background: var(--surface-2); }
+  .badge.muted { color: var(--muted); }
+  .badge.new { color: var(--limmat); border-color: var(--limmat); background: var(--limmat-soft); }
   .link-button {
     border: 0; background: none; cursor: pointer; color: var(--muted);
     padding: 6px 4px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
@@ -460,10 +478,9 @@
       </label>
     </div>
     <div class="field">
-      <label for="sel-model"><span>Modell</span></label>
-      <select id="sel-model" name="model_choice"></select>
-      <input type="text" name="model_custom" placeholder="Name, Hugging-Face-ID oder Ordner" autocomplete="off" spellcheck="false" hidden aria-label="Eigenes Modell">
-      <div class="model-info" id="model-status" aria-live="polite"></div>
+      <span id="model-label">Modell</span>
+      <div class="model-cards" id="model-cards" role="radiogroup" aria-labelledby="model-label"></div>
+      <small id="model-status" aria-live="polite">Die gewählte Kachel wird mit «Einstellungen speichern» zum Standard.</small>
     </div>
     <fieldset>
       <legend>Tempo</legend>
@@ -1176,35 +1193,83 @@ function setNames() {
 
 const CUSTOM = "__custom__";
 
-function showModelStatus() {
-  const form = $("form-settings");
-  const choice = form.elements.model_choice.value;
-  const custom = form.elements.model_custom;
-  custom.hidden = choice !== CUSTOM;
-  const m = state.models.find((x) => x.id === choice);
-  const box = $("model-status");
-  if (!m) {
-    box.replaceChildren(element("span", {}, "Eingebauter Name (z.B. medium), Hugging-Face-ID oder lokaler Ordner. Hugging-Face-Modelle zuerst im Terminal konvertieren."));
-    return;
-  }
-  const lines = [element("span", {}, m.description + ".")];
-  if (m.revision) {
-    lines.push(element("span", {}, `Auf diesem PC: Stand ${m.revision}, geladen am ${dateText(m.loaded)}.`));
-  } else if (m.local) {
-    lines.push(element("span", {}, `Auf diesem PC (${m.source}).`));
-  } else {
-    lines.push(element("span", {}, m.status.charAt(0).toUpperCase() + m.status.slice(1) + "."));
-  }
+/* ---------- Model tiles ---------- */
+
+function chosenModel() {
+  const checked = document.querySelector('#model-cards input[name="model_choice"]:checked');
+  return checked ? checked.value : null;
+}
+
+function badge(text, kind) {
+  return element("span", { class: `badge ${kind}` }, text);
+}
+
+function modelCard(m, selected) {
   const update = (state.modelUpdates || {})[m.id];
+  const radio = element("input", { type: "radio", name: "model_choice", value: m.id });
+  radio.checked = selected;
+  const details = [];
+  if (m.revision) details.push(element("span", {}, `Stand ${m.revision}, geladen am ${dateText(m.loaded)}`));
+  else if (m.local) details.push(element("span", {}, m.source === "Hugging Face" ? "Auf diesem PC" : `Auf diesem PC (${m.source})`));
   if (update) {
-    lines.push(element("span", { class: "update" },
-      `Update verfügbar: Stand ${update.revision} vom ${dateText(update.changed)} – wird beim nächsten Transkribieren geladen.`));
+    details.push(element("span", { class: "update" },
+      `Update verfügbar: Stand ${update.revision} vom ${dateText(update.changed)} – wird beim nächsten Transkribieren geladen`));
   }
-  if (m.page) {
-    lines.push(element("button", { type: "button", class: "link-button",
-      onclick: () => call("open_model_page", m.id).catch((e) => showMessage(e.message)) }, "Modellseite auf Hugging Face öffnen"));
+  return element("label", { class: "model-card" },
+    radio,
+    element("span", { class: "card-body" },
+      element("span", { class: "card-head" },
+        element("span", { class: "card-name" }, m.name || m.id),
+        m.local ? badge("Auf diesem PC", "ok") : badge(m.size_gb ? `Download ca. ${String(m.size_gb).replace(".", ",")} GB` : "Download bei Bedarf", "muted"),
+        update ? badge("Update", "new") : null,
+      ),
+      m.name && m.name !== m.id ? element("span", { class: "card-id" }, m.id) : null,
+      element("span", { class: "card-text" }, m.description),
+      ...details,
+      m.page ? element("button", {
+        type: "button", class: "link-button",
+        onclick: (event) => { event.preventDefault(); call("open_model_page", m.id).catch((e) => showMessage(e.message)); },
+      }, "Modellseite auf Hugging Face öffnen") : null,
+    ),
+  );
+}
+
+function customCard(selected, value) {
+  const radio = element("input", { type: "radio", name: "model_choice", value: CUSTOM });
+  radio.checked = selected;
+  const input = element("input", {
+    type: "text", name: "model_custom", placeholder: "Name, Hugging-Face-ID oder Ordner",
+    autocomplete: "off", spellcheck: "false", "aria-label": "Eigenes Modell",
+  });
+  input.value = value || "";
+  input.addEventListener("focus", () => { radio.checked = true; markChosen(); });
+  return element("label", { class: "model-card" },
+    radio,
+    element("span", { class: "card-body" },
+      element("span", { class: "card-head" }, element("span", { class: "card-name" }, "Anderes Modell …")),
+      element("span", { class: "card-text" }, "Eingebauter Name (z.B. medium), Hugging-Face-ID oder lokaler Ordner. Hugging-Face-Modelle im Transformers-Format zuerst im Terminal konvertieren."),
+      input,
+    ),
+  );
+}
+
+function renderModelCards(current, customValue) {
+  const known = state.models.some((m) => m.id === current);
+  $("model-cards").replaceChildren(
+    ...state.models.map((m) => modelCard(m, m.id === current)),
+    customCard(!known, known ? customValue : (customValue ?? current)),
+  );
+  markChosen();
+}
+
+function markChosen() {
+  for (const card of document.querySelectorAll("#model-cards .model-card")) {
+    card.classList.toggle("chosen", card.querySelector('input[type="radio"]').checked);
   }
-  box.replaceChildren(...lines);
+}
+
+function fillModelChoice(current) {
+  renderModelCards(current, "");
 }
 
 function dateText(iso) {
@@ -1214,29 +1279,11 @@ function dateText(iso) {
 
 async function loadModelUpdates() {
   try { state.modelUpdates = await call("model_updates"); } catch (_) { return; }
-  const select = $("sel-model");
-  for (const option of select.options) {
-    const m = state.models.find((x) => x.id === option.value);
-    if (m) option.textContent = m.label + (state.modelUpdates[m.id] ? " – Update verfügbar" : "");
-  }
-  showModelStatus();
-}
-
-function fillModelChoice(current) {
-  const select = $("sel-model");
-  const ids = state.models.map((m) => m.id);
-  select.replaceChildren(
-    ...state.models.map((m) => element("option", { value: m.id }, m.label || m.id)),
-    element("option", { value: CUSTOM }, "Anderes Modell …"),
-  );
-  const form = $("form-settings");
-  if (ids.includes(current)) {
-    select.value = current;
-    form.elements.model_custom.value = "";
-  } else {
-    select.value = CUSTOM;
-    form.elements.model_custom.value = current || "";
-  }
+  if (!Object.keys(state.modelUpdates).length) return;
+  // keep what the user has chosen or typed meanwhile
+  const chosen = chosenModel();
+  const typed = $("form-settings").elements.model_custom.value;
+  renderModelCards(chosen === CUSTOM ? typed : chosen, typed);
 }
 
 async function openSettings() {
@@ -1256,7 +1303,7 @@ async function openSettings() {
   fillModelChoice(e.model);
   loadModelUpdates();      // asks Hugging Face in the background, the dialog doesn't wait
   try { renderCorrectionList(await call("corrections")); } catch (_) { renderCorrectionList([]); }
-  showModelStatus();
+  $("model-status").textContent = "Die gewählte Kachel wird mit «Einstellungen speichern» zum Standard.";
   $("dlg-settings").showModal();
 }
 
@@ -1574,7 +1621,7 @@ async function saveSettings(event) {
       return;
     }
   }
-  const choice = form.elements.model_choice.value;
+  const choice = chosenModel();
   data.model = choice === CUSTOM ? form.elements.model_custom.value.trim() : choice;
   if (!data.model) { $("model-status").textContent = "Bitte ein Modell angeben."; return; }
   try {
@@ -1631,7 +1678,7 @@ async function init() {
   }
   $("btn-cancel").addEventListener("click", () => $("dlg-settings").close());
   $("form-settings").addEventListener("submit", saveSettings);
-  $("sel-model").addEventListener("change", showModelStatus);
+  $("model-cards").addEventListener("change", markChosen);
 
   try {
     state.settings = await call("settings");

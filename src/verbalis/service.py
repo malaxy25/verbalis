@@ -148,8 +148,8 @@ class Service:
 
     def models(self) -> list[dict]:
         """Recommended and own models, with whether they are already on this computer."""
-        from .transcription.models import (RECOMMENDED, SIZE_GB, converted_models, is_local, local_revision,
-                                           page_url, repo_for)
+        from .transcription.models import (DISPLAY_NAMES, RECOMMENDED, SIZE_GB, converted_models, is_local,
+                                           local_revision, page_url, repo_for)
 
         entries = list(RECOMMENDED) + [(m, "selbst konvertiert") for m in sorted(
             set(converted_models()) - {m for m, _ in RECOMMENDED})]
@@ -166,7 +166,8 @@ class Service:
                 status = f"wird bei Bedarf heruntergeladen (ca. {size:.1f} GB)".replace(".", ",", 1)
             else:
                 status = "wird bei Bedarf heruntergeladen"
-            entry = {"id": model, "description": description, "status": status, "local": local,
+            entry = {"id": model, "name": DISPLAY_NAMES.get(model, model), "description": description,
+                     "status": status, "local": local,
                      "size_gb": size, "label": f"{model} – {status}", "page": page_url(model),
                      "revision": None, "loaded": None, "source": "Hugging Face"}
             if local:

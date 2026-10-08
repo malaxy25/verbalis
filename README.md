@@ -148,7 +148,8 @@ Transformers format upstream, so a ready-converted copy is provided in
 Model updates: before transcribing, Verbalis compares the model files on this
 computer with the latest ones on Hugging Face (documentation changes don't count)
 and downloads newer ones with progress and a notice. The settings show each model's
-revision, download date, available updates and a link to its page. For Flix, a
+revision, download date, available updates and a link to its page on its own
+tile; the chosen tile is the default model. For Flix, a
 monthly GitHub Action watches the original and opens an issue when it has new model
 files – our copy only changes when we convert, compare and upload a new version.
 

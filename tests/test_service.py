@@ -410,3 +410,10 @@ def test_model_updates_are_listed_and_cached(monkeypatch):
     first = s.model_updates()
     assert first["large-v3"]["revision"] == "ccccccc"
     assert s.model_updates() == first and len(calls) == 3     # cached: no second round of requests
+
+
+
+def test_models_have_readable_names():
+    names = {m["id"]: m["name"] for m in make_service().models()}
+    assert names["Flix-AI/flix-swissgerman-full"] == "Flix Schweizerdeutsch"
+    assert names["large-v3-turbo"] == "Whisper large-v3 turbo"
