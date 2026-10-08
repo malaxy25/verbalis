@@ -9,14 +9,15 @@ Dependabot checks once a month and opens **grouped** pull requests:
 
 | PR | What it updates | Risk |
 |---|---|---|
-| `python-dependencies` | minimum versions in `pyproject.toml` (usually nothing to do, they are ranges) | low |
-| `build-dependencies` | exact versions in `packaging/requirements-build.txt` used for the installer | medium |
+| `python-dependencies` | `pyproject.toml` (ranges, rarely anything) and the exact versions of the installer in `packaging/requirements-build.txt` | medium |
 | `github-actions` | versions of the building blocks in `.github/workflows/` | low |
 
 For each PR:
 
-1. **Tests green?** The «Tests» workflow runs on every PR (Windows and Ubuntu).
-   Red → don't merge; look at the failing step.
+1. **Tests green?** The «Tests» workflow runs on every PR (Windows and Ubuntu). Its job
+   **build versions** installs exactly the pinned versions of the installer – if a new pin
+   doesn't fit the others (e.g. one package requires an older version of another), it is red.
+   Red → don't merge; see «When a dependency PR can't be merged» below.
 2. **Major version jump** (e.g. `4 → 7`)? Skim the release notes in the PR for
    «breaking». Usually it only concerns features Verbalis doesn't use.
 3. **Merge on GitHub** («Merge pull request»), then «Delete branch».
@@ -24,6 +25,18 @@ For each PR:
    (Actions → Release → Run workflow). It builds and self-tests the installer
    without publishing. Green → the next tag will build fine.
 5. **Locally:** `git pull` – otherwise your local `main` is behind GitHub.
+
+## When a dependency PR can't be merged
+
+Dependabot updates single packages; sometimes another package doesn't allow the new
+version yet. Example (October 2026): huggingface-hub 2 – tokenizers, which faster-whisper
+needs, requires huggingface-hub < 2.
+
+1. Close the PR («Close pull request») – don't merge it.
+2. Add an `ignore` entry with a comment to `.github/dependabot.yml`, so Dependabot doesn't
+   propose it again every month (see the huggingface-hub entry there).
+3. Remove the entry once the blocking package has a compatible version – Dependabot
+   proposes updates of the blocking package as usual.
 
 ## Immediately: security alerts
 

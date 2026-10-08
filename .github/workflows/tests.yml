@@ -6,6 +6,7 @@ on:
 
 jobs:
   tests:
+    # newest compatible versions – early warning for upcoming breakage
     strategy:
       fail-fast: false
       matrix:
@@ -19,5 +20,27 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
       - run: pip install -e ".[dev]" pyflakes
-      - run: pyflakes src tests
+      - run: pyflakes src tests tools
+      - run: pytest -q
+
+  build-versions:
+    # exactly the versions of the installer build (packaging/requirements-build.txt):
+    # catches Dependabot pins that don't fit together before they break a release
+    name: build versions
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install the exact build versions
+        run: |
+          pip install -c packaging/requirements-build.txt -e ".[build]" pytest
+          if ($LASTEXITCODE -ne 0) { throw "The pinned versions in packaging/requirements-build.txt don't fit together" }
+          pip check
+          if ($LASTEXITCODE -ne 0) { throw "pip check found incompatible versions" }
       - run: pytest -q

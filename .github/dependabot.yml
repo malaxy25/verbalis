@@ -1,8 +1,11 @@
-# Dependabot: suggests dependency updates as pull requests.
-# Updates are grouped into one PR per ecosystem and month, so they don't flood the repo.
-# The Tests workflow runs on every PR – merge only when it is green.
+# Dependabot: suggests dependency updates as pull requests, grouped per ecosystem and month.
+# The Tests workflow runs on every PR – merge only when it is green. Its job
+# «build versions» installs exactly packaging/requirements-build.txt, so a pin that
+# doesn't fit the others turns the PR red.
 version: 2
 updates:
+  # pyproject.toml and packaging/requirements-build.txt (Dependabot finds both from the root;
+  # a second entry for /packaging would only open the same PR twice)
   - package-ecosystem: pip
     directory: "/"
     schedule:
@@ -11,16 +14,11 @@ updates:
     groups:
       python-dependencies:
         patterns: ["*"]
-
-  # Exact versions of the installer build
-  - package-ecosystem: pip
-    directory: "/packaging"
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 3
-    groups:
-      build-dependencies:
-        patterns: ["*"]
+    ignore:
+      # tokenizers (needed by faster-whisper) requires huggingface-hub < 2 (status October 2026).
+      # Remove this once Dependabot proposes a tokenizers version that allows huggingface-hub 2.
+      - dependency-name: "huggingface-hub"
+        versions: [">=2"]
 
   - package-ecosystem: github-actions
     directory: "/"

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.9 – 2026-10-08
+- **New test job «build versions»:** installs exactly the pinned versions of the installer
+  (`packaging/requirements-build.txt`) and runs the tests. Dependabot PRs whose pin doesn't fit the
+  others now turn red instead of breaking the next release. Found with PRs #2/#3: huggingface-hub 2
+  is not compatible with tokenizers (requires < 2), but the tests were green because they resolve
+  their own versions.
+- Dependabot: one PR for Python packages instead of two identical ones; huggingface-hub ≥ 2 ignored
+  until tokenizers supports it (with explanation in `.github/dependabot.yml`)
+- Lint also checks `tools/`
+- `MAINTENANCE.md`: what to do when a dependency PR can't be merged
+
 ## 0.7.8 – 2026-10-08
 - **New recommended model «Schweizerdeutsch turbo (gcoli)»**
   (`gcoli/whisper-large-v3-turbo-swiss-german-mit`): Swiss German fine-tune of large-v3-turbo,
