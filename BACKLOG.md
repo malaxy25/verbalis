@@ -16,16 +16,12 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 - [ ] **Standard German reference text** – second read-aloud text with reference, check that the Swiss German model does not get worse on Standard German. **[quality]**
 - [ ] **WER per track** in `compare`, so microphone and Teams tests are evaluated separately. **[quality]**
 - [ ] **Decide default model** after Teams tests (currently Flix-AI/flix-swissgerman-full). **[quality]**
-- [ ] **Refresh device list** – button, or detect headsets plugged in after start. **[ux]**
-- [ ] **Silent-track warning** – during recording, warn if the remote track stays silent for long (wrong output device chosen). **[ux]**
-- [ ] **Delete a recording completely** (transcript included), not just its audio. **[privacy]**
 - [ ] **Remove the migration from «Mitschrift»** once no old installations remain (≥ 1.0). **[ops]**
 
 ## Later
 
 - [ ] **Recognize speakers across calls** – voice fingerprints. Biometric data under the Swiss revDSG: opt-in only, consent of the people concerned, deletable. **[privacy]** **[tocco]**
 - [ ] **Summary and action items** via LLM – optional and off by default; local model or a provider approved by tocco. **[tocco]**
-- [ ] **Standalone installer** (e.g. PyInstaller) so colleagues can install without Python. **[ops]** **[tocco]**
 - [ ] **Resume transcription after app restart** – save progress per segment instead of starting over. **[ux]**
 - [ ] **Convert models from the UI** instead of the terminal. **[ux]**
 - [ ] **Search across transcripts.** **[ux]**
@@ -39,6 +35,14 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 - [ ] **macOS support** – system audio via ScreenCaptureKit or BlackHole. **[ops]**
 
 ## Before using it at tocco **[tocco]**
+
+Devices at tocco are not centrally managed, so Verbalis is distributed as an
+installer via GitHub Releases with an update notice in the app.
+
+- [ ] **Installer build in CI** (planned for 0.8.0) – on every version tag (`v*`) the GitHub Action builds a Windows installer (PyInstaller + e.g. Inno Setup) and attaches it to a GitHub Release. No Python needed on the target machine. **[ops]**
+- [ ] **Update notice in the app** – on start, check the latest GitHub Release; if newer, show «Update verfügbar» with a button that downloads and starts the installer. Settings, models and recordings in `~/.verbalis` are kept. **[ops]** **[ux]**
+- [ ] **Model download on first start** – models are not part of the installer (several GB). Provide the converted Flix model once (internal share or own Hugging Face repo – Apache 2.0 allows this) and let the app download it with progress. **[ops]** **[ux]**
+- [ ] **Code signing** – without a signature Windows SmartScreen warns about an unknown publisher on first install. Decide whether to buy a certificate or document the warning. **[ops]**
 
 - [ ] Talk to IT and data protection: local processing, consent per recording, retention (audio deleted after N days).
 - [ ] Check the licence situation of the default model (Flix: Apache 2.0, trained under the Swiss TDM research exception).

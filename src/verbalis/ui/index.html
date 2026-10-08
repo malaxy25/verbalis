@@ -14,6 +14,9 @@
     --line: #D5DBE1;
     --red: #C8102E;
     --red-soft: #FBE7EA;
+    --amber: #9A5B00;
+    --amber-soft: #FCF1DC;
+    --font-mono: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace;
     --limmat: #2F6F8F;
     --limmat-soft: #E3EEF3;
     --focus: #2F6F8F;
@@ -31,6 +34,8 @@
       --line: #2E3945;
       --red: #E5484D;
       --red-soft: #3A1F24;
+      --amber: #E3A33B;
+      --amber-soft: #3A2E1A;
       --limmat: #6BB0CF;
       --limmat-soft: #1F3440;
       --focus: #6BB0CF;
@@ -93,14 +98,14 @@
     display: grid;
     grid-template-columns: auto 1fr;
     grid-template-areas:
-      "knopf  spuren"
-      "knopf  geraete"
-      ".      zustimmung";
+      "button  tracks"
+      "button  devices"
+      ".       consent";
     column-gap: 28px; row-gap: 14px;
     align-items: center;
   }
   .record-button {
-    grid-area: knopf; align-self: start;
+    grid-area: button; align-self: start;
     width: 76px; height: 76px; border-radius: 50%;
     border: 2px solid var(--line); background: var(--surface);
     display: grid; place-items: center; cursor: pointer;
@@ -116,7 +121,7 @@
     @keyframes breathe { 50% { box-shadow: 0 0 0 8px var(--red-soft); } }
   }
 
-  .tracks { grid-area: spuren; display: grid; grid-template-columns: auto 1fr auto; gap: 10px 16px; align-items: center; }
+  .tracks { grid-area: tracks; display: grid; grid-template-columns: auto 1fr auto; gap: 10px 16px; align-items: center; }
   .time {
     grid-column: 1 / -1;
     font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums;
@@ -131,17 +136,51 @@
   .lane .fill.loud { background: var(--red); }
   .db { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 5em; text-align: right; }
 
-  .devices { grid-area: geraete; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  .devices { grid-area: devices; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: end; }
   .devices label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
   .devices select {
     max-width: 320px; padding: 5px 8px; border-radius: 6px;
     border: 1px solid var(--line); background: var(--surface); font-size: 14px;
   }
-  .consent { grid-area: zustimmung; display: flex; gap: 10px; align-items: flex-start; }
+  .consent { grid-area: consent; display: flex; gap: 10px; align-items: flex-start; }
   .consent input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--ink); }
   .consent .hint { display: block; font-size: 13px; color: var(--muted); }
   .message { grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--red-soft); color: var(--ink); }
   .message[hidden] { display: none; }
+  .silent-hint {
+    grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: 8px;
+    background: var(--amber-soft); color: var(--ink);
+  }
+  .silent-hint[hidden] { display: none; }
+  .link-button {
+    border: 0; background: none; cursor: pointer; color: var(--muted);
+    padding: 6px 4px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .link-button:hover { color: var(--ink); }
+  .link-button:disabled { opacity: .5; cursor: default; }
+
+  /* Log */
+  #dlg-log { width: min(920px, 94vw); }
+  #dlg-log .log-body { padding: 22px 26px 18px; display: grid; gap: 12px; }
+  .log-toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .log-toolbar label { display: flex; gap: 8px; align-items: center; margin-right: auto; }
+  .log-list {
+    list-style: none; margin: 0; padding: 0; max-height: 55vh; overflow-y: auto;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2);
+  }
+  .log-list li { padding: 8px 12px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 9.5em 5.5em 1fr; gap: 0 12px; }
+  .log-list li:first-child { border-top: 0; }
+  .log-list .log-time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .log-list .log-level { font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+  .log-list .log-level.WARNING { color: var(--amber); }
+  .log-list .log-level.ERROR, .log-list .log-level.CRITICAL { color: var(--red); }
+  .log-list .log-level.INFO, .log-list .log-level.DEBUG { color: var(--muted); }
+  .log-list .log-message { font-family: var(--font-mono); font-size: 13px; overflow-wrap: anywhere; }
+  .log-list details { grid-column: 3; margin-top: 4px; }
+  .log-list summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .log-list pre { margin: 6px 0 0; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .log-empty { color: var(--muted); padding: 12px; }
+  .log-result { color: var(--muted); font-size: 13px; margin: 0; min-height: 1.2em; }
 
   /* Content */
   .content { flex: 1; overflow-y: auto; padding: 28px 32px 48px; }
@@ -249,6 +288,7 @@
   <ol class="list" id="list"></ol>
   <footer>
     <button type="button" id="btn-settings">Einstellungen</button>
+    <button type="button" id="btn-log">Protokoll</button>
     <button type="button" id="btn-folder">Aufnahmeordner öffnen</button>
     <div class="version" id="version"></div>
   </footer>
@@ -277,6 +317,7 @@
       <label>Ton der anderen kommt über
         <select id="sel-speakers"></select>
       </label>
+      <button type="button" class="link-button" id="btn-reload-devices">Geräte neu laden</button>
     </div>
 
     <label class="consent">
@@ -286,11 +327,26 @@
       </span>
     </label>
 
+    <p class="silent-hint" id="silent-hint" role="status" hidden></p>
     <p class="message" id="message" role="alert" hidden></p>
   </section>
 
   <section class="content" id="content" aria-live="polite"></section>
 </main>
+
+<dialog id="dlg-log" aria-labelledby="log-title">
+  <div class="log-body">
+    <h2 id="log-title">Protokoll</h2>
+    <div class="log-toolbar">
+      <label><input type="checkbox" id="chk-log-errors"> Nur Warnungen und Fehler</label>
+      <button type="button" class="action" id="btn-log-refresh">Aktualisieren</button>
+      <button type="button" class="action" id="btn-log-export">Exportieren …</button>
+      <button type="button" class="action primary" id="btn-log-close">Schliessen</button>
+    </div>
+    <ol class="log-list" id="log-list"></ol>
+    <p class="log-result" id="log-result">Das Protokoll enthält keine Gesprächsinhalte. Der Export ist für Fehlermeldungen gedacht und lässt Namen und Pfade weg.</p>
+  </div>
+</dialog>
 
 <dialog id="dlg-settings">
   <form method="dialog" id="form-settings">
@@ -530,7 +586,8 @@ async function renderContent(force = false) {
         element("h2", {}, "Transkription fehlgeschlagen"),
         element("p", {}, a.error || "Unbekannter Fehler."),
         element("div", { class: "actions" }, a.audio ? transcribeButton("Erneut transkribieren") : null,
-          element("button", { type: "button", class: "action", onclick: () => $("btn-settings").click() }, "Einstellungen öffnen")),
+          element("button", { type: "button", class: "action", onclick: () => $("btn-settings").click() }, "Einstellungen öffnen"),
+          deleteRecordingButton(a.id)),
       ));
       return;
     case "none":
@@ -539,7 +596,8 @@ async function renderContent(force = false) {
         element("p", {}, a.audio
           ? "Für diese Aufnahme gibt es noch kein Transkript, zum Beispiel weil die App während der Transkription geschlossen wurde."
           : "Das Audio dieser Aufnahme wurde gelöscht, ein Transkript lässt sich nicht mehr erstellen."),
-        element("div", { class: "actions" }, a.audio ? transcribeButton("Transkribieren") : null, folderButton(a.id)),
+        element("div", { class: "actions" }, a.audio ? transcribeButton("Transkribieren") : null, folderButton(a.id),
+          deleteRecordingButton(a.id)),
       ));
       return;
     case "done":
@@ -580,6 +638,7 @@ async function renderTranscript(a) {
       a.audio ? retranscribeButton(a.id, !!t.edited) : null,
       a.audio ? deleteAudioButton(a.id) : null,
       folderButton(a.id),
+      deleteRecordingButton(a.id),
       element("span", { class: "edit-hint" }, "Zum Korrigieren einen Absatz anklicken."),
     ),
   );
@@ -652,6 +711,7 @@ function editParagraph(id, index, paragraph, textEl) {
   paragraph.querySelectorAll(".vorschlaege").forEach((v) => v.remove());
   const before = textEl.textContent;
   textEl.setAttribute("contenteditable", "plaintext-only");
+  textEl.setAttribute("spellcheck", "true");   // right-click shows suggestions (see app.enable_context_menu)
   textEl.removeAttribute("title");
   textEl.focus();
 
@@ -663,6 +723,7 @@ function editParagraph(id, index, paragraph, textEl) {
 
   function finish(text) {
     textEl.removeAttribute("contenteditable");
+    textEl.removeAttribute("spellcheck");
     textEl.title = "Zum Korrigieren klicken";
     textEl.textContent = text;
     textEl.removeEventListener("keydown", onKey);
@@ -762,6 +823,7 @@ function showRecording(recording) {
     $("sel-microphone").disabled = running;
     $("sel-speakers").disabled = running;
     $("chk-consent").disabled = running;
+    $("btn-reload-devices").disabled = running;
     if (!running) {
       $("chk-consent").checked = false;   // consent applies to one recording only
       setLevel("me", -90);
@@ -773,6 +835,19 @@ function showRecording(recording) {
     $("time").textContent = timeText(recording.duration_s);
     setLevel("me", recording.levels.me);
     setLevel("others", recording.levels.others);
+  }
+  showSilentHint(recording);
+}
+
+const SILENT_AFTER_S = 60;
+
+function showSilentHint(recording) {
+  const hint = $("silent-hint");
+  const silent = recording && recording.others_silent_s >= SILENT_AFTER_S;
+  hint.hidden = !silent;
+  if (silent) {
+    hint.textContent = `Seit ${Math.floor(recording.others_silent_s / 60)} Min. kommt kein Ton über «${recording.others_device}». `
+      + "Falls Teams den Ton über ein anderes Gerät ausgibt: Aufnahme beenden, unter «Ton der anderen kommt über» das richtige Gerät wählen und neu starten.";
   }
 }
 
@@ -861,6 +936,67 @@ function fillOptions(select, names, fallback, chosen) {
   select.replaceChildren(element("option", { value: "" }, `Systemstandard (${fallback})`));
   for (const n of names) select.append(element("option", { value: n }, n));
   select.value = names.includes(chosen) ? chosen : "";
+}
+
+async function reloadDevices() {
+  const button = $("btn-reload-devices");
+  button.disabled = true;
+  button.textContent = "Wird geladen …";
+  await loadDevices();
+  button.textContent = "Geräte neu laden";
+  button.disabled = state.running;
+}
+
+/* ---------- Log ---------- */
+
+function openLog() {
+  $("dlg-log").showModal();
+  loadLog();
+}
+
+async function loadLog() {
+  const list = $("log-list");
+  let entries;
+  try { entries = await call("logs", $("chk-log-errors").checked); }
+  catch (e) { list.replaceChildren(element("li", { class: "log-empty" }, e.message)); return; }
+  if (!entries.length) {
+    list.replaceChildren(element("li", { class: "log-empty" }, "Keine Einträge."));
+    return;
+  }
+  list.replaceChildren(...entries.map((entry) => element("li", {},
+    element("span", { class: "log-time" }, entry.time),
+    element("span", { class: `log-level ${entry.level}` }, entry.level),
+    element("span", { class: "log-message" }, entry.message),
+    entry.details ? element("details", {}, element("summary", {}, "Details"), element("pre", {}, entry.details)) : null,
+  )));
+}
+
+async function exportLog() {
+  const result = $("log-result");
+  try {
+    const r = await call("export_logs");
+    result.textContent = r ? `Gespeichert: ${r.path}` : "Export abgebrochen.";
+  } catch (e) { result.textContent = e.message; }
+}
+
+function deleteRecordingButton(id) {
+  const button = element("button", { type: "button", class: "action" }, "Aufnahme löschen");
+  let confirmed = false;
+  button.addEventListener("click", async () => {
+    if (!confirmed) {   // deletes audio and transcript – a second click confirms
+      confirmed = true;
+      button.textContent = "Mit Transkript endgültig löschen? Nochmals klicken";
+      setTimeout(() => { confirmed = false; button.textContent = "Aufnahme löschen"; }, 4000);
+      return;
+    }
+    try {
+      await call("delete_recording", id);
+      state.selected = null;
+      state.listSignature = "";
+      await loadList();
+    } catch (e) { showMessage(e.message); }
+  });
+  return button;
 }
 
 async function loadDevices() {
@@ -977,6 +1113,17 @@ async function init() {
   $("chk-consent").addEventListener("change", updateRecordButton);
   $("btn-settings").addEventListener("click", openSettings);
   $("btn-folder").addEventListener("click", () => call("open_folder", "").catch((e) => showMessage(e.message)));
+  $("btn-log").addEventListener("click", openLog);
+  $("btn-log-refresh").addEventListener("click", loadLog);
+  $("chk-log-errors").addEventListener("change", loadLog);
+  $("btn-log-export").addEventListener("click", exportLog);
+  $("btn-log-close").addEventListener("click", () => $("dlg-log").close());
+  $("btn-reload-devices").addEventListener("click", reloadDevices);
+  // Context menu only where it helps: editable fields (spelling suggestions) and selected text
+  document.addEventListener("contextmenu", (event) => {
+    const editable = event.target.closest("[contenteditable], input[type=text], textarea");
+    if (!editable && !String(window.getSelection())) event.preventDefault();
+  });
   $("btn-cancel").addEventListener("click", () => $("dlg-settings").close());
   $("form-settings").addEventListener("submit", saveSettings);
   $("sel-model").addEventListener("change", showModelStatus);

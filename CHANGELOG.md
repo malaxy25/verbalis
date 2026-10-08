@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.1 – 2026-10-08
+- **Log viewer** («Protokoll» in the sidebar): newest entries first, filter for warnings and errors,
+  tracebacks expandable. **Export** as ZIP for bug reports – log files, version, system info and
+  non-personal settings; home path replaced by `~`, no names, keywords or conversation content.
+- **Spelling suggestions** when correcting a transcript: right-click a red-underlined word.
+  The WebView2 context menu is enabled on Windows but suppressed outside editable fields and
+  selected text.
+- **Reload devices** button, e.g. after plugging in a headset
+- **Warning when the others track stays silent** for a minute during a recording – usually the
+  wrong output device
+- **Delete a recording completely** (audio and transcript), with confirmation
+- CSS grid area names in English (missed in 0.7.0)
+
 ## 0.7.0 – 2026-10-07
 - **Renamed to Verbalis** (formerly «Mitschrift»): package, commands (`verbalis`, `verbalis-app.exe`),
   data folder `~/.verbalis`, window title, icon, shortcut

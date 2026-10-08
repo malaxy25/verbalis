@@ -20,6 +20,7 @@ import math
 import os
 import queue
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -38,6 +39,7 @@ from .transcription.models import verbalis_home
 VALID_ID = re.compile(r"^[\w\-]+$")
 CLEANUP = ":cleanup"          # queue task (not a valid recording ID)
 CLEANUP_EVERY_S = 3600        # additionally every hour while the app stays open
+SOUND_DB = -55.0              # louder than this counts as "something is coming through"
 MB = 1024 * 1024              # as shown in Windows Explorer
 log = logging.getLogger(__name__)
 
@@ -75,6 +77,7 @@ class Service:
         self._rec = None
         self._rec_info: dict = {}
         self._recording_error: str | None = None
+        self._others_last_sound = 0.0   # when the others track last had sound (monotonic)
 
         self._queue: queue.Queue[str | None] = queue.Queue()
         self._queued: list[str] = []
@@ -168,6 +171,7 @@ class Service:
 
             self._rec = rec
             self._recording_error = None
+            self._others_last_sound = time.monotonic()
             self._rec_info = {
                 "id": folder.name,
                 "folder": folder,
@@ -569,6 +573,17 @@ class Service:
         data["markdown"] = md.read_text(encoding="utf-8") if md.exists() else ""
         return data
 
+    def delete_recording(self, recording_id: str) -> None:
+        """Delete a recording completely: audio, transcript, metadata."""
+        folder = self._path(recording_id)
+        if recording_id in self._protected():
+            raise RuntimeError("Diese Aufnahme wird gerade aufgenommen oder transkribiert.")
+        if folder.exists():
+            shutil.rmtree(folder)
+        with self._lock:
+            self._errors.pop(recording_id, None)
+        log.info("Recording deleted: %s", recording_id)
+
     def open_folder(self, recording_id: str = "") -> None:
         path = self._path(recording_id) if recording_id else self._s.recordings
         path.mkdir(parents=True, exist_ok=True)
@@ -582,10 +597,16 @@ class Service:
             recording = None
             if rec is not None and rec.running:  # stopped by itself = a track failed
                 me, others = rec.status()
+                now = time.monotonic()
+                if _db(others.level_rms) > SOUND_DB:
+                    self._others_last_sound = now
                 recording = {
                     "id": info["id"],
-                    "duration_s": round(time.monotonic() - rec.t0, 1),
+                    "duration_s": round(now - rec.t0, 1),
                     "levels": {"me": _db(me.level_rms), "others": _db(others.level_rms)},
+                    # long silence on the others track usually means the wrong output device
+                    "others_silent_s": round(now - self._others_last_sound),
+                    "others_device": info["devices"]["others"],
                 }
             job = None
             if self._job:

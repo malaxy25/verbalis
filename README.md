@@ -76,8 +76,13 @@ the repo, so updates take effect immediately. Errors are logged to
   transcription starts faster.
 - **Correct:** click a paragraph, edit, save. Verbalis suggests the changed
   words for the correction list; ticked suggestions apply from then on.
+- **Spelling:** while correcting, right-click a red-underlined word for
+  suggestions (Windows).
 - **Settings:** your name, label for the others, model, speed (accurate/fast),
   keywords, correction list, audio retention and recordings folder.
+- **Log:** «Protokoll» shows the log with a filter for warnings and errors.
+  «Exportieren …» saves a ZIP for bug reports – without names, paths or
+  conversation content.
 
 ## Data
 
@@ -91,7 +96,7 @@ variable):
 | `stats.json` | speed per model, for the remaining-time estimate |
 | `models/` | converted models |
 | `recordings/YYYY-MM-DD_HHMMSS/` | `me.flac`, `others.flac`, `meta.json`, `transcript.md/.json` |
-| `verbalis.log` | log file |
+| `verbalis.log` | log file, rotates at 1 MB (one backup `verbalis.log.1`) |
 
 During a recording audio is written as WAV (crash-safe) and compressed afterwards.
 

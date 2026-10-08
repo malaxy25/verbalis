@@ -268,3 +268,33 @@ def test_keywords_without_duplicates():
     c.add("Toko", "tocco")
     c.add("Limetnah", "Limmat")
     assert Service._keywords("Tocco, Höngg, ", c) == "Tocco, Höngg, Limmat"
+
+
+def test_delete_recording_completely(home):
+    s = make_service()
+    rid = finished_recording(s)
+    s.delete_recording(rid)
+    assert not (home / "recordings" / rid).exists()
+    assert s.recordings() == []
+
+
+def test_cannot_delete_running_recording():
+    s = make_service()
+    rid = s.start_recording(consent=True)
+    with pytest.raises(RuntimeError, match="gerade"):
+        s.delete_recording(rid)
+    s.stop_recording()
+
+
+def test_silent_others_track_is_reported():
+    s = make_service()
+    s.start_recording(consent=True)
+    rec = s._rec
+    rec.status()  # FakeRecorder: level 0.1 rms ≈ −20 dB on both tracks
+    state = s.state()["recording"]
+    assert state["others_silent_s"] == 0 and state["others_device"] == "Lautsprecher"
+
+    s._others_last_sound -= 90          # pretend the last sound was 90 s ago …
+    rec.status = lambda: [TrackStatus(n, rec.folder / f"{n}.wav", 0, 0, 0.0) for n in ("me", "others")]
+    assert s.state()["recording"]["others_silent_s"] >= 90   # … and it is silent now
+    s.stop_recording()

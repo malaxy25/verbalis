@@ -13,9 +13,8 @@ import sys
 import threading
 from pathlib import Path
 
-from . import __version__
+from . import __version__, logs
 from .service import Service
-from .transcription.models import verbalis_home
 
 UI = Path(__file__).parent / "ui" / "index.html"
 ICON = Path(__file__).parent / "ui" / "verbalis.ico"
@@ -26,6 +25,7 @@ _MUTEX = None  # holds the Windows lock against opening the app twice
 class Api:
     def __init__(self, service: Service):
         self._s = service  # leading underscore: not exposed to JavaScript
+        self._window = None  # set after the window is created (for the save dialog)
 
     def _call(self, fn, *args):
         try:
@@ -94,6 +94,34 @@ class Api:
     def open_folder(self, recording_id=""):
         return self._call(self._s.open_folder, recording_id)
 
+    def delete_recording(self, recording_id):
+        return self._call(self._s.delete_recording, recording_id)
+
+    def logs(self, errors_only=False):
+        return self._call(logs.read_entries, bool(errors_only))
+
+    def export_logs(self):
+        return self._call(self._export_logs)
+
+    def _export_logs(self) -> dict | None:
+        """Ask where to save (save dialog), then write the ZIP. None = cancelled."""
+        name = logs.default_export_name()
+        downloads = Path.home() / "Downloads"
+        if self._window is None:
+            target = downloads / name
+        else:
+            import webview
+
+            result = self._window.create_file_dialog(
+                webview.FileDialog.SAVE, directory=str(downloads if downloads.exists() else Path.home()),
+                save_filename=name, file_types=("ZIP-Datei (*.zip)",))
+            if not result:
+                return None
+            target = Path(result if isinstance(result, str) else result[0])
+        if target.suffix.lower() != ".zip":
+            target = target.with_suffix(".zip")
+        return {"path": str(logs.export(target, self._s.settings()))}
+
 
 # ---------------------------------------------------------------- window size and position
 
@@ -137,6 +165,29 @@ def window_position(width: int, height: int, screen) -> tuple[int | None, int | 
     return x + max((w - width) // 2, 0), y + max((h - height) // 2, 0)
 
 
+def enable_context_menu(window) -> None:
+    """Allow the WebView2 context menu on Windows – it holds the spelling suggestions.
+
+    pywebview only enables it in debug mode. The UI suppresses it everywhere
+    except in editable fields and on selected text (see index.html).
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        from System import Func, Type  # pythonnet, comes with pywebview on Windows
+
+        form = window.native
+
+        def apply():
+            core = form.browser.webview.CoreWebView2
+            if core is not None:
+                core.Settings.AreDefaultContextMenusEnabled = True
+
+        form.Invoke(Func[Type](apply))
+    except Exception:
+        log.warning("Could not enable the context menu (spelling suggestions)", exc_info=True)
+
+
 def start() -> None:
     import webview
 
@@ -149,10 +200,11 @@ def start() -> None:
     width, height = window_size(service.settings()["window_size"], screen)
     x, y = window_position(width, height, screen)
 
+    api = Api(service)
     window = webview.create_window(
         "Verbalis",
         html=UI.read_text(encoding="utf-8"),
-        js_api=Api(service),
+        js_api=api,
         width=width,
         height=height,
         x=x,
@@ -172,15 +224,14 @@ def start() -> None:
             service.save_settings({"window_size": last_size["value"]})
         service.shutdown()  # save a running recording properly
 
+    api._window = window
     window.events.resized += remember_size
     window.events.closing += on_closing
+    window.events.loaded += lambda: enable_context_menu(window)
     webview.start(icon=str(ICON))  # icon applies on Linux; on Windows it comes from the shortcut
 
 
 # ---------------------------------------------------------------- start by double-click
-
-def log_path() -> Path:
-    return verbalis_home() / "verbalis.log"
 
 
 class _ToLog:
@@ -208,7 +259,7 @@ class _ToLog:
 
 
 def _setup_logging() -> None:
-    path = log_path()
+    path = logs.log_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     handler = logging.handlers.RotatingFileHandler(path, maxBytes=1_000_000, backupCount=1, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
@@ -259,5 +310,5 @@ def main() -> None:
         start()
     except Exception:
         log.exception("Start failed")
-        _notify(f"Verbalis konnte nicht gestartet werden.\n\nDetails stehen im Protokoll:\n{log_path()}")
+        _notify(f"Verbalis konnte nicht gestartet werden.\n\nDetails stehen im Protokoll:\n{logs.log_path()}")
     log.info("Verbalis closed")
