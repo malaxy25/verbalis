@@ -22,7 +22,7 @@ Used by [Verbalis](https://github.com/malaxy25/verbalis), which downloads it on 
 ```python
 from faster_whisper import WhisperModel
 
-model = WhisperModel("malaxy25/flix-swissgerman-ct2", device="cpu", compute_type="int8")
+model = WhisperModel("malaxy/flix-swissgerman-ct2", device="cpu", compute_type="int8")
 segments, info = model.transcribe("meeting.wav", language="de")
 ```
 

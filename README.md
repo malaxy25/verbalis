@@ -143,7 +143,7 @@ real-time factor and word error rate (WER), plus one transcript per model.
 Models are downloaded on first use, with progress in the app; the model list in
 the settings shows which ones are already on this computer. Flix only exists in
 Transformers format upstream, so a ready-converted copy is provided in
-`malaxy25/flix-swissgerman-ct2` (model card in `tools/flix-model/`). Downloaded
+`malaxy/flix-swissgerman-ct2` (model card in `tools/flix-model/`). Downloaded
 models update themselves: faster-whisper fetches a newer version of the repo when
 it loads the model.
 

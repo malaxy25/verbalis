@@ -43,7 +43,7 @@ dictionary once. No hurry – spelling dictionaries change rarely and slowly.
 
 - **Updates of a model** need nothing: faster-whisper checks the Hugging Face repo
   when it loads a model and downloads a newer version (offline it uses the cached one).
-- **Flix** is served from our own repo `malaxy25/flix-swissgerman-ct2`. If Flix-AI
+- **Flix** is served from our own repo `malaxy/flix-swissgerman-ct2`. If Flix-AI
   publishes a new version, convert it again (`verbalis convert-model … --force`) and
   upload it like the first time (see `tools/flix-model/README.md`).
 - **New, better models** usually appear as new repos: compare them (`verbalis compare`)

@@ -45,8 +45,8 @@ def test_repo_check():
 
 
 def test_download_sources():
-    assert models.repo_for("Flix-AI/flix-swissgerman-full") == "malaxy25/flix-swissgerman-ct2"
-    assert models.resolve("Flix-AI/flix-swissgerman-full") == "malaxy25/flix-swissgerman-ct2"
+    assert models.repo_for("Flix-AI/flix-swissgerman-full") == "malaxy/flix-swissgerman-ct2"
+    assert models.resolve("Flix-AI/flix-swissgerman-full") == "malaxy/flix-swissgerman-ct2"
     assert models.repo_for("large-v3") == "Systran/faster-whisper-large-v3"
     assert models.repo_for("someone/faster-model") == "someone/faster-model"
 

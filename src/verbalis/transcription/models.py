@@ -28,7 +28,7 @@ DEFAULT_MODEL = RECOMMENDED[0][0]
 # faster-whisper (CTranslate2) in our own Hugging Face repo, so nobody has to
 # convert them. Flix is Apache 2.0, redistribution with attribution is allowed.
 DOWNLOAD_REPO = {
-    "Flix-AI/flix-swissgerman-full": "malaxy25/flix-swissgerman-ct2",
+    "Flix-AI/flix-swissgerman-full": "malaxy/flix-swissgerman-ct2",
 }
 # Approximate download size in GB (float16 CTranslate2), shown before downloading
 SIZE_GB = {

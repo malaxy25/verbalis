@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.5 – 2026-10-08
+- Flix is downloaded from `malaxy/flix-swissgerman-ct2` – the Hugging Face account is `malaxy`
+  (0.7.4 pointed to `malaxy25`, which doesn't exist on Hugging Face)
+
 ## 0.7.4 – 2026-10-08
 - Fix: exporting the log failed with «ZIP-Datei (*.zip) is not a valid file filter» – pywebview
   allows no hyphen in the filter description. Regression test uses pywebview's own check.
