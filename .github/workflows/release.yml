@@ -21,9 +21,9 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -89,7 +89,7 @@ jobs:
           $notes += "", "**Installation:** Verbalis-$version-setup.exe herunterladen und ausführen. Ein Update installiert man genauso – Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten."
           $notes | Set-Content release-notes.md -Encoding utf8
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: Verbalis-${{ steps.version.outputs.version }}-setup
           path: dist/Verbalis-*-setup.exe
@@ -97,7 +97,7 @@ jobs:
 
       - name: Publish GitHub Release
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Verbalis ${{ steps.version.outputs.version }}
           body_path: release-notes.md
