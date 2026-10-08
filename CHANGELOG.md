@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.6 – 2026-10-08
+- **Model updates become visible:** before transcribing, Verbalis checks whether the model files on
+  Hugging Face are newer than the ones on this computer. If so, it downloads them with progress
+  («Modell-Update wird heruntergeladen») and shows a notice afterwards. Changes that only touch the
+  model card don't count. Applies to all downloaded models (Flix, large-v3, large-v3-turbo).
+- **Settings show the model's version:** revision and download date on this computer, an available
+  update, and a link to the model page on Hugging Face; the model list marks «Update verfügbar»
+- **Monthly check of the Flix original** (`model-check.yml`, `tools/check_upstream_models.py`): opens
+  an issue when Flix-AI publishes new model files. Our copy stays as it is until we convert, compare
+  and upload a new one. Converted from revision `a9c347a` (noted in the model card).
+
 ## 0.7.5 – 2026-10-08
 - Flix is downloaded from `malaxy/flix-swissgerman-ct2` – the Hugging Face account is `malaxy`
   (0.7.4 pointed to `malaxy25`, which doesn't exist on Hugging Face)

@@ -143,9 +143,14 @@ real-time factor and word error rate (WER), plus one transcript per model.
 Models are downloaded on first use, with progress in the app; the model list in
 the settings shows which ones are already on this computer. Flix only exists in
 Transformers format upstream, so a ready-converted copy is provided in
-`malaxy/flix-swissgerman-ct2` (model card in `tools/flix-model/`). Downloaded
-models update themselves: faster-whisper fetches a newer version of the repo when
-it loads the model.
+`malaxy/flix-swissgerman-ct2` (model card in `tools/flix-model/`).
+
+Model updates: before transcribing, Verbalis compares the model files on this
+computer with the latest ones on Hugging Face (documentation changes don't count)
+and downloads newer ones with progress and a notice. The settings show each model's
+revision, download date, available updates and a link to its page. For Flix, a
+monthly GitHub Action watches the original and opens an issue when it has new model
+files – our copy only changes when we convert, compare and upload a new version.
 
 Any Hugging Face Whisper model can be converted with `convert-model` and used with
 `--model <hf-id>`. The read-aloud text for tests is in

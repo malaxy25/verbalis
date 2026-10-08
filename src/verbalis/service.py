@@ -91,6 +91,8 @@ class Service:
         self._manual_pause = False
         self._speller = speller or Speller()   # loads the dictionary on first use
         self._update: dict | None = None        # result of the last update check
+        self._notice: str | None = None         # neutral information for the UI, e.g. a model update
+        self._model_updates: tuple[float, dict] | None = None   # (checked at, result) – cached
         self._update_progress: float | None = None
 
         self._worker = threading.Thread(target=self._work, name="transcription", daemon=True)
@@ -146,7 +148,8 @@ class Service:
 
     def models(self) -> list[dict]:
         """Recommended and own models, with whether they are already on this computer."""
-        from .transcription.models import RECOMMENDED, SIZE_GB, converted_models, is_local
+        from .transcription.models import (RECOMMENDED, SIZE_GB, converted_models, is_local, local_revision,
+                                           page_url, repo_for)
 
         entries = list(RECOMMENDED) + [(m, "selbst konvertiert") for m in sorted(
             set(converted_models()) - {m for m, _ in RECOMMENDED})]
@@ -163,31 +166,91 @@ class Service:
                 status = f"wird bei Bedarf heruntergeladen (ca. {size:.1f} GB)".replace(".", ",", 1)
             else:
                 status = "wird bei Bedarf heruntergeladen"
-            result.append({"id": model, "description": description, "status": status, "local": local,
-                           "size_gb": size, "label": f"{model} – {status}"})
+            entry = {"id": model, "description": description, "status": status, "local": local,
+                     "size_gb": size, "label": f"{model} – {status}", "page": page_url(model),
+                     "revision": None, "loaded": None, "source": "Hugging Face"}
+            if local:
+                rev = local_revision(model)
+                if rev:
+                    entry.update(revision=rev["revision"][:7], loaded=rev["loaded"])
+                elif repo_for(model) is None:
+                    entry["source"] = "auf diesem PC umgewandelt"
+            result.append(entry)
         return result
 
+    def model_updates(self) -> dict:
+        """Newer revisions on Hugging Face for downloaded models (network; cached for 6 hours)."""
+        from .transcription.models import RECOMMENDED, check_update, is_local
+
+        if self._model_updates and time.monotonic() - self._model_updates[0] < 6 * 3600:
+            return self._model_updates[1]
+        result = {}
+        for model, _ in RECOMMENDED:
+            try:
+                update = check_update(model) if is_local(model) else None
+            except Exception as e:  # offline – just no information
+                log.info("Model update check for %s failed: %s", model, e)
+                continue
+            if update:
+                result[model] = {"revision": update["revision"][:7], "changed": update["changed"]}
+        self._model_updates = (time.monotonic(), result)
+        return result
+
+    def open_model_page(self, model: str) -> None:
+        from .transcription.models import HF_PAGE, page_url
+
+        url = page_url(model)
+        if not url or not url.startswith(HF_PAGE):
+            raise ValueError("Für dieses Modell gibt es keine Seite auf Hugging Face.")
+        import webbrowser
+        webbrowser.open(url)
+
+    def dismiss_notice(self) -> None:
+        self._notice = None
+
     def _ensure_model(self, model: str) -> None:
-        """Download a missing model before loading it, with progress in the job."""
-        from .transcription.models import SIZE_GB, download, is_local, repo_for
+        """Before loading: download a missing model, or a newer revision of a downloaded one.
+
+        Both with progress in the job. faster-whisper would fetch a newer revision
+        on its own, but silently – this way the user sees it and gets a notice.
+        """
+        from .transcription.models import SIZE_GB, check_update, download, is_local, local_revision, repo_for
 
         try:
-            if repo_for(model) is None or is_local(model):
+            if repo_for(model) is None:
                 return
+            local = is_local(model)
         except Exception:
             return  # can't tell – faster-whisper will download it itself
+        before = local_revision(model) if local else None
+        if local:
+            try:
+                update = check_update(model)
+            except Exception as e:  # offline: use what is there
+                log.info("Could not check %s for updates: %s", model, e)
+                return
+            if not update:
+                return
         size = SIZE_GB.get(model)
+        what = "Modell-Update wird heruntergeladen" if local else "Modell wird heruntergeladen"
 
         def progress(done: int) -> None:
             gb = done / 1e9
             with self._lock:
                 if self._job:
                     total = f" von ca. {size:.1f} GB" if size else " GB"
-                    self._job["phase"] = f"Modell wird heruntergeladen: {gb:.1f}{total}".replace(".", ",")
+                    self._job["phase"] = f"{what}: {gb:.1f}{total}".replace(".", ",")
                     self._job["progress"] = min(gb / size, 0.99) if size else 0.0
 
-        log.info("Downloading model %s", model)
+        log.info("Downloading model %s (%s)", model, "update" if local else "first download")
         download(model, progress)
+        after = local_revision(model)
+        if before and after and after["revision"] != before["revision"]:
+            self._transcriber = None   # load the new revision, not the one in memory
+            self._model_updates = None
+            self._notice = (f"Das Modell {model} wurde aktualisiert (neuer Stand {after['revision'][:7]}). "
+                            "Details auf der Modellseite in den Einstellungen.")
+            log.info("Model %s updated %s → %s", model, before["revision"][:7], after["revision"][:7])
 
     # ------------------------------------------------------------ recording
 
@@ -755,7 +818,7 @@ class Service:
             self.stop_recording()
         update = self._update
         return {"recording": recording, "job": job, "queued": queued, "pause": pause,
-                "recording_error": self._recording_error,
+                "recording_error": self._recording_error, "notice": self._notice,
                 "update": {"latest": update["latest"]} if update and update.get("available") else None,
                 "update_progress": self._update_progress}
 

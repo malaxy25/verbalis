@@ -1,0 +1,52 @@
+name: Model check
+
+# Our Flix copy (malaxy/flix-swissgerman-ct2) is converted from Flix-AI/flix-swissgerman-full.
+# Installations only get a new Flix when we upload a new conversion. This workflow checks
+# monthly whether the original has a newer revision than the one we converted
+# (UPSTREAM_REVISIONS in src/verbalis/transcription/models.py) and opens an issue if so.
+# Models downloaded directly from their publishers (large-v3, large-v3-turbo) need no check:
+# Verbalis notices and downloads their updates itself.
+
+on:
+  schedule:
+    - cron: "0 6 3 * *"   # 3rd of every month, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare converted models with their originals
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          report=$(python3 tools/check_upstream_models.py)
+          status=$?
+          echo "$report"
+          if [ $status -eq 0 ]; then exit 0; fi
+          if [ $status -ne 1 ]; then echo "Check failed"; exit $status; fi
+          title="Newer version of a converted model available"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq 'length')
+          if [ "$open" != "0" ]; then
+            echo "An issue is already open."
+            exit 0
+          fi
+          gh issue create --title "$title" --body "$report
+
+          Installations keep using our current copy until we upload a new conversion. To update:
+          1. \`pip install -e \".[convert]\"\`, then \`verbalis convert-model Flix-AI/flix-swissgerman-full --force\`
+          2. Compare old and new with \`verbalis compare\` (read-aloud text and a real Teams recording).
+             Only continue if the new version is at least as good.
+          3. Upload as described in \`tools/flix-model/README.md\`.
+          4. Set the new revision in \`UPSTREAM_REVISIONS\` (\`src/verbalis/transcription/models.py\`),
+             note it in the model card and in \`CHANGELOG.md\`, release.
+
+          Every installation then downloads the new model the next time it transcribes, with progress,
+          and shows a notice that the model was updated."

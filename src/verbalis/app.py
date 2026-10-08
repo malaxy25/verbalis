@@ -106,6 +106,15 @@ class Api:
     def spelling_add(self, word):
         return self._call(self._s.spelling_add, word)
 
+    def model_updates(self):
+        return self._call(self._s.model_updates)
+
+    def open_model_page(self, model):
+        return self._call(self._s.open_model_page, model)
+
+    def dismiss_notice(self):
+        return self._call(self._s.dismiss_notice)
+
     def update_info(self):
         return self._call(self._s.update_info)
 

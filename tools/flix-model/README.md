@@ -36,6 +36,10 @@ ct2-transformers-converter --model Flix-AI/flix-swissgerman-full --output_dir fl
 The weights are stored as float16; `compute_type` can still be chosen when loading
 (`int8` on CPU, `float16` on GPU).
 
+Converted from revision
+[`a9c347a`](https://huggingface.co/Flix-AI/flix-swissgerman-full/tree/a9c347a904af5d31b28c537ac732e0618aed6136)
+of the original. Verbalis checks monthly whether the original has a newer version.
+
 ## Credits and licence
 
 - Fine-tune: Flix-AI, Apache 2.0 – all credit for the model goes to the original authors.

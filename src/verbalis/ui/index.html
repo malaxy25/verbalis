@@ -208,6 +208,17 @@
     background: var(--amber-soft); color: var(--ink);
   }
   .silent-hint[hidden] { display: none; }
+  .notice {
+    grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: 8px;
+    background: var(--limmat-soft); color: var(--ink); display: flex; gap: 12px; align-items: flex-start;
+  }
+  .notice[hidden] { display: none; }
+  .notice span { flex: 1; }
+  .notice button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
+  .notice button:hover { color: var(--ink); }
+  .model-info { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
+  .model-info .update { color: var(--limmat); font-weight: 600; }
+  .model-info .link-button { justify-self: start; padding: 2px 0; }
   .link-button {
     border: 0; background: none; cursor: pointer; color: var(--muted);
     padding: 6px 4px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
@@ -402,6 +413,7 @@
     </label>
 
     <p class="silent-hint" id="silent-hint" role="status" hidden></p>
+    <p class="notice" id="notice" role="status" hidden><span id="notice-text"></span><button type="button" id="btn-notice-close" aria-label="Hinweis schliessen" title="Schliessen">×</button></p>
     <p class="message" id="message" role="alert" hidden></p>
   </section>
 
@@ -451,7 +463,7 @@
       <label for="sel-model"><span>Modell</span></label>
       <select id="sel-model" name="model_choice"></select>
       <input type="text" name="model_custom" placeholder="Name, Hugging-Face-ID oder Ordner" autocomplete="off" spellcheck="false" hidden aria-label="Eigenes Modell">
-      <small id="model-status"></small>
+      <div class="model-info" id="model-status" aria-live="polite"></div>
     </div>
     <fieldset>
       <legend>Tempo</legend>
@@ -1059,6 +1071,8 @@ async function poll() {
     if (z.recording_error) showMessage(z.recording_error);
     state.lastState = z;
     showUpdateBanner(z);
+    $("notice").hidden = !z.notice;
+    if (z.notice) $("notice-text").textContent = z.notice;
     showProgress(z);
     renderContent();
     if (++counter % 4 === 0 || z.job) await loadList();
@@ -1168,9 +1182,44 @@ function showModelStatus() {
   const custom = form.elements.model_custom;
   custom.hidden = choice !== CUSTOM;
   const m = state.models.find((x) => x.id === choice);
-  $("model-status").textContent = m
-    ? `${m.description}. Status: ${m.status}.`
-    : "Eingebauter Name (z.B. medium), Hugging-Face-ID oder lokaler Ordner. Hugging-Face-Modelle zuerst im Terminal konvertieren.";
+  const box = $("model-status");
+  if (!m) {
+    box.replaceChildren(element("span", {}, "Eingebauter Name (z.B. medium), Hugging-Face-ID oder lokaler Ordner. Hugging-Face-Modelle zuerst im Terminal konvertieren."));
+    return;
+  }
+  const lines = [element("span", {}, m.description + ".")];
+  if (m.revision) {
+    lines.push(element("span", {}, `Auf diesem PC: Stand ${m.revision}, geladen am ${dateText(m.loaded)}.`));
+  } else if (m.local) {
+    lines.push(element("span", {}, `Auf diesem PC (${m.source}).`));
+  } else {
+    lines.push(element("span", {}, m.status.charAt(0).toUpperCase() + m.status.slice(1) + "."));
+  }
+  const update = (state.modelUpdates || {})[m.id];
+  if (update) {
+    lines.push(element("span", { class: "update" },
+      `Update verfügbar: Stand ${update.revision} vom ${dateText(update.changed)} – wird beim nächsten Transkribieren geladen.`));
+  }
+  if (m.page) {
+    lines.push(element("button", { type: "button", class: "link-button",
+      onclick: () => call("open_model_page", m.id).catch((e) => showMessage(e.message)) }, "Modellseite auf Hugging Face öffnen"));
+  }
+  box.replaceChildren(...lines);
+}
+
+function dateText(iso) {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d) ? d.toLocaleDateString("de-CH", { day: "numeric", month: "long", year: "numeric" }) : "unbekannt";
+}
+
+async function loadModelUpdates() {
+  try { state.modelUpdates = await call("model_updates"); } catch (_) { return; }
+  const select = $("sel-model");
+  for (const option of select.options) {
+    const m = state.models.find((x) => x.id === option.value);
+    if (m) option.textContent = m.label + (state.modelUpdates[m.id] ? " – Update verfügbar" : "");
+  }
+  showModelStatus();
 }
 
 function fillModelChoice(current) {
@@ -1205,6 +1254,7 @@ async function openSettings() {
   $("folder-hint").textContent = `Leer lassen für den Standard. Aktuell: ${e.recordings_path}`;
   try { state.models = await call("models"); } catch (_) { state.models = []; }
   fillModelChoice(e.model);
+  loadModelUpdates();      // asks Hugging Face in the background, the dialog doesn't wait
   try { renderCorrectionList(await call("corrections")); } catch (_) { renderCorrectionList([]); }
   showModelStatus();
   $("dlg-settings").showModal();
@@ -1573,6 +1623,7 @@ async function init() {
   $("btn-news-ok").addEventListener("click", closeWhatsNew);
   $("dlg-news").addEventListener("close", () => call("whats_new_seen").catch(() => {}));
   $("btn-check-update").addEventListener("click", checkUpdateNow);
+  $("btn-notice-close").addEventListener("click", () => { $("notice").hidden = true; call("dismiss_notice").catch(() => {}); });
   for (const id of ["corr-variant", "corr-target"]) {
     $(id).addEventListener("keydown", (event) => {   // Enter adds instead of saving the settings
       if (event.key === "Enter") { event.preventDefault(); addCorrection(); }

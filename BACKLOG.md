@@ -41,7 +41,6 @@ installer via GitHub Releases with an update notice in the app.
 
 - [ ] **First installer test** – install the latest release in Windows Sandbox, on a second machine or in a fresh user account (without Python); check recording, transcription, shortcut, update over an existing installation and uninstall. **[ops]**
 - [ ] **Offline use** – the spelling dictionary is downloaded on first use like the models; for machines without internet provide both on an internal share. **[ops]**
-- [ ] **Upload the converted Flix model** to `malaxy/flix-swissgerman-ct2` on Hugging Face (one-time; model card in `tools/flix-model/README.md`), then test the download in Windows Sandbox. **[ops]**
 - [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
 - [ ] **Code signing** – without a signature Windows SmartScreen warns about an unknown publisher on first install. Decide whether to buy a certificate or document the warning. **[ops]**
 

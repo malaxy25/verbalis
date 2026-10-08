@@ -350,3 +350,63 @@ def test_spelling_knows_keywords_and_correction_targets(tmp_path):
     s.save_settings({"keywords": "Höngg, Limmat"})
     s.add_correction("Toko", "tocco")
     assert s.spelling_check(["Release", "Höngg", "tocco", "Toko"])["misspelled"] == ["Toko"]
+
+
+def _patch_models(monkeypatch, revisions, remote, downloads):
+    """Fake a downloaded model whose local revision follows `revisions`."""
+    from verbalis.transcription import models as m
+    monkeypatch.setattr(m, "repo_for", lambda model: "org/repo")
+    monkeypatch.setattr(m, "is_local", lambda model: True)
+    monkeypatch.setattr(m, "local_revision", lambda model: {"revision": revisions[0], "loaded": "2026-10-08T10:00"})
+    monkeypatch.setattr(m, "check_update", remote)
+
+    def fake_download(model, progress=None):
+        downloads.append(model)
+        if progress:
+            progress(500_000_000)
+        revisions[0] = "b" * 40
+
+    monkeypatch.setattr(m, "download", fake_download)
+
+
+def test_model_update_is_downloaded_and_announced(monkeypatch):
+    revisions, downloads = ["a" * 40], []
+    _patch_models(monkeypatch, revisions, lambda model: {"revision": "b" * 40, "changed": "2026-11-02T08:00"},
+                  downloads)
+    s = make_service()
+    s._transcriber = object()                 # a loaded model of the old revision
+    s._job = {"phase": "", "progress": 0.0}
+    s._ensure_model("large-v3")
+    assert "Modell-Update" in s._job["phase"]  # the user sees that it is an update
+    s._job = None
+    assert downloads == ["large-v3"] and s._transcriber is None
+    assert "aktualisiert" in s.state()["notice"] and "bbbbbbb" in s.state()["notice"]
+    s.dismiss_notice()
+    assert s.state()["notice"] is None
+
+
+def test_no_download_when_current_or_offline(monkeypatch):
+    revisions, downloads = ["a" * 40], []
+    _patch_models(monkeypatch, revisions, lambda model: None, downloads)   # no newer model files
+    s = make_service()
+    s._ensure_model("large-v3")
+    assert downloads == []
+
+    def offline(model):
+        raise OSError("no network")
+    _patch_models(monkeypatch, revisions, offline, downloads)
+    s._ensure_model("large-v3")
+    assert downloads == [] and s.state()["notice"] is None
+
+
+def test_model_updates_are_listed_and_cached(monkeypatch):
+    calls = []
+
+    def remote(model):
+        calls.append(model)
+        return {"revision": "c" * 40, "changed": "2026-11-02T08:00"}
+    _patch_models(monkeypatch, ["a" * 40], remote, [])
+    s = make_service()
+    first = s.model_updates()
+    assert first["large-v3"]["revision"] == "ccccccc"
+    assert s.model_updates() == first and len(calls) == 3     # cached: no second round of requests

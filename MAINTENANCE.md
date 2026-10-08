@@ -41,11 +41,23 @@ dictionary once. No hurry – spelling dictionaries change rarely and slowly.
 
 ## Models
 
-- **Updates of a model** need nothing: faster-whisper checks the Hugging Face repo
-  when it loads a model and downloads a newer version (offline it uses the cached one).
-- **Flix** is served from our own repo `malaxy/flix-swissgerman-ct2`. If Flix-AI
-  publishes a new version, convert it again (`verbalis convert-model … --force`) and
-  upload it like the first time (see `tools/flix-model/README.md`).
+- **Updates of a downloaded model** need nothing from us: before transcribing,
+  Verbalis compares the model files with the latest on Hugging Face and downloads
+  newer ones with progress and a notice (offline it uses what is there).
+- **Flix** is served from our own repo `malaxy/flix-swissgerman-ct2`. The «Model check»
+  workflow (3rd of every month) opens an issue «Newer version of a converted model
+  available» when Flix-AI publishes new model files. Then:
+  1. `pip install -e ".[convert]"`, `verbalis convert-model Flix-AI/flix-swissgerman-full --force`
+  2. compare old and new with `verbalis compare` (read-aloud text and a real Teams call);
+     only continue if the new one is at least as good
+  3. upload as in `tools/flix-model/README.md` (the old version stays in the repo history,
+     so you can go back)
+  4. set the new revision in `UPSTREAM_REVISIONS` (`transcription/models.py`) and in the
+     model card, add a line to `CHANGELOG.md`, release
+  Installations download the new Flix the next time they transcribe.
+- **Only the model card changed?** Upload it with
+  `hf upload malaxy/flix-swissgerman-ct2 tools/flix-model/README.md README.md` – installations
+  don't download anything because the model files are unchanged.
 - **New, better models** usually appear as new repos: compare them (`verbalis compare`)
   and add the good ones to `RECOMMENDED` in `transcription/models.py`.
 

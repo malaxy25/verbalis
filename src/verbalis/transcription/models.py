@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 # (model id, description shown in the UI – German)
@@ -30,6 +31,13 @@ DEFAULT_MODEL = RECOMMENDED[0][0]
 DOWNLOAD_REPO = {
     "Flix-AI/flix-swissgerman-full": "malaxy/flix-swissgerman-ct2",
 }
+# Revision of the original our converted copy was made from. A monthly GitHub
+# Action (.github/workflows/model-check.yml) compares it with the original and
+# opens an issue when Flix-AI publishes a newer version.
+UPSTREAM_REVISIONS = {
+    "Flix-AI/flix-swissgerman-full": "a9c347a904af5d31b28c537ac732e0618aed6136",
+}
+HF_PAGE = "https://huggingface.co/"
 # Approximate download size in GB (float16 CTranslate2), shown before downloading
 SIZE_GB = {
     "Flix-AI/flix-swissgerman-full": 3.1,
@@ -169,6 +177,73 @@ def download(model: str, progress=None) -> None:
         raise ModelError(
             f"Das Modell konnte nicht heruntergeladen werden ({repo}). Internetverbindung prüfen. "
             f"Details: {result['error']}") from result["error"]
+
+
+def page_url(model: str) -> str | None:
+    """Web page of the model on Hugging Face (the download repo, or the original if converted locally)."""
+    repo = repo_for(model)
+    if repo:
+        return HF_PAGE + repo
+    return HF_PAGE + model if "/" in model and not Path(model).expanduser().is_dir() else None
+
+
+def local_revision(model: str) -> dict | None:
+    """Which revision of a downloaded model is on this computer, and since when."""
+    repo = repo_for(model)
+    if repo is None:
+        return None
+    folder = _cache_folder(repo)
+    try:
+        sha = (folder / "refs" / "main").read_text(encoding="utf-8").strip()
+        snapshot = folder / "snapshots" / sha
+        loaded = datetime.fromtimestamp(snapshot.stat().st_mtime).astimezone()
+    except (FileNotFoundError, OSError):
+        return None
+    return {"revision": sha, "loaded": loaded.isoformat(timespec="minutes")}
+
+
+def remote_revision(model: str, timeout: float = 6.0) -> dict | None:
+    """Latest revision on Hugging Face, or None (offline, unknown repo, …)."""
+    repo = repo_for(model)
+    if repo is None:
+        return None
+    from huggingface_hub import HfApi
+
+    info = HfApi().model_info(repo, timeout=timeout)
+    changed = info.last_modified.astimezone().isoformat(timespec="minutes") if info.last_modified else None
+    return {"revision": info.sha, "changed": changed}
+
+
+def _model_files(info) -> dict[str, str]:
+    """{file name: content id} for the files Verbalis downloads – README & co. don't count."""
+    import fnmatch
+
+    return {s.rfilename: s.blob_id for s in (info.siblings or [])
+            if any(fnmatch.fnmatch(s.rfilename, pattern) for pattern in FILES)}
+
+
+def check_update(model: str, timeout: float = 6.0) -> dict | None:
+    """Is there a newer version of the *model files* than the one on this computer?
+
+    A new revision on Hugging Face alone isn't enough: changing only the model
+    card also creates one. So the content ids of the downloaded files are
+    compared between our revision and the latest. Returns None if nothing to do.
+    """
+    repo = repo_for(model)
+    local = local_revision(model)
+    if repo is None or local is None:
+        return None
+    from huggingface_hub import HfApi
+
+    api = HfApi()
+    latest = api.model_info(repo, timeout=timeout, files_metadata=True)
+    if latest.sha == local["revision"]:
+        return None
+    ours = api.model_info(repo, revision=local["revision"], timeout=timeout, files_metadata=True)
+    if _model_files(latest) == _model_files(ours):
+        return None   # only documentation changed
+    changed = latest.last_modified.astimezone().isoformat(timespec="minutes") if latest.last_modified else None
+    return {"revision": latest.sha, "changed": changed}
 
 
 def converted_models() -> list[str]:
