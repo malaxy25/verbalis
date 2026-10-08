@@ -8,6 +8,11 @@ Sync: both tracks refer to the same start time t0. If a device delivers no
 data for a while (e.g. a driver glitch), we pad the gap with silence. This
 keeps the timestamps of both tracks comparable – important for merging the
 transcripts later.
+
+Pause: while paused, the tracks keep reading from the devices (so no stale
+audio piles up in the driver buffers) but write nothing. The paused time is
+subtracted from the elapsed time, so no silence is padded for it – the
+recording simply continues where it stopped.
 """
 
 from __future__ import annotations
@@ -75,6 +80,8 @@ class Track(threading.Thread):
         t0: float,
         samplerate: int = SAMPLERATE,
         clock: Callable[[], float] = time.monotonic,
+        paused: Callable[[], bool] = lambda: False,
+        paused_time: Callable[[], float] = lambda: 0.0,
     ):
         super().__init__(name=f"track-{name}", daemon=True)
         self.device = device
@@ -82,6 +89,8 @@ class Track(threading.Thread):
         self.t0 = t0
         self.samplerate = samplerate
         self.clock = clock
+        self.paused = paused            # is the recording paused right now?
+        self.paused_time = paused_time  # total paused seconds so far
         self.status = TrackStatus(name=name, path=path)
 
     def run(self) -> None:
@@ -100,10 +109,14 @@ class Track(threading.Thread):
         ) as file, self.device.recorder(samplerate=self.samplerate, blocksize=block) as rec:
             while not self.stop_event.is_set():
                 data = rec.record(numframes=block)
+                if self.paused():
+                    s.level_rms = 0.0
+                    continue
                 mono = data.mean(axis=1) if data.ndim == 2 else data
                 mono = mono.astype(np.float32, copy=False)
 
-                gap = missing_frames(self.clock() - self.t0, self.samplerate, s.written_frames, len(mono))
+                elapsed = self.clock() - self.t0 - self.paused_time()
+                gap = missing_frames(elapsed, self.samplerate, s.written_frames, len(mono))
                 if gap:
                     file.write(np.zeros(gap, dtype=np.float32))
                     s.written_frames += gap
@@ -125,18 +138,49 @@ class TwoTrackRecorder:
     stop_event: threading.Event = field(default_factory=threading.Event)
     tracks: list[Track] = field(default_factory=list)
     t0: float = 0.0
+    _paused_total: float = 0.0
+    _paused_since: float | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def start(self) -> None:
         self.folder.mkdir(parents=True, exist_ok=True)
         self.t0 = time.monotonic()
+        common = dict(paused=lambda: self.paused, paused_time=self.paused_time)
         self.tracks = [
-            Track("me", self.microphone, self.folder / "me.wav", self.stop_event, self.t0, self.samplerate),
-            Track("others", self.loopback, self.folder / "others.wav", self.stop_event, self.t0, self.samplerate),
+            Track("me", self.microphone, self.folder / "me.wav", self.stop_event, self.t0, self.samplerate, **common),
+            Track("others", self.loopback, self.folder / "others.wav", self.stop_event, self.t0, self.samplerate,
+                  **common),
         ]
         for track in self.tracks:
             track.start()
 
+    def pause(self) -> None:
+        with self._lock:
+            if self._paused_since is None:
+                self._paused_since = time.monotonic()
+
+    def resume(self) -> None:
+        with self._lock:
+            if self._paused_since is not None:
+                self._paused_total += time.monotonic() - self._paused_since
+                self._paused_since = None
+
+    @property
+    def paused(self) -> bool:
+        return self._paused_since is not None
+
+    def paused_time(self) -> float:
+        """Total paused seconds, including a pause that is still running."""
+        with self._lock:
+            running = time.monotonic() - self._paused_since if self._paused_since is not None else 0.0
+            return self._paused_total + running
+
+    def active_seconds(self) -> float:
+        """Recorded time without pauses."""
+        return time.monotonic() - self.t0 - self.paused_time()
+
     def stop(self, timeout: float = 5.0) -> None:
+        self.resume()  # count a running pause
         self.stop_event.set()
         for track in self.tracks:
             track.join(timeout)

@@ -70,17 +70,20 @@ the repo, so updates take effect immediately. Errors are logged to
 ## Using the app
 
 - **Record:** pick the microphone and the device Teams plays sound on, confirm
-  that all participants consent, start and stop with the red button.
+  that all participants consent, start and stop with the red button. The small
+  button below pauses and resumes; paused time is not recorded.
 - **Transcript:** created automatically in the background after stopping, with
   progress and remaining time. The model stays loaded, so the next
   transcription starts faster.
 - **Correct:** click a paragraph, edit, save. Verbalis suggests the changed
   words for the correction list; ticked suggestions apply from then on.
-- **Spelling:** while correcting, right-click a red-underlined word for
-  suggestions (Windows).
+- **Spelling:** while correcting, misspelled words are underlined; right-click
+  for suggestions or «Als richtig merken». Uses the Swiss German dictionary of
+  LibreOffice (GPL), downloaded on first use.
 - **Settings:** your name, label for the others, model, speed (accurate/fast),
-  keywords, correction list, audio retention and recordings folder.
-- **Log:** «Protokoll» shows the log with a filter for warnings and errors.
+  keywords, correction list (add entries by hand, click a word to add another
+  variant), audio retention and recordings folder.
+- **Log:** the «Protokoll» tab in the settings shows the log with a filter for warnings and errors.
   «Exportieren …» saves a ZIP for bug reports – without names, paths or
   conversation content.
 
@@ -93,6 +96,8 @@ variable):
 |---|---|
 | `settings.json` | settings |
 | `corrections.json` | correction list |
+| `dictionaries/` | spelling dictionary (downloaded on first use) |
+| `words.txt` | words marked as correct |
 | `stats.json` | speed per model, for the remaining-time estimate |
 | `models/` | converted models |
 | `recordings/YYYY-MM-DD_HHMMSS/` | `me.flac`, `others.flac`, `meta.json`, `transcript.md/.json` |
@@ -149,6 +154,27 @@ every recording and stores it in `meta.json`. Recordings contain personal data;
 they are excluded from the repo via `.gitignore` and deleted after the retention
 period. See `BACKLOG.md` for what is still open before use at tocco.
 
+## Releases and installer
+
+Pushing a version tag (`git tag -a v0.7.2 …`, `git push origin v0.7.2`) starts the
+**Release** GitHub Action:
+
+1. bundles Verbalis with PyInstaller (`packaging/verbalis.spec`) into `Verbalis.exe`
+   (app, no console) and `verbalis-cli.exe` (command line),
+2. runs `verbalis-cli selftest` on the bundle,
+3. builds `Verbalis-<version>-setup.exe` with Inno Setup (`packaging/verbalis.iss`),
+4. publishes it as a GitHub Release with the matching CHANGELOG section.
+
+The tag must match `verbalis.__version__`. The installer installs per user into
+`%LOCALAPPDATA%\Programs\Verbalis` without admin rights; installing a newer
+version updates in place and keeps `~/.verbalis`. Without a code signature Windows
+SmartScreen warns on first install («Weitere Informationen» → «Trotzdem ausführen»).
+
+The workflow can also be started manually (Actions → Release → Run workflow): it then
+only builds and attaches the installer to the run, without publishing.
+
+Local build: `pip install -e ".[build]"`, then `pyinstaller packaging/verbalis.spec --noconfirm`.
+
 ## Development
 
 ```bash
@@ -156,6 +182,8 @@ pytest
 ```
 
 The GitHub Action runs the tests on Windows and Ubuntu with Python 3.11 and 3.13.
+Dependabot proposes grouped dependency updates once a month as pull requests;
+merge them when the tests are green.
 Open work is tracked in [`BACKLOG.md`](BACKLOG.md), changes in
 [`CHANGELOG.md`](CHANGELOG.md).
 

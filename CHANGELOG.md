@@ -1,7 +1,34 @@
 # Changelog
 
+## 0.7.3 – 2026-10-08
+- **Own spell checking** while correcting a transcript: misspelled words are underlined, a right-click
+  shows suggestions and «Als richtig merken». Swiss German dictionary (LibreOffice de_CH, «ss»
+  instead of «ß»), downloaded on first use to `~/.verbalis/dictionaries` (GPL, therefore not part of
+  the repo). Keywords and correction targets count as correct; own words in `~/.verbalis/words.txt`.
+  Replaces the WebView2 context menu from 0.7.1, which no longer worked.
+- **Pause and resume a recording:** paused time is neither recorded nor padded with silence;
+  the silent-track warning ignores pauses
+- **Edit the correction list in the settings:** add entries by hand, click a word to add another
+  variant to it
+- Version in the sidebar links to the release notes on GitHub
+- Dependabot: monthly grouped update PRs for Python packages and GitHub Actions
+- Self-test also checks the spelling library
+- Fix: the suggestion box of an earlier edit was not removed when editing again
+
+## 0.7.2 – 2026-10-08
+- Log moved into the settings as its own tab («Allgemein» / «Protokoll»); title and tabs stay
+  visible while the content scrolls
+- **Release build:** on every version tag a GitHub Action bundles Verbalis with PyInstaller,
+  runs a self-test of the bundle and builds a Windows installer (Inno Setup) that is published
+  as a GitHub Release with the matching changelog section. Per-user install without admin rights;
+  updates keep settings, corrections, models and recordings. Can also be started manually
+  without publishing.
+- Hidden command `verbalis selftest` checks the bundled parts (audio, silence filter, model
+  runtime, UI, window and audio libraries)
+- Optional dependency group `.[build]` for PyInstaller
+
 ## 0.7.1 – 2026-10-08
-- **Log viewer** («Protokoll» in the sidebar): newest entries first, filter for warnings and errors,
+- **Log viewer** («Protokoll»): newest entries first, filter for warnings and errors,
   tracebacks expandable. **Export** as ZIP for bug reports – log files, version, system info and
   non-personal settings; home path replaced by `~`, no names, keywords or conversation content.
 - **Spelling suggestions** when correcting a transcript: right-click a red-underlined word.

@@ -32,6 +32,7 @@ from typing import Callable
 from . import pipeline
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
+from .spelling import Speller
 from .transcript import to_markdown
 from .transcription.base import Segment
 from .transcription.models import verbalis_home
@@ -66,6 +67,7 @@ class Service:
         select_devices: Callable | None = None,
         list_devices: Callable | None = None,
         cleanup_on_start: bool = True,
+        speller: Speller | None = None,
     ):
         self._lock = threading.RLock()
         self._s = settings or Settings.load()
@@ -86,6 +88,7 @@ class Service:
         self._transcriber = None
         self._transcriber_model: str | None = None
         self._manual_pause = False
+        self._speller = speller or Speller()   # loads the dictionary on first use
 
         self._worker = threading.Thread(target=self._work, name="transcription", daemon=True)
         self._worker.start()
@@ -184,6 +187,19 @@ class Service:
                 self.save_settings({"microphone": microphone, "speakers": speakers})
             return folder.name
 
+    def pause_recording(self) -> None:
+        with self._lock:
+            if self._rec is None:
+                raise RuntimeError("Es läuft keine Aufnahme.")
+            self._rec.pause()
+
+    def resume_recording(self) -> None:
+        with self._lock:
+            if self._rec is None:
+                raise RuntimeError("Es läuft keine Aufnahme.")
+            self._rec.resume()
+            self._others_last_sound = time.monotonic()  # silence during the pause doesn't count
+
     def stop_recording(self) -> str | None:
         with self._lock:
             rec, info = self._rec, self._rec_info
@@ -195,7 +211,7 @@ class Service:
         errors = [repr(e) for e in rec.errors]
         if errors:
             self._recording_error = "Die Aufnahme wurde wegen eines Gerätefehlers abgebrochen: " + "; ".join(errors)
-        duration = time.monotonic() - rec.t0
+        duration = rec.active_seconds()
         pipeline.write_meta(info["folder"], info["start"], duration, rec.samplerate,
                             info["consent"], info["devices"], rec.status())
         if duration >= 1:
@@ -513,6 +529,33 @@ class Service:
     def corrections(self) -> list[dict]:
         return CorrectionList.load().as_list()
 
+    def add_correction(self, variant: str, target: str) -> dict:
+        """Add a correction by hand (settings). Same rules as from the transcript."""
+        variant, target = " ".join((variant or "").split()), " ".join((target or "").split())
+        if not variant or not target:
+            raise ValueError("Bitte beide Felder ausfüllen: was falsch erkannt wird und wie es richtig heisst.")
+        corrections = CorrectionList.load()
+        info = corrections.add(variant, target)
+        if info["kind"] == "ignored":
+            raise ValueError("Falsch und richtig sind gleich – da gibt es nichts zu korrigieren.")
+        corrections.save()
+        return {"info": info, "list": corrections.as_list()}
+
+    # ------------------------------------------------------------ spelling
+
+    def _known_terms(self) -> list[str]:
+        """Keywords and correction targets count as correctly spelled."""
+        return [w.strip() for w in self._s.keywords.split(",") if w.strip()] + CorrectionList.load().targets()
+
+    def spelling_check(self, words: list[str]) -> dict:
+        return self._speller.check(list(words)[:2000], extra=self._known_terms())
+
+    def spelling_suggest(self, word: str) -> dict:
+        return {"suggestions": self._speller.suggest(word)}
+
+    def spelling_add(self, word: str) -> None:
+        self._speller.add_word(word)
+
     def remove_correction(self, target: str, variant: str | None = None) -> list[dict]:
         corrections = CorrectionList.load()
         corrections.remove(target, variant)
@@ -598,11 +641,12 @@ class Service:
             if rec is not None and rec.running:  # stopped by itself = a track failed
                 me, others = rec.status()
                 now = time.monotonic()
-                if _db(others.level_rms) > SOUND_DB:
+                if rec.paused or _db(others.level_rms) > SOUND_DB:
                     self._others_last_sound = now
                 recording = {
                     "id": info["id"],
-                    "duration_s": round(now - rec.t0, 1),
+                    "duration_s": round(rec.active_seconds(), 1),
+                    "paused": rec.paused,
                     "levels": {"me": _db(me.level_rms), "others": _db(others.level_rms)},
                     # long silence on the others track usually means the wrong output device
                     "others_silent_s": round(now - self._others_last_sound),
@@ -629,7 +673,7 @@ class Service:
             rec, info = self._rec, self._rec_info
             rec.stop()
             self._rec, self._rec_info = None, {}
-            pipeline.write_meta(info["folder"], info["start"], time.monotonic() - rec.t0, rec.samplerate,
+            pipeline.write_meta(info["folder"], info["start"], rec.active_seconds(), rec.samplerate,
                                 info["consent"], info["devices"], rec.status())
         self._queue.put(None)
         if wait_s:

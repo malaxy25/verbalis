@@ -39,8 +39,9 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 Devices at tocco are not centrally managed, so Verbalis is distributed as an
 installer via GitHub Releases with an update notice in the app.
 
-- [ ] **Installer build in CI** (planned for 0.8.0) – on every version tag (`v*`) the GitHub Action builds a Windows installer (PyInstaller + e.g. Inno Setup) and attaches it to a GitHub Release. No Python needed on the target machine. **[ops]**
+- [ ] **First installer test** – install the release of 0.7.2 on a second Windows machine (or a fresh user account) without Python; check recording, transcription, shortcut, update over an existing installation and uninstall. **[ops]**
 - [ ] **Update notice in the app** – on start, check the latest GitHub Release; if newer, show «Update verfügbar» with a button that downloads and starts the installer. Settings, models and recordings in `~/.verbalis` are kept. **[ops]** **[ux]**
+- [ ] **Offline use** – the spelling dictionary is downloaded on first use like the models; for machines without internet provide both on an internal share. **[ops]**
 - [ ] **Model download on first start** – models are not part of the installer (several GB). Provide the converted Flix model once (internal share or own Hugging Face repo – Apache 2.0 allows this) and let the app download it with progress. **[ops]** **[ux]**
 - [ ] **Code signing** – without a signature Windows SmartScreen warns about an unknown publisher on first install. Decide whether to buy a certificate or document the warning. **[ops]**
 

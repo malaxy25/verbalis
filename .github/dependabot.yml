@@ -1,0 +1,21 @@
+# Dependabot: suggests dependency updates as pull requests.
+# Updates are grouped into one PR per ecosystem and month, so they don't flood the repo.
+# The Tests workflow runs on every PR – merge only when it is green.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns: ["*"]

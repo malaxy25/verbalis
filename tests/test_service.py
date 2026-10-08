@@ -38,6 +38,17 @@ class FakeRecorder:
     def running(self):
         return not self.stop_event.is_set()
 
+    paused = False
+
+    def pause(self):
+        self.paused = True
+
+    def resume(self):
+        self.paused = False
+
+    def active_seconds(self):
+        return time.monotonic() - self.t0
+
     def status(self):
         return [TrackStatus(n, self.folder / f"{n}.wav", 48000 * 5, 0, 0.1) for n in ("me", "others")]
 
@@ -298,3 +309,44 @@ def test_silent_others_track_is_reported():
     rec.status = lambda: [TrackStatus(n, rec.folder / f"{n}.wav", 0, 0, 0.0) for n in ("me", "others")]
     assert s.state()["recording"]["others_silent_s"] >= 90   # … and it is silent now
     s.stop_recording()
+
+
+def test_pause_and_resume_recording():
+    s = make_service()
+    with pytest.raises(RuntimeError, match="keine Aufnahme"):
+        s.pause_recording()
+    s.start_recording(consent=True)
+    s.pause_recording()
+    assert s.state()["recording"]["paused"] is True
+    s._others_last_sound -= 120                       # silence during a pause …
+    assert s.state()["recording"]["others_silent_s"] == 0   # … doesn't trigger the warning
+    s.resume_recording()
+    assert s.state()["recording"]["paused"] is False
+    s.stop_recording()
+
+
+def test_add_correction_by_hand():
+    s = make_service()
+    r = s.add_correction(" Toko ", "tocco")
+    assert r["info"]["kind"] == "new" and r["list"] == [{"target": "tocco", "variants": ["Toko"]}]
+    r = s.add_correction("Tokko", "tocco")                      # second variant for the same word
+    assert r["info"]["kind"] == "added" and r["list"][0]["variants"] == ["Tokko", "Toko"]
+    with pytest.raises(ValueError, match="beide Felder"):
+        s.add_correction("", "tocco")
+    with pytest.raises(ValueError, match="gleich"):
+        s.add_correction("tocco", "Tocco")
+
+
+def test_spelling_knows_keywords_and_correction_targets(tmp_path):
+    from verbalis.spelling import Speller
+
+    folder = tmp_path / "dict"
+    folder.mkdir()
+    (folder / "de_CH_frami.aff").write_text("SET UTF-8\n", encoding="utf-8")
+    (folder / "de_CH_frami.dic").write_text("1\nRelease\n", encoding="utf-8")
+    speller = Speller(folder=folder, download=False)
+    speller.load_now()
+    s = make_service(speller=speller)
+    s.save_settings({"keywords": "Höngg, Limmat"})
+    s.add_correction("Toko", "tocco")
+    assert s.spelling_check(["Release", "Höngg", "tocco", "Toko"])["misspelled"] == ["Toko"]

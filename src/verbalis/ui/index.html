@@ -85,7 +85,43 @@
     padding: 8px 12px; border-radius: 8px; color: var(--muted);
   }
   .history footer button:hover { background: var(--surface-2); color: var(--ink); }
-  .version { font-size: 12px; color: var(--muted); padding: 4px 12px 0; }
+  .version { font-size: 12px; color: var(--muted); padding: 4px 12px 0; text-decoration: none; justify-self: start; }
+  .version:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  .pause-button {
+    width: 44px; height: 44px; border-radius: 50%; cursor: pointer; color: var(--ink);
+    border: 2px solid var(--line); background: var(--surface); display: grid; place-items: center;
+  }
+  .pause-button:hover { border-color: var(--ink); }
+  .pause-button[hidden] { display: none; }
+  .pause-button svg { width: 16px; height: 16px; fill: currentColor; }
+  .pause-button svg[hidden] { display: none; }   /* hidden doesn't apply to SVG by itself */
+  .paused .time span:first-child { color: var(--muted); }
+  .paused-label { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 12px; letter-spacing: 0; }
+  .paused-label[hidden] { display: none; }
+
+  /* Spelling */
+  ::highlight(spelling) { text-decoration: underline wavy var(--red); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .spell-status { color: var(--muted); }
+  .spell-menu {
+    position: fixed; z-index: 10; min-width: 200px; max-width: 320px; padding: 6px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); display: grid;
+  }
+  .spell-menu button {
+    border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .spell-menu button:hover, .spell-menu button:focus-visible { background: var(--surface-2); outline: none; }
+  .spell-menu .suggestion { font-weight: 600; }
+  .spell-menu .note { padding: 7px 10px; color: var(--muted); font-size: 13px; }
+  .spell-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+
+  /* Correction list: add by hand */
+  .correction-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+  .correction-add input { flex: 1 1 9em; min-width: 8em; }
+  .correction-list .target-button {
+    border: 0; background: none; padding: 0; cursor: pointer; font: inherit; font-weight: 600; font-size: 14px;
+    margin-right: 4px; text-decoration: underline dotted; text-underline-offset: 3px;
+  }
 
   /* ---------- Hauptbereich ---------- */
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -104,8 +140,8 @@
     column-gap: 28px; row-gap: 14px;
     align-items: center;
   }
+  .controls { grid-area: button; align-self: start; display: grid; justify-items: center; gap: 10px; }
   .record-button {
-    grid-area: button; align-self: start;
     width: 76px; height: 76px; border-radius: 50%;
     border: 2px solid var(--line); background: var(--surface);
     display: grid; place-items: center; cursor: pointer;
@@ -117,7 +153,7 @@
   .running .record-button { border-color: var(--red); background: var(--red-soft); }
   .running .record-button .symbol { width: 24px; height: 24px; border-radius: 4px; }
   @media (prefers-reduced-motion: no-preference) {
-    .running .record-button { animation: breathe 2s ease-in-out infinite; }
+    .running:not(.paused) .record-button { animation: breathe 2s ease-in-out infinite; }
     @keyframes breathe { 50% { box-shadow: 0 0 0 8px var(--red-soft); } }
   }
 
@@ -160,8 +196,19 @@
   .link-button:disabled { opacity: .5; cursor: default; }
 
   /* Log */
-  #dlg-log { width: min(920px, 94vw); }
-  #dlg-log .log-body { padding: 22px 26px 18px; display: grid; gap: 12px; }
+  .log-body { padding: 16px 26px 20px; display: grid; gap: 12px; }
+  .log-body[hidden] { display: none; }
+  #dlg-settings.wide { width: min(920px, 94vw); }
+  #dlg-settings[open] { display: flex; flex-direction: column; overflow: hidden; }
+  #dlg-settings form, #dlg-settings .log-body { overflow-y: auto; min-height: 0; }
+  .dialog-head { padding: 22px 26px 0; display: grid; gap: 12px; border-bottom: 1px solid var(--line); }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button {
+    border: 0; background: none; cursor: pointer; padding: 8px 12px; margin-bottom: -1px;
+    color: var(--muted); border-bottom: 2px solid transparent; font-weight: 600; font-size: 14px;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
   .log-toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
   .log-toolbar label { display: flex; gap: 8px; align-items: center; margin-right: auto; }
   .log-list {
@@ -243,7 +290,8 @@
     padding: 0; background: var(--surface); color: var(--ink);
   }
   dialog::backdrop { background: rgb(21 27 34 / 0.45); }
-  dialog form { padding: 24px 26px 20px; display: grid; gap: 16px; }
+  dialog form { padding: 18px 26px 20px; display: grid; gap: 16px; }
+  dialog form[hidden] { display: none; }
   dialog h2 { margin: 0; font-size: 18px; font-weight: 600; }
   .field { display: grid; gap: 4px; }
   .field > span, .field > label > span { font-weight: 600; font-size: 14px; }
@@ -288,20 +336,25 @@
   <ol class="list" id="list"></ol>
   <footer>
     <button type="button" id="btn-settings">Einstellungen</button>
-    <button type="button" id="btn-log">Protokoll</button>
     <button type="button" id="btn-folder">Aufnahmeordner öffnen</button>
-    <div class="version" id="version"></div>
+    <a href="#" class="version" id="version" title="Was ist neu? Versionshinweise auf GitHub öffnen"></a>
   </footer>
 </aside>
 
 <main>
   <section class="recorder" id="recorder" aria-label="Aufnahme">
-    <button type="button" class="record-button" id="btn-record" aria-label="Aufnahme starten" disabled>
-      <span class="symbol"></span>
-    </button>
+    <div class="controls">
+      <button type="button" class="record-button" id="btn-record" aria-label="Aufnahme starten" disabled>
+        <span class="symbol"></span>
+      </button>
+      <button type="button" class="pause-button" id="btn-pause-rec" aria-label="Aufnahme pausieren" title="Aufnahme pausieren" hidden>
+        <svg viewBox="0 0 16 16" aria-hidden="true" id="icon-pause"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>
+        <svg viewBox="0 0 16 16" aria-hidden="true" id="icon-resume" hidden><path d="M4 2.5v11a1 1 0 0 0 1.5.86l9-5.5a1 1 0 0 0 0-1.72l-9-5.5A1 1 0 0 0 4 2.5z"/></svg>
+      </button>
+    </div>
 
     <div class="tracks">
-      <div class="time" id="time" aria-live="off">00:00</div>
+      <div class="time" aria-live="off"><span id="time">00:00</span><span class="paused-label" id="paused-label" hidden>pausiert</span></div>
       <span class="track-name me" id="name-me">Ich</span>
       <div class="lane me"><div class="fill" id="level-me"></div></div>
       <span class="db" id="db-me"></span>
@@ -334,23 +387,15 @@
   <section class="content" id="content" aria-live="polite"></section>
 </main>
 
-<dialog id="dlg-log" aria-labelledby="log-title">
-  <div class="log-body">
-    <h2 id="log-title">Protokoll</h2>
-    <div class="log-toolbar">
-      <label><input type="checkbox" id="chk-log-errors"> Nur Warnungen und Fehler</label>
-      <button type="button" class="action" id="btn-log-refresh">Aktualisieren</button>
-      <button type="button" class="action" id="btn-log-export">Exportieren …</button>
-      <button type="button" class="action primary" id="btn-log-close">Schliessen</button>
+<dialog id="dlg-settings" aria-labelledby="settings-title">
+  <div class="dialog-head">
+    <h2 id="settings-title">Einstellungen</h2>
+    <div class="tabs" role="tablist" aria-label="Bereiche">
+      <button type="button" role="tab" id="tab-general" aria-controls="form-settings" aria-selected="true">Allgemein</button>
+      <button type="button" role="tab" id="tab-log" aria-controls="panel-log" aria-selected="false" tabindex="-1">Protokoll</button>
     </div>
-    <ol class="log-list" id="log-list"></ol>
-    <p class="log-result" id="log-result">Das Protokoll enthält keine Gesprächsinhalte. Der Export ist für Fehlermeldungen gedacht und lässt Namen und Pfade weg.</p>
   </div>
-</dialog>
-
-<dialog id="dlg-settings">
-  <form method="dialog" id="form-settings">
-    <h2>Einstellungen</h2>
+  <form method="dialog" id="form-settings" role="tabpanel" aria-labelledby="tab-general">
     <div class="field-pair">
       <label class="field"><span>Dein Name</span>
         <input type="text" name="name" autocomplete="off">
@@ -379,7 +424,13 @@
     <div class="field">
       <span>Korrekturliste</span>
       <ul class="correction-list" id="correction-list"></ul>
-      <small>Wird nach jeder Transkription angewendet. Neue Einträge entstehen, wenn du im Transkript etwas korrigierst.</small>
+      <div class="correction-add">
+        <input type="text" id="corr-variant" placeholder="falsch erkannt, z.B. Toko" aria-label="Falsch erkannt" autocomplete="off" spellcheck="false">
+        <span aria-hidden="true">→</span>
+        <input type="text" id="corr-target" placeholder="richtig, z.B. tocco" aria-label="Richtig" autocomplete="off" spellcheck="false">
+        <button type="button" class="action" id="btn-corr-add">Hinzufügen</button>
+      </div>
+      <small id="corr-result">Wird nach jeder Transkription angewendet. Einträge entstehen beim Korrigieren im Transkript oder hier von Hand. Ein Klick auf ein Wort in der Liste fügt eine weitere Variante hinzu.</small>
     </div>
     <div class="field">
       <span>Audio aufbewahren</span>
@@ -398,6 +449,18 @@
       <button type="submit" class="action primary">Einstellungen speichern</button>
     </div>
   </form>
+  <div class="log-body" id="panel-log" role="tabpanel" aria-labelledby="tab-log" hidden>
+    <div class="log-toolbar">
+      <label><input type="checkbox" id="chk-log-errors"> Nur Warnungen und Fehler</label>
+      <button type="button" class="action" id="btn-log-refresh">Aktualisieren</button>
+      <button type="button" class="action" id="btn-log-export">Exportieren …</button>
+    </div>
+    <ol class="log-list" id="log-list"></ol>
+    <p class="log-result" id="log-result">Das Protokoll enthält keine Gesprächsinhalte. Der Export ist für Fehlermeldungen gedacht und lässt Namen und Pfade weg.</p>
+    <div class="dialog-buttons">
+      <button type="button" class="action primary" id="btn-log-close">Schliessen</button>
+    </div>
+  </div>
 </dialog>
 
 <script>
@@ -708,20 +771,22 @@ let editing = null;  // { cancel } of the paragraph being edited
 function editParagraph(id, index, paragraph, textEl) {
   if (textEl.hasAttribute("contenteditable")) return;
   if (editing) editing.cancel();
-  paragraph.querySelectorAll(".vorschlaege").forEach((v) => v.remove());
+  paragraph.querySelectorAll(".suggestions").forEach((v) => v.remove());
   const before = textEl.textContent;
   textEl.setAttribute("contenteditable", "plaintext-only");
-  textEl.setAttribute("spellcheck", "true");   // right-click shows suggestions (see app.enable_context_menu)
   textEl.removeAttribute("title");
   textEl.focus();
 
   const bar = element("div", { class: "edit-bar" });
   const saveButton = element("button", { type: "button", class: "action primary" }, "Korrektur speichern");
   const cancelButton = element("button", { type: "button", class: "action" }, "Abbrechen");
-  bar.append(saveButton, cancelButton, element("small", {}, "Strg+Enter speichert, Esc bricht ab"));
+  const spellStatus = element("small", { class: "spell-status" }, "Rechtsklick auf ein Wort zeigt Vorschläge");
+  bar.append(saveButton, cancelButton, element("small", {}, "Strg+Enter speichert, Esc bricht ab."), spellStatus);
   textEl.after(bar);
+  startSpelling(textEl, spellStatus);
 
   function finish(text) {
+    stopSpelling();
     textEl.removeAttribute("contenteditable");
     textEl.removeAttribute("spellcheck");
     textEl.title = "Zum Korrigieren klicken";
@@ -744,6 +809,7 @@ function editParagraph(id, index, paragraph, textEl) {
     }
   }
   function onKey(ev) {
+    if (ev.key === "Escape" && spell.menu) return;   // Escape closes the spelling menu first
     if (ev.key === "Escape") { ev.preventDefault(); finish(before); }
     if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); }
     if (ev.key === "Enter" && !ev.ctrlKey && !ev.metaKey) ev.preventDefault();  // a paragraph stays one paragraph
@@ -829,14 +895,37 @@ function showRecording(recording) {
       setLevel("me", -90);
       setLevel("others", -90);
     }
+    $("btn-pause-rec").hidden = !running;
     updateRecordButton();
   }
+  const paused = running && recording.paused;
+  $("recorder").classList.toggle("paused", paused);
+  $("paused-label").hidden = !paused;
+  $("icon-pause").toggleAttribute("hidden", paused);     // SVG elements have no .hidden property
+  $("icon-resume").toggleAttribute("hidden", !paused);
+  const label = paused ? "Aufnahme fortsetzen" : "Aufnahme pausieren";
+  $("btn-pause-rec").setAttribute("aria-label", label);
+  $("btn-pause-rec").title = label;
   if (running) {
     $("time").textContent = timeText(recording.duration_s);
     setLevel("me", recording.levels.me);
     setLevel("others", recording.levels.others);
   }
   showSilentHint(recording);
+}
+
+async function togglePauseRecording() {
+  const button = $("btn-pause-rec");
+  button.disabled = true;
+  try {
+    const paused = state.lastState && state.lastState.recording && state.lastState.recording.paused;
+    await call(paused ? "resume_recording" : "pause_recording");
+    await poll();
+  } catch (e) {
+    showMessage(e.message);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 const SILENT_AFTER_S = 60;
@@ -949,9 +1038,16 @@ async function reloadDevices() {
 
 /* ---------- Log ---------- */
 
-function openLog() {
-  $("dlg-log").showModal();
-  loadLog();
+function showTab(name) {
+  const log = name === "log";
+  $("tab-general").setAttribute("aria-selected", String(!log));
+  $("tab-log").setAttribute("aria-selected", String(log));
+  $("tab-general").tabIndex = log ? -1 : 0;
+  $("tab-log").tabIndex = log ? 0 : -1;
+  $("form-settings").hidden = log;      // unsaved changes stay in the form
+  $("panel-log").hidden = !log;
+  $("dlg-settings").classList.toggle("wide", log);
+  if (log) loadLog();
 }
 
 async function loadLog() {
@@ -1045,6 +1141,7 @@ function fillModelChoice(current) {
 }
 
 async function openSettings() {
+  showTab("general");
   const form = $("form-settings");
   const e = state.settings;
   for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb"]) form.elements[field].value = e[field] || "";
@@ -1069,7 +1166,10 @@ function renderCorrectionList(list) {
     return;
   }
   ul.replaceChildren(...list.map((entry) => element("li", {},
-    element("span", { class: "target" }, entry.target),
+    element("button", {
+      type: "button", class: "target-button", title: `Weitere Variante für «${entry.target}» hinzufügen`,
+      onclick: () => { $("corr-target").value = entry.target; $("corr-variant").focus(); },
+    }, entry.target),
     element("span", { class: "edit-hint" }, "statt"),
     ...entry.variants.map((v) => element("span", { class: "variant" }, v,
       element("button", {
@@ -1079,6 +1179,177 @@ function renderCorrectionList(list) {
         },
       }, "×"))),
   )));
+}
+
+async function addCorrection() {
+  const variant = $("corr-variant").value.trim(), target = $("corr-target").value.trim();
+  const result = $("corr-result");
+  try {
+    const r = await call("add_correction", variant, target);
+    renderCorrectionList(r.list);
+    const i = r.info;
+    result.textContent = i.kind === "added" ? `«${i.variant}» zu «${i.target}» hinzugefügt.`
+      : i.kind === "replaces" ? `«${i.variant}» gehört jetzt zu «${i.target}» (vorher zu «${i.previous}»).`
+      : i.kind === "known" ? `«${i.variant}» → «${i.target}» gibt es schon.`
+      : `«${i.variant}» → «${i.target}» hinzugefügt.`;
+    $("corr-variant").value = "";
+    $("corr-variant").focus();
+  } catch (e) {
+    result.textContent = e.message;
+  }
+}
+
+/* ---------- Spelling ---------- */
+
+const spell = { el: null, status: null, misspelled: new Set(), timer: null, menu: null };
+const HAS_HIGHLIGHT = typeof CSS !== "undefined" && CSS.highlights && typeof Highlight !== "undefined";
+const WORD_RE = /\p{L}+(?:[-'’]\p{L}+)*/gu;
+
+function startSpelling(el, statusEl) {
+  spell.el = el;
+  spell.status = statusEl;
+  spell.misspelled = new Set();
+  el.setAttribute("spellcheck", "false");      // the app's own check replaces the browser's
+  el.addEventListener("input", onSpellInput);
+  el.addEventListener("contextmenu", openSpellMenu);
+  runSpelling();
+}
+
+function stopSpelling() {
+  if (!spell.el) return;
+  spell.el.removeEventListener("input", onSpellInput);
+  spell.el.removeEventListener("contextmenu", openSpellMenu);
+  clearTimeout(spell.timer);
+  closeSpellMenu();
+  if (HAS_HIGHLIGHT) CSS.highlights.delete("spelling");
+  spell.el = null;
+}
+
+function onSpellInput() {
+  paintSpelling();                              // keep underlines in place while typing
+  clearTimeout(spell.timer);
+  spell.timer = setTimeout(runSpelling, 400);
+}
+
+async function runSpelling(attempt = 0) {
+  const el = spell.el;
+  if (!el) return;
+  const words = [...new Set(el.textContent.match(WORD_RE) || [])];
+  let r;
+  try { r = await call("spelling_check", words); } catch (_) { return; }
+  if (el !== spell.el) return;
+  if (r.status === "loading" || r.status === "idle") {
+    spell.status.textContent = "Rechtschreibprüfung wird vorbereitet …";
+    if (attempt < 90) spell.timer = setTimeout(() => runSpelling(attempt + 1), 1000);
+    return;
+  }
+  if (r.status === "error") { spell.status.textContent = r.error; return; }
+  spell.status.textContent = "Rechtsklick auf ein Wort zeigt Vorschläge.";
+  spell.misspelled = new Set(r.misspelled);
+  paintSpelling();
+}
+
+function wordRanges(el, accept) {
+  const ranges = [];
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    for (const m of node.data.matchAll(WORD_RE)) {
+      if (!accept(m[0])) continue;
+      const range = new Range();
+      range.setStart(node, m.index);
+      range.setEnd(node, m.index + m[0].length);
+      ranges.push(range);
+    }
+  }
+  return ranges;
+}
+
+function paintSpelling() {
+  if (!HAS_HIGHLIGHT || !spell.el) return;
+  CSS.highlights.set("spelling", new Highlight(...wordRanges(spell.el, (w) => spell.misspelled.has(w))));
+}
+
+function wordAt(x, y) {
+  const caret = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null;
+  if (!caret || caret.startContainer.nodeType !== Node.TEXT_NODE || !spell.el.contains(caret.startContainer)) return null;
+  const node = caret.startContainer, offset = caret.startOffset;
+  for (const m of node.data.matchAll(WORD_RE)) {
+    if (m.index <= offset && offset <= m.index + m[0].length) {
+      const range = new Range();
+      range.setStart(node, m.index);
+      range.setEnd(node, m.index + m[0].length);
+      return range;
+    }
+  }
+  return null;
+}
+
+function closeSpellMenu() {
+  if (!spell.menu) return;
+  spell.menu.remove();
+  spell.menu = null;
+  document.removeEventListener("mousedown", closeOnOutside, true);
+}
+
+function closeOnOutside(event) {
+  if (spell.menu && !spell.menu.contains(event.target)) closeSpellMenu();
+}
+
+async function openSpellMenu(event) {
+  event.preventDefault();
+  closeSpellMenu();
+  const range = wordAt(event.clientX, event.clientY);
+  if (!range) return;
+  const word = range.toString();
+  const wrong = spell.misspelled.has(word);
+  const menu = element("div", { class: "spell-menu", role: "menu", "aria-label": `Rechtschreibung «${word}»` });
+  menu.style.left = `${Math.min(event.clientX, window.innerWidth - 240)}px`;
+  menu.style.top = `${Math.min(event.clientY + 4, window.innerHeight - 220)}px`;
+  menu.append(element("div", { class: "note" }, wrong ? "Vorschläge werden gesucht …" : `«${word}» ist richtig geschrieben.`));
+  document.body.append(menu);
+  spell.menu = menu;
+  document.addEventListener("mousedown", closeOnOutside, true);
+  menu.addEventListener("keydown", onSpellMenuKey);
+  if (!wrong) return;
+
+  let suggestions = [];
+  try { suggestions = (await call("spelling_suggest", word)).suggestions; } catch (_) { /* show none */ }
+  if (spell.menu !== menu) return;    // closed meanwhile
+  const items = suggestions.map((s) => element("button", {
+    type: "button", role: "menuitem", class: "suggestion",
+    onclick: () => { replaceWord(range, s); closeSpellMenu(); spell.el && spell.el.focus(); },
+  }, s));
+  menu.replaceChildren(
+    ...(items.length ? items : [element("div", { class: "note" }, "Keine Vorschläge gefunden.")]),
+    element("hr"),
+    element("button", {
+      type: "button", role: "menuitem",
+      onclick: async () => {
+        try { await call("spelling_add", word); } catch (e) { showMessage(e.message); }
+        spell.misspelled.delete(word);
+        paintSpelling();
+        closeSpellMenu();
+        spell.el && spell.el.focus();
+      },
+    }, `«${word}» als richtig merken`),
+  );
+  menu.querySelector("button").focus();
+}
+
+function onSpellMenuKey(event) {
+  const buttons = [...spell.menu.querySelectorAll("button")];
+  const i = buttons.indexOf(document.activeElement);
+  if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeSpellMenu(); spell.el && spell.el.focus(); }
+  if (event.key === "ArrowDown") { event.preventDefault(); buttons[(i + 1) % buttons.length].focus(); }
+  if (event.key === "ArrowUp") { event.preventDefault(); buttons[(i - 1 + buttons.length) % buttons.length].focus(); }
+}
+
+function replaceWord(range, replacement) {
+  range.deleteContents();
+  range.insertNode(document.createTextNode(replacement));
+  spell.el.normalize();
+  spell.misspelled.delete(range.toString());
+  onSpellInput();
 }
 
 async function saveSettings(event) {
@@ -1113,17 +1384,33 @@ async function init() {
   $("chk-consent").addEventListener("change", updateRecordButton);
   $("btn-settings").addEventListener("click", openSettings);
   $("btn-folder").addEventListener("click", () => call("open_folder", "").catch((e) => showMessage(e.message)));
-  $("btn-log").addEventListener("click", openLog);
+  $("tab-general").addEventListener("click", () => showTab("general"));
+  $("tab-log").addEventListener("click", () => showTab("log"));
+  $("dlg-settings").addEventListener("keydown", (event) => {   // arrow keys switch tabs
+    if (!event.target.closest('[role="tab"]') || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    showTab(event.target.id === "tab-general" ? "log" : "general");
+    $(event.target.id === "tab-general" ? "tab-log" : "tab-general").focus();
+  });
   $("btn-log-refresh").addEventListener("click", loadLog);
   $("chk-log-errors").addEventListener("change", loadLog);
   $("btn-log-export").addEventListener("click", exportLog);
-  $("btn-log-close").addEventListener("click", () => $("dlg-log").close());
+  $("btn-log-close").addEventListener("click", () => $("dlg-settings").close());
   $("btn-reload-devices").addEventListener("click", reloadDevices);
-  // Context menu only where it helps: editable fields (spelling suggestions) and selected text
+  // No browser context menu; while correcting, the app shows its own spelling menu
   document.addEventListener("contextmenu", (event) => {
-    const editable = event.target.closest("[contenteditable], input[type=text], textarea");
-    if (!editable && !String(window.getSelection())) event.preventDefault();
+    if (!event.target.closest("input[type=text], textarea")) event.preventDefault();
   });
+  $("btn-pause-rec").addEventListener("click", togglePauseRecording);
+  $("version").addEventListener("click", (event) => {
+    event.preventDefault();
+    call("open_project_page").catch((e) => showMessage(e.message));
+  });
+  $("btn-corr-add").addEventListener("click", addCorrection);
+  for (const id of ["corr-variant", "corr-target"]) {
+    $(id).addEventListener("keydown", (event) => {   // Enter adds instead of saving the settings
+      if (event.key === "Enter") { event.preventDefault(); addCorrection(); }
+    });
+  }
   $("btn-cancel").addEventListener("click", () => $("dlg-settings").close());
   $("form-settings").addEventListener("submit", saveSettings);
   $("sel-model").addEventListener("change", showModelStatus);

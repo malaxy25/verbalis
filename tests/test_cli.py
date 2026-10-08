@@ -70,3 +70,8 @@ def test_load_audio_resampling(tmp_path):
     assert audio.dtype == np.float32 and len(audio) == 32000
     assert faster.load_audio(tmp_path / "x.wav", until_s=1).shape == (16000,)
     assert 0.45 < np.abs(audio[1000:-1000]).max() < 0.55  # tone preserved
+
+
+def test_selftest_passes(capsys):
+    assert cli.main(["selftest"]) == 0
+    assert "Alles in Ordnung" in capsys.readouterr().out

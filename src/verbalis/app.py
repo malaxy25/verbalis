@@ -17,6 +17,7 @@ from . import __version__, logs
 from .service import Service
 
 UI = Path(__file__).parent / "ui" / "index.html"
+PROJECT_URL = "https://github.com/malaxy25/verbalis/releases"
 ICON = Path(__file__).parent / "ui" / "verbalis.ico"
 log = logging.getLogger("verbalis")
 _MUTEX = None  # holds the Windows lock against opening the app twice
@@ -58,6 +59,12 @@ class Api:
     def stop_recording(self):
         return self._call(self._s.stop_recording)
 
+    def pause_recording(self):
+        return self._call(self._s.pause_recording)
+
+    def resume_recording(self):
+        return self._call(self._s.resume_recording)
+
     def recordings(self):
         return self._call(self._s.recordings)
 
@@ -84,6 +91,23 @@ class Api:
 
     def remove_correction(self, target, variant=None):
         return self._call(self._s.remove_correction, target, variant)
+
+    def add_correction(self, variant, target):
+        return self._call(self._s.add_correction, variant, target)
+
+    def spelling_check(self, words):
+        return self._call(self._s.spelling_check, words)
+
+    def spelling_suggest(self, word):
+        return self._call(self._s.spelling_suggest, word)
+
+    def spelling_add(self, word):
+        return self._call(self._s.spelling_add, word)
+
+    def open_project_page(self):
+        import webbrowser
+
+        return self._call(webbrowser.open, PROJECT_URL)
 
     def audio_usage(self):
         return self._call(self._s.audio_usage)
@@ -165,29 +189,6 @@ def window_position(width: int, height: int, screen) -> tuple[int | None, int | 
     return x + max((w - width) // 2, 0), y + max((h - height) // 2, 0)
 
 
-def enable_context_menu(window) -> None:
-    """Allow the WebView2 context menu on Windows – it holds the spelling suggestions.
-
-    pywebview only enables it in debug mode. The UI suppresses it everywhere
-    except in editable fields and on selected text (see index.html).
-    """
-    if sys.platform != "win32":
-        return
-    try:
-        from System import Func, Type  # pythonnet, comes with pywebview on Windows
-
-        form = window.native
-
-        def apply():
-            core = form.browser.webview.CoreWebView2
-            if core is not None:
-                core.Settings.AreDefaultContextMenusEnabled = True
-
-        form.Invoke(Func[Type](apply))
-    except Exception:
-        log.warning("Could not enable the context menu (spelling suggestions)", exc_info=True)
-
-
 def start() -> None:
     import webview
 
@@ -227,7 +228,6 @@ def start() -> None:
     api._window = window
     window.events.resized += remember_size
     window.events.closing += on_closing
-    window.events.loaded += lambda: enable_context_menu(window)
     webview.start(icon=str(ICON))  # icon applies on Linux; on Windows it comes from the shortcut
 
 

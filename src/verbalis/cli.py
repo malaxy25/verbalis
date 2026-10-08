@@ -251,6 +251,66 @@ def cmd_convert_model(args) -> int:
     return 0
 
 
+def cmd_selftest(_args) -> int:
+    """Check that all bundled parts work – used by the release build in CI."""
+    import importlib
+    import tempfile
+
+    import numpy as np
+
+    failures = []
+
+    def check(name, fn):
+        try:
+            fn()
+            print(f"OK      {name}")
+        except Exception as e:  # report every part, don't stop at the first
+            print(f"FEHLER  {name}: {e!r}")
+            failures.append(name)
+
+    def audio_roundtrip():
+        import soundfile as sf
+
+        from .pipeline import audio_file, compress_audio
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            t = np.arange(48000) / 48000
+            for track in ("me", "others"):
+                sf.write(folder / f"{track}.wav", (0.3 * np.sin(2 * np.pi * 440 * t)).astype(np.float32), 48000)
+            assert compress_audio(folder) == 2
+            data, sr = sf.read(audio_file(folder, "me"))
+            assert sr == 16000 and len(data) > 15000
+
+    def silence_filter():
+        from faster_whisper.vad import VadOptions, get_speech_timestamps
+        assert get_speech_timestamps(np.zeros(32000, dtype=np.float32), VadOptions()) == []
+
+    def model_runtime():
+        import ctranslate2
+        ctranslate2.get_cuda_device_count()
+
+    def user_interface():
+        from .app import ICON, UI
+        assert UI.exists() and ICON.exists(), f"{UI} / {ICON} fehlen"
+
+    def window_library():
+        importlib.import_module("webview")
+
+    def audio_devices_library():
+        if sys.platform == "win32":  # on Linux it needs a running PulseAudio
+            importlib.import_module("soundcard")
+
+    check("Audio komprimieren und lesen", audio_roundtrip)
+    check("Stillefilter (Silero VAD)", silence_filter)
+    check("Modell-Laufzeit (CTranslate2)", model_runtime)
+    check("Oberfläche (index.html, Icon)", user_interface)
+    check("Fenster (pywebview)", window_library)
+    check("Audiogeräte (soundcard)", audio_devices_library)
+    check("Rechtschreibung (spylls)", lambda: importlib.import_module("spylls.hunspell"))
+    print("\nAlles in Ordnung." if not failures else f"\n{len(failures)} Teil(e) fehlerhaft.")
+    return 1 if failures else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     from .migration import migrate_if_needed
     from .settings import Settings
@@ -296,6 +356,8 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_compare, until=180)  # default: first 3 minutes, 0 = everything
 
     sub.add_parser("models", help="Empfohlene und konvertierte Modelle anzeigen").set_defaults(func=cmd_models)
+
+    sub.add_parser("selftest", help=argparse.SUPPRESS).set_defaults(func=cmd_selftest)
 
     p = sub.add_parser("convert-model", help="Hugging-Face-Whisper-Modell für faster-whisper umwandeln")
     p.add_argument("model_id", help="z.B. Flix-AI/flix-swissgerman-full")

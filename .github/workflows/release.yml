@@ -1,0 +1,105 @@
+name: Release
+
+# Builds the Windows installer.
+# - Version tag (v1.2.3): build, self-test, publish a GitHub Release with the installer
+#   and the matching CHANGELOG section. The tag must match verbalis.__version__.
+# - Manual run (Actions → Release → Run workflow): build and self-test only; the
+#   installer is attached to the run as an artifact, nothing is published.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create the release
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[build]"
+          if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+
+      - name: Read and check version
+        id: version
+        run: |
+          $version = python -c "import verbalis; print(verbalis.__version__)"
+          if ($LASTEXITCODE -ne 0) { throw "could not read the version" }
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match verbalis.__version__ ($version)"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $version"
+
+      - name: Bundle with PyInstaller
+        run: |
+          pyinstaller packaging/verbalis.spec --noconfirm
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+
+      - name: Self-test of the bundle
+        env:
+          VERBALIS_HOME: ${{ runner.temp }}\verbalis-home
+          MITSCHRIFT_HOME: ${{ runner.temp }}\no-old-home
+        run: |
+          dist\Verbalis\verbalis-cli.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "verbalis-cli --version failed" }
+          dist\Verbalis\verbalis-cli.exe selftest
+          if ($LASTEXITCODE -ne 0) { throw "self-test failed" }
+
+      - name: Install Inno Setup
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "installing Inno Setup failed" }
+          }
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+          "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Build installer
+        run: |
+          & $env:ISCC "/DAppVersion=${{ steps.version.outputs.version }}" packaging\verbalis.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Get-ChildItem dist\Verbalis-*-setup.exe | ForEach-Object { "{0}  {1:N0} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      - name: Release notes from CHANGELOG
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $lines = Get-Content CHANGELOG.md -Encoding utf8
+          $start = ($lines | Select-String -Pattern "^## $([regex]::Escape($version)) " | Select-Object -First 1).LineNumber
+          if (-not $start) { throw "CHANGELOG.md has no section for $version" }
+          $notes = @()
+          foreach ($line in $lines[$start..($lines.Count - 1)]) {
+            if ($line -match "^## ") { break }
+            $notes += $line
+          }
+          $notes += "", "**Installation:** Verbalis-$version-setup.exe herunterladen und ausführen. Ein Update installiert man genauso – Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten."
+          $notes | Set-Content release-notes.md -Encoding utf8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Verbalis-${{ steps.version.outputs.version }}-setup
+          path: dist/Verbalis-*-setup.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Verbalis ${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          files: dist/Verbalis-*-setup.exe
+          fail_on_unmatched_files: true
