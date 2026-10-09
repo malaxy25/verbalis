@@ -43,6 +43,10 @@ seconds on Windows, Linux and macOS.
   list, Markdown/JSON output and the macOS update swap script (with fake app folders)
   run for real.
 - **Regression tests** name the bug they guard against in their docstring.
+- **Tests must not depend on the machine they run on.** Two lessons from CI (0.7.10):
+  - shell scripts (the macOS update swap) can't run on Windows → `skipif(sys.platform == "win32")`
+  - on GitHub's Mac the real system audio helper is present, which changes the device list →
+    device tests fix `mac_tap.available` explicitly (`use(..., system_audio=...)` in `test_devices.py`)
 
 ## Not covered by automated tests
 

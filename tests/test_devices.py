@@ -26,8 +26,12 @@ class FakeSoundcard:
         return self.speakers[0]
 
 
-def use(monkeypatch, platform, mics, speakers=("Lautsprecher",)):
+def use(monkeypatch, platform, mics, speakers=("Lautsprecher",), system_audio=False):
+    """Simulate a platform. On a Mac the system audio helper is off unless asked for –
+    on a real Mac (CI) it would be found and change the device list."""
+    from verbalis.audio import mac_tap
     monkeypatch.setattr(devices.sys, "platform", platform)
+    monkeypatch.setattr(mac_tap, "available", lambda: system_audio)
     sc = FakeSoundcard(mics, speakers)
     monkeypatch.setattr(devices, "soundcard_module", lambda: sc)
     return sc

@@ -2,6 +2,7 @@
 
 import io
 import json
+import sys
 from contextlib import contextmanager
 
 import pytest
@@ -117,6 +118,7 @@ def test_app_bundle_found_from_executable(tmp_path):
     assert updates.app_bundle(str(tmp_path / "python")) is None
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the swap script is a macOS shell script")
 def test_mac_update_swaps_bundle_after_app_closed(tmp_path):
     import subprocess
     import time
@@ -142,6 +144,7 @@ def test_mac_update_swaps_bundle_after_app_closed(tmp_path):
     assert opened.exists() and not script.exists()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the swap script is a macOS shell script")
 def test_mac_update_rolls_back_if_new_app_missing(tmp_path):
     import subprocess
     applications = tmp_path / "Applications"

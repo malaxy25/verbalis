@@ -56,8 +56,7 @@ def test_tap_device_notices_when_helper_stops(tmp_path):
 
 def test_mac_prefers_system_audio_when_available(monkeypatch):
     from test_devices import use
-    use(monkeypatch, "darwin", ["MacBook-Mikrofon", "BlackHole 2ch"])
-    monkeypatch.setattr(mac_tap, "available", lambda: True)
+    use(monkeypatch, "darwin", ["MacBook-Mikrofon", "BlackHole 2ch"], system_audio=True)
     monkeypatch.setattr(mac_tap.TapDevice, "__init__", lambda self, command=None: None)
     names = devices.device_names()
     assert names["speakers"][0] == mac_tap.SYSTEM_AUDIO and names["default_speakers"] == mac_tap.SYSTEM_AUDIO
@@ -69,8 +68,7 @@ def test_mac_prefers_system_audio_when_available(monkeypatch):
 
 def test_old_mac_falls_back_to_virtual_device(monkeypatch):
     from test_devices import use
-    use(monkeypatch, "darwin", ["MacBook-Mikrofon"])
-    monkeypatch.setattr(mac_tap, "available", lambda: False)
+    use(monkeypatch, "darwin", ["MacBook-Mikrofon"], system_audio=False)
     with pytest.raises(ValueError, match="macOS 14.2"):
         devices.select(None, mac_tap.SYSTEM_AUDIO)
 
