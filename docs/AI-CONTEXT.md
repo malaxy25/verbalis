@@ -70,6 +70,10 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   bundled into the app) records the system audio through a Core Audio tap (macOS 14.2+) and
   streams it to Python (`audio/mac_tap.py`). BlackHole only for older Macs. Updates swap the
   app bundle via a script. I (Claude) can't run Swift or macOS: Mac changes need Andrea's tests.
+- **soundcard on Windows** only opens devices whose mix format is float32 WAVEFORMATEXTENSIBLE (and
+  its struct has wrong offsets). `audio/wasapi_fix.py` wraps its `_AudioClient.__init__`: on its assertion
+  the stream is opened with an own packed float32 format and AUTOCONVERTPCM. Check this file when
+  updating soundcard.
 - **Not signed** yet (Windows SmartScreen / macOS Gatekeeper warn on first install).
 
 ## How work is delivered (important pitfalls)

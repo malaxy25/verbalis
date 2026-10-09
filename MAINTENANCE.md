@@ -101,6 +101,11 @@ about changes made on GitHub in the meantime (e.g. merged Dependabot PRs).
 
 ## Occasionally
 
+- **soundcard updates:** Verbalis patches one function of soundcard on Windows
+  (`src/verbalis/audio/wasapi_fix.py`). When Dependabot proposes a new soundcard version, check
+  that `_AudioClient.__init__` still has the same parameters; the tests in `test_wasapi_fix.py`
+  only use a fake, so try a recording with a normal and a Jabra-type device after the update.
+
 - **Dependencies changed in `pyproject.toml`** (new package): regenerate the exact versions
   ```bash
   pip install uv

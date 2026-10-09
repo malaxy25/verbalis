@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-142 tests in 16 files.
+147 tests in 17 files.
 
 ### `test_app.py` (7)
 
@@ -293,4 +293,14 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Check picks the asset for this platform**
 - **Download checks sha256 and size**
 - **Check reads the github digest and name**
+
+### `test_wasapi_fix.py` (5)
+
+Windows workaround for devices soundcard can't open (e.g. Jabra Link 380) – with a fake WASAPI.
+
+- **Float format is packed like windows expects**
+- **Devices that work are left to soundcard**
+- **Unsupported device is opened with own format** – Regression 0.7.13: «Mikrofon (Jabra Link 380)» failed soundcard's format assertion.
+- **Loopback flag and stereo for system audio**
+- **Install only once**
 <!-- catalog:end -->

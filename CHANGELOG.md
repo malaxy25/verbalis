@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.14 – 2026-10-09
+- Fix: devices that report a plain audio format, such as the **Jabra Link 380** in hands-free mode, still
+  couldn't be recorded. The audio library only accepts one specific format (and describes it with wrong
+  memory offsets). When it fails, Verbalis now opens the device with a correctly packed 32-bit float format
+  of its own and lets Windows convert (`audio/wasapi_fix.py`). Devices that already worked are untouched.
+
 ## 0.7.13 – 2026-10-09
 - Fix: on some devices a recording stopped at once with «Gerätefehler: AssertionError()». The audio
   library can't read the format some devices report (e.g. Bluetooth headsets in hands-free mode, some

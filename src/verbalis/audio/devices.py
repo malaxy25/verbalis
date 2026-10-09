@@ -27,6 +27,12 @@ def soundcard_module():
 
     # Windows often reports "data discontinuity" on short glitches – harmless.
     warnings.filterwarnings("ignore", category=sc.SoundcardRuntimeWarning)
+    if sys.platform == "win32":
+        # devices whose format soundcard can't handle (e.g. Jabra Link 380), see wasapi_fix.py
+        from . import wasapi_fix
+        from soundcard import mediafoundation
+
+        wasapi_fix.install(mediafoundation)
     return sc
 
 
