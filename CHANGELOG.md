@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.13 – 2026-10-09
+- Fix: on some devices a recording stopped at once with «Gerätefehler: AssertionError()». The audio
+  library can't read the format some devices report (e.g. Bluetooth headsets in hands-free mode, some
+  USB devices) and fails a check. Verbalis now retries with a fixed channel count (microphone mono,
+  system audio stereo – Windows converts the format); if that fails too, it says in plain words which
+  device can't be recorded and what to do. Found on a second PC.
+- Device errors are shown as readable text instead of e.g. «AssertionError()», and the log contains
+  the full traceback of every track error (so the next unknown device problem can be diagnosed)
+- Tests also run on Python 3.14
+
 ## 0.7.12 – 2026-10-09
 - Fix: on a PC without a default microphone (or speakers) both device lists stayed empty with
   «Error 0x80070490» (Windows: element not found). Verbalis now takes the first device when no default

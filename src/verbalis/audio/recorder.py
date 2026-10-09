@@ -17,7 +17,9 @@ recording simply continues where it stopped.
 
 from __future__ import annotations
 
+import logging
 import sys
+from contextlib import ExitStack, contextmanager
 import threading
 import time
 from dataclasses import dataclass, field
@@ -26,6 +28,8 @@ from typing import Any, Callable
 
 import numpy as np
 import soundfile as sf
+
+log = logging.getLogger(__name__)
 
 SAMPLERATE = 48_000
 BLOCK_SECONDS = 0.1
@@ -98,15 +102,46 @@ class Track(threading.Thread):
             _init_com()
             self._record()
         except BaseException as e:  # report errors to the main thread
+            log.error("Track %s failed", self.status.name, exc_info=True)   # full traceback in the log
             self.status.error = e
             self.stop_event.set()
+
+    # Channels to ask for when a device's own format can't be read: the microphone in mono,
+    # the system audio in stereo (mixed down to mono below). WASAPI converts the device format.
+    FALLBACK_CHANNELS = {"me": 1, "others": 2}
+
+    @contextmanager
+    def _open_device(self, block: int):
+        """Open the device for recording – with a second try for devices soundcard can't describe.
+
+        soundcard reads the channel count from the device format and asserts that format has a
+        certain size; some devices (e.g. Bluetooth headsets in hands-free mode, some USB devices)
+        report a shorter one and the assertion fails. Giving the channel count explicitly avoids
+        that query.
+        """
+        with ExitStack() as stack:
+            try:
+                rec = stack.enter_context(self.device.recorder(samplerate=self.samplerate, blocksize=block))
+            except AssertionError:
+                log.warning("Track %s: device format not readable, retrying with fixed channels",
+                            self.status.name, exc_info=True)
+                channels = self.FALLBACK_CHANNELS.get(self.status.name, 1)
+                try:
+                    rec = stack.enter_context(self.device.recorder(samplerate=self.samplerate,
+                                                                   channels=channels, blocksize=block))
+                except AssertionError as e:
+                    raise RuntimeError(
+                        f"Das Audiogerät «{getattr(self.device, 'name', '?')}» liefert ein Format, das Verbalis "
+                        "nicht aufnehmen kann (z.B. ein Bluetooth-Headset im Telefonie-Modus). Bitte ein anderes "
+                        "Gerät wählen oder das Headset per Kabel/USB-Adapter verbinden.") from e
+            yield rec
 
     def _record(self) -> None:
         block = int(self.samplerate * BLOCK_SECONDS)
         s = self.status
         with sf.SoundFile(   # "x": never overwrite an existing recording
             s.path, "x", samplerate=self.samplerate, channels=1, subtype="PCM_16"
-        ) as file, self.device.recorder(samplerate=self.samplerate, blocksize=block) as rec:
+        ) as file, self._open_device(block) as rec:
             while not self.stop_event.is_set():
                 data = rec.record(numframes=block)
                 if self.paused():

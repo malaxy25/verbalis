@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python: ["3.11", "3.13"]
+        python: ["3.11", "3.13", "3.14"]
         include:
           - os: macos-latest      # experimental Mac version
             python: "3.12"

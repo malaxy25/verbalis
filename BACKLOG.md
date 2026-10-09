@@ -56,7 +56,7 @@ Done in the code (0.7.11):
 
 Still open:
 - [ ] Installers signed, signature checked before running (needs SignPath / Apple, see «Code signing») **[ops]**
-- [ ] Windows install and update tested on a clean machine (see «First installer test») **[ops]**
+- [x] Windows install and update tested on a second PC (9 Oct 2026, 0.7.11 → 0.7.12). Found two device bugs: no default microphone (fixed in 0.7.12) and devices whose format soundcard can't read (fixed in 0.7.13)
 - [ ] macOS system audio tested on real hardware **[ops]**
 - [ ] Consent and information process approved by tocco's data protection **[tocco]**
 - [ ] Disk encryption, backups, leaving employees and device replacement arranged by tocco IT **[tocco]**
@@ -64,7 +64,7 @@ Still open:
 
 ### Tasks
 
-- [ ] **First installer test** – install the latest release in Windows Sandbox, on a second machine or in a fresh user account (without Python); check recording, transcription, shortcut, update over an existing installation and uninstall. **[ops]**
+- [ ] **Installer test, part 2** – on the second PC: a full recording with transcription (after the 0.7.13 device fix), and uninstall. **[ops]**
 - [ ] **Offline use** – the spelling dictionary is downloaded on first use like the models; for machines without internet provide both on an internal share. **[ops]**
 - [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
 - [ ] **Code signing** – Windows: SignPath Foundation offers free certificates for open-source projects (fully automated build required, each release approved by hand; SmartScreen reputation still builds up over time). macOS: Apple Developer Program (99 USD/year) for signing and notarization. **[ops]**

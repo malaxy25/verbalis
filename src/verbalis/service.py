@@ -348,7 +348,7 @@ class Service:
     def _finish(self, rec, info: dict, reason: str | None = None) -> str:
         """Stop the recorder and record honestly in meta.json how the recording ended."""
         ended = rec.stop()
-        errors = [repr(e) for e in rec.errors]
+        errors = [str(e) or type(e).__name__ for e in rec.errors]   # readable, not repr()
         if not ended:
             state = pipeline.STOP_TIMEOUT
             problem = ("Eine Spur liess sich nicht rechtzeitig beenden. Das Audio bis dahin ist gesichert, "

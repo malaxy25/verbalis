@@ -100,3 +100,53 @@ def test_pause_writes_nothing_and_pads_no_silence(tmp_path):
     assert abs(len(data) / sr - 2.0) < 0.15           # 4 s wall time, 2 s paused → 2 s audio
     assert track.status.padded_frames == 0            # the pause is not padded with silence
     assert np.allclose(data, 0.2, atol=1e-3)
+
+
+class UnreadableFormatDevice:
+    """Like some Bluetooth/USB devices on Windows: soundcard asserts on the device format
+    unless the channel count is given explicitly."""
+
+    name = "Headset (Freisprechen)"
+
+    def __init__(self, clock, stop, works_with_channels=True):
+        self.clock, self.stop, self.works = clock, stop, works_with_channels
+        self.asked = []
+
+    def recorder(self, samplerate, blocksize, channels=None):
+        self.asked.append(channels)
+        if channels is None or not self.works:
+            raise AssertionError()      # soundcard: assert blob.cbSize == 40
+        device = self
+
+        @contextmanager
+        def ctx():
+            class Rec:
+                def record(self, numframes):
+                    device.clock.t += numframes / samplerate
+                    if device.clock.t >= 1.0:
+                        device.stop.set()
+                    return np.full((numframes, channels), 0.2, dtype=np.float32)
+            yield Rec()
+        return ctx()
+
+
+def test_device_with_unreadable_format_records_with_fixed_channels(tmp_path):
+    """Regression 0.7.12: «AssertionError» from soundcard stopped the recording at once."""
+    clock, stop = FakeClock(), threading.Event()
+    device = UnreadableFormatDevice(clock, stop)
+    track = Track("others", device, tmp_path / "others.wav", stop, t0=0.0, samplerate=SR, clock=clock)
+    track.run()
+    assert track.status.error is None
+    assert device.asked == [None, 2]                     # tried the normal way, then stereo
+    data, sr = sf.read(tmp_path / "others.wav")
+    assert abs(len(data) / sr - 1.0) < 0.15 and np.allclose(data, 0.2, atol=1e-3)
+
+
+def test_device_that_cannot_record_explains_why(tmp_path):
+    clock, stop = FakeClock(), threading.Event()
+    device = UnreadableFormatDevice(clock, stop, works_with_channels=False)
+    track = Track("me", device, tmp_path / "me.wav", stop, t0=0.0, samplerate=SR, clock=clock)
+    track.run()
+    assert isinstance(track.status.error, RuntimeError)
+    assert "anderes Gerät" in str(track.status.error) and "Headset (Freisprechen)" in str(track.status.error)
+    assert device.asked == [None, 1]                     # microphone retried in mono

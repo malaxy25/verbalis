@@ -66,7 +66,7 @@ class TapDevice:
         self.command = command
 
     @contextmanager
-    def recorder(self, samplerate: int, blocksize: int | None = None):
+    def recorder(self, samplerate: int, blocksize: int | None = None, channels: int | None = None):
         proc = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             header = _read_header(proc)

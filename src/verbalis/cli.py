@@ -106,7 +106,7 @@ def cmd_record(args) -> int:
     state = COMPLETE if ended and not rec.errors else (STOP_TIMEOUT if not ended else INCOMPLETE)
     problem = None if state == COMPLETE else (
         "Eine Spur liess sich nicht rechtzeitig beenden." if not ended
-        else "Gerätefehler: " + "; ".join(repr(e) for e in rec.errors))
+        else "Gerätefehler: " + "; ".join(str(e) or type(e).__name__ for e in rec.errors))
     meta = write_meta(
         folder, start, rec.active_seconds(), rec.samplerate, consent_time,
         {"me": devices.microphone.name, "others": devices.loopback.name}, rec.status(), state, problem,

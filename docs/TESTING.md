@@ -19,7 +19,7 @@ seconds on Windows, Linux and macOS.
 
 | Where | What |
 |---|---|
-| **Tests** workflow, job *tests* | every push and pull request: Windows + Ubuntu (Python 3.11, 3.13), macOS (3.12); lint (pyflakes), all tests, catalogue check – with the newest compatible library versions |
+| **Tests** workflow, job *tests* | every push and pull request: Windows + Ubuntu (Python 3.11, 3.13, 3.14), macOS (3.12); lint (pyflakes), all tests, catalogue check – with the newest compatible library versions |
 | **Tests** workflow, job *build versions* | same tests with exactly the pinned versions of the installer (`packaging/requirements-build.txt`); catches Dependabot pins that don't fit together |
 | **Release** workflow | `verbalis-cli selftest` inside the bundled app on Windows and macOS: audio compression, silence filter (VAD), model runtime, UI files, window and audio libraries, spelling library, changelog |
 | **Dictionary check** / **Model check** (monthly) | not tests, but watch external data: LibreOffice dictionary and the Flix original |
@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-140 tests in 16 files.
+142 tests in 16 files.
 
 ### `test_app.py` (7)
 
@@ -196,7 +196,7 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Check update ignores documentation only changes**
 - **Subfolder model** – gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root.
 
-### `test_recorder.py` (4)
+### `test_recorder.py` (6)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -204,6 +204,8 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Gap is detected**
 - **Track pads dropout**
 - **Pause writes nothing and pads no silence**
+- **Device with unreadable format records with fixed channels** – Regression 0.7.12: «AssertionError» from soundcard stopped the recording at once.
+- **Device that cannot record explains why**
 
 ### `test_robustness.py` (13)
 
