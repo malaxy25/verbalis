@@ -163,3 +163,29 @@ def test_check_picks_the_asset_for_this_platform(monkeypatch):
     assert updates.check(opener=fake_opener(release))["installer_url"] == "https://dl/mac.zip"
     monkeypatch.setattr(updates.sys, "platform", "win32")
     assert updates.check(opener=fake_opener(release))["installer_url"] == "https://dl/win.exe"
+
+
+def test_download_checks_sha256_and_size(tmp_path):
+    import hashlib
+    payload = b"installer" * 1000
+    good = hashlib.sha256(payload).hexdigest()
+    target = updates.download_installer("https://dl/x.exe", tmp_path / "ok.exe", None,
+                                        opener=fake_opener(payload), sha256=good, size=len(payload))
+    assert target.read_bytes() == payload
+    with pytest.raises(RuntimeError, match="Prüfsumme"):
+        updates.download_installer("https://dl/x.exe", tmp_path / "bad.exe", None,
+                                   opener=fake_opener(payload), sha256="0" * 64, size=len(payload))
+    with pytest.raises(RuntimeError, match="unvollständig"):
+        updates.download_installer("https://dl/x.exe", tmp_path / "short.exe", None,
+                                   opener=fake_opener(payload[:100]), size=len(payload))
+    assert not (tmp_path / "bad.exe").exists() and not list(tmp_path.glob("*.part"))   # nothing left to run
+
+
+def test_check_reads_the_github_digest_and_name(monkeypatch):
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+    release = {"tag_name": "v99.0.0", "assets": [{"name": "Verbalis-99.0.0-setup.exe", "size": 5,
+               "browser_download_url": "https://dl/win.exe", "digest": "sha256:ABC123"}]}
+    info = updates.check(opener=fake_opener(release))
+    assert info["installer_sha256"] == "abc123" and info["installer_size"] == 5
+    assert updates.expected_name(info)
+    assert not updates.expected_name({**info, "installer_name": "Verbalis-98.0.0-setup.exe"})

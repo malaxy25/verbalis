@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import time
 from datetime import datetime
@@ -33,7 +34,59 @@ def audio_file(folder: Path, track: str) -> Path | None:
 
 
 def has_audio(folder: Path) -> bool:
-    return all(audio_file(folder, t) for t in TRACKS)
+    """At least one track – a single rescued track can still be transcribed."""
+    return any(audio_file(folder, t) for t in TRACKS)
+
+
+def missing_tracks(folder: Path) -> list[str]:
+    return [t for t in TRACKS if audio_file(folder, t) is None]
+
+
+# ---------------------------------------------------------------- crash-safe files
+
+def write_json_atomic(path: Path, data) -> None:
+    """Write JSON so that a crash leaves either the old or the new file, never half of one."""
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def repair_wav(path: Path) -> bool:
+    """Make a WAV readable that wasn't closed (crash, power loss).
+
+    The sizes in the header are only written when the file is closed; after a
+    crash they are 0 or too small, so players and libsndfile see little or no
+    audio although it is on disk. Sets them from the real file size. Returns True
+    if something was fixed.
+    """
+    import struct
+
+    size = path.stat().st_size
+    with path.open("r+b") as f:
+        head = f.read(12)
+        if len(head) < 12 or head[:4] != b"RIFF" or head[8:12] != b"WAVE":
+            return False
+        offset, fixed = 12, False
+        while offset + 8 <= size:
+            f.seek(offset)
+            chunk_id, chunk_size = struct.unpack("<4sI", f.read(8))
+            if chunk_id == b"data":
+                real = size - offset - 8
+                real -= real % 2                      # whole 16-bit samples only
+                if chunk_size != real:
+                    f.seek(offset + 4)
+                    f.write(struct.pack("<I", real))
+                    fixed = True
+                break
+            offset += 8 + chunk_size + (chunk_size % 2)
+        if struct.unpack("<I", head[4:8])[0] != size - 8:
+            f.seek(4)
+            f.write(struct.pack("<I", size - 8))
+            fixed = True
+    return fixed
 
 
 def audio_bytes(folder: Path) -> int:
@@ -100,15 +153,48 @@ def delete_audio(folder: Path, reason: str) -> int:
 
 # ---------------------------------------------------------------- metadata
 
-def write_meta(folder: Path, start: datetime, duration_s: float, samplerate: int,
-               consent_time: str, devices: dict[str, str], tracks: list) -> dict:
+# Recording states in meta.json
+RECORDING = "recording"          # running – if found after a restart, Verbalis had crashed
+COMPLETE = "complete"
+INCOMPLETE = "incomplete"        # a device failed; what was recorded until then is kept
+STOP_TIMEOUT = "stop_timeout"    # a track didn't end in time; files may be incomplete
+INTERRUPTED = "interrupted"      # found running after a restart (crash, power loss)
+
+# Shown next to the consent checkbox; stored with every recording so it is clear what was confirmed
+CONSENT_TEXT = "Alle Teilnehmenden haben der Aufnahme zugestimmt"
+CONSENT_TEXT_VERSION = "2026-10"
+
+
+def consent_record(timestamp: str) -> dict:
+    return {"confirmed": True, "timestamp": timestamp, "text": CONSENT_TEXT, "text_version": CONSENT_TEXT_VERSION}
+
+
+def start_meta(folder: Path, start: datetime, samplerate: int, consent_time: str, devices: dict[str, str]) -> dict:
+    """Written when a recording starts, so consent and start survive a crash."""
     meta = {
         "app_version": __version__,
         "start": start.isoformat(timespec="seconds"),
+        "state": RECORDING,
+        "samplerate": samplerate,
+        "system": f"{platform.system()} {platform.release()}",
+        "consent": consent_record(consent_time),
+        "devices": devices,
+    }
+    write_json_atomic(folder / "meta.json", meta)
+    return meta
+
+
+def write_meta(folder: Path, start: datetime, duration_s: float, samplerate: int,
+               consent_time: str, devices: dict[str, str], tracks: list,
+               state: str = COMPLETE, problem: str | None = None) -> dict:
+    meta = {
+        "app_version": __version__,
+        "start": start.isoformat(timespec="seconds"),
+        "state": state,
         "duration_s": round(duration_s, 1),
         "samplerate": samplerate,
         "system": f"{platform.system()} {platform.release()}",
-        "consent": {"confirmed": True, "timestamp": consent_time},
+        "consent": consent_record(consent_time),
         "tracks": {
             t.name: {
                 "file": t.path.name,
@@ -119,20 +205,26 @@ def write_meta(folder: Path, start: datetime, duration_s: float, samplerate: int
             for t in tracks
         },
     }
-    (folder / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    if problem:
+        meta["problem"] = problem
+    write_json_atomic(folder / "meta.json", meta)
     return meta
 
 
 def read_meta(folder: Path) -> dict:
+    """meta.json – {} if there is none, {"damaged": True} if it can't be read (never silently empty)."""
     try:
-        return json.loads((folder / "meta.json").read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+        data = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {"damaged": True}
+    except FileNotFoundError:
         return {}
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        return {"damaged": True}
 
 
 def update_meta(folder: Path, **fields) -> None:
     meta = {**read_meta(folder), **fields}
-    (folder / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_json_atomic(folder / "meta.json", meta)
 
 
 def recording_start(folder: Path) -> datetime | None:
@@ -159,10 +251,12 @@ def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float 
     paused_time = paused_time or (lambda: 0.0)
     tracks = {}
     compute = recording = 0.0
+    if not has_audio(folder):
+        raise FileNotFoundError("Die Audiodateien dieser Aufnahme fehlen – wurden sie gelöscht?")
     for track, display_name in names.items():
         path = audio_file(folder, track)
         if path is None:
-            raise FileNotFoundError(f"Die Audiodatei der Spur «{display_name}» fehlt – wurde sie gelöscht?")
+            continue   # a rescued single track: transcribe what is there, the header says what is missing
         audio = load_audio(path, until_s)
         recording = max(recording, len(audio) / WHISPER_SAMPLERATE)
 
@@ -204,6 +298,11 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
     paragraphs, compute, recording = transcribe(folder, transcriber, names, progress=progress,
                                                 paused_time=paused_time)
     h = header(folder, model, compute, recording)
+    if missing := missing_tracks(folder):
+        h["Hinweis"] = "Unvollständig – keine Aufnahme von: " + ", ".join(names.get(t, t) for t in missing)
+    meta = read_meta(folder)
+    if meta.get("state") in (INCOMPLETE, STOP_TIMEOUT, INTERRUPTED):
+        h["Aufnahme"] = (h.get("Aufnahme") or "") + " (nicht vollständig aufgenommen)"
     if n := apply_corrections(paragraphs, corrections):
         h["Korrekturen"] = f"{n} automatisch ersetzt"
     path = save(folder, "transcript", paragraphs, f"Transkript {folder.name}", h, tracks=names)

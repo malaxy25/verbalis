@@ -54,9 +54,12 @@ dictionary once. No hurry – spelling dictionaries change rarely and slowly.
 
 ## Models
 
-- **Updates of a downloaded model** need nothing from us: before transcribing,
-  Verbalis compares the model files with the latest on Hugging Face and downloads
-  newer ones with progress and a notice (offline it uses what is there).
+- **Updates of a downloaded model** are offered to the user at start («Modell-Update
+  verfügbar») and only taken on confirmation, unless «Modell-Updates automatisch
+  übernehmen» is switched on. Models load from the approved revision on disk
+  (`~/.verbalis/models.json`); the previous revision stays for «Zurück auf vorherigen
+  Stand». For company use: compare a new revision with `verbalis compare` before
+  rolling it out.
 - **Flix** is served from our own repo `malaxy/flix-swissgerman-ct2`. The «Model check»
   workflow (3rd of every month) opens an issue «Newer version of a converted model
   available» when Flix-AI publishes new model files. Then:

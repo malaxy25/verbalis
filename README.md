@@ -203,13 +203,43 @@ To compare an old and a new Flix: the old conversion stays available as
 `malaxy/flix-swissgerman-ct2`, a fresh local conversion is used for
 `Flix-AI/flix-swissgerman-full`.
 
-## Privacy and law
+## Privacy, storage and law
 
-Recording a conversation without the consent of all participants is a criminal
-offence in Switzerland (StGB Art. 179ter). Verbalis asks for consent before
-every recording and stores it in `meta.json`. Recordings contain personal data;
-they are excluded from the repo via `.gitignore` and deleted after the retention
-period. See `BACKLOG.md` for what is still open before use at tocco.
+**What Verbalis does**
+
+- Records and transcribes **only on this computer**. Audio and transcripts are never
+  uploaded. Network access is limited to: update check (GitHub), model and dictionary
+  downloads (Hugging Face, LibreOffice on GitHub) – no recording data is sent.
+- **Storage:** `~/.verbalis/recordings/` in the user's profile (Windows:
+  `C:\Users\<name>\.verbalis`), readable with that user's permissions only, as far as the
+  operating system enforces it. A different folder can be set; Verbalis warns if it lies in a
+  folder synchronised by OneDrive, Dropbox, iCloud & co., because recordings would then be
+  copied to the cloud.
+- **Retention:** audio is compressed after transcription and deleted after the configured
+  number of days or when the size limit is exceeded; transcripts stay until deleted by hand.
+  Recordings without a transcript are never deleted automatically. Deleting a recording
+  removes its folder completely.
+- **Consent:** before every recording the user confirms that all participants agreed
+  (Swiss criminal law, StGB Art. 179ter). `meta.json` stores time, wording and version of
+  that confirmation – written at the start, so it survives a crash. Verbalis can't verify
+  consent itself; it records that the user confirmed it.
+- **Honest records:** `meta.json` states how a recording ended (complete, ended early by a
+  device error or full disk, not stopped cleanly, interrupted by a crash); the app shows it.
+- **Log export** for support contains no recordings or transcripts; the home path, the
+  names of the user and the others and all audio device names are removed.
+- **Updates** (app and models) only after confirmation; downloads are checked against the
+  size and SHA-256 published by GitHub. Models are loaded from a fixed, approved revision;
+  the previous one is kept for going back.
+
+**What Verbalis can't do – to be arranged by the organisation**
+
+- encryption of the disk (BitLocker / FileVault) and access to the computer
+- backups: whether and where `~/.verbalis` is backed up, and how long
+- the consent and information process for customer calls, and who is responsible for the data
+- what happens to recordings when an employee leaves or a device is replaced
+- code signing of the installers (see `BACKLOG.md`)
+
+Recordings contain personal data; they are excluded from the repo via `.gitignore`.
 
 ## Releases and installer
 

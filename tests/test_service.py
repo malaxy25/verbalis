@@ -26,13 +26,14 @@ class FakeRecorder:
         self.t0 = 0.0
 
     def start(self):
-        self.folder.mkdir(parents=True)
+        self.folder.mkdir(parents=True, exist_ok=True)   # the service creates it first
         self.t0 = time.monotonic() - 5  # pretend it has been running for 5 s
         for name in ("me", "others"):
             sf.write(self.folder / f"{name}.wav", np.zeros(48000, dtype=np.float32), 48000)
 
-    def stop(self):
+    def stop(self, timeout=5.0):
         self.stop_event.set()
+        return not getattr(self, "hangs", False)
 
     @property
     def running(self):
@@ -374,6 +375,7 @@ def test_model_update_is_downloaded_and_announced(monkeypatch):
     _patch_models(monkeypatch, revisions, lambda model: {"revision": "b" * 40, "changed": "2026-11-02T08:00"},
                   downloads)
     s = make_service()
+    s.save_settings({"model_auto_update": "on"})
     s._transcriber = object()                 # a loaded model of the old revision
     s._job = {"phase": "", "progress": 0.0}
     s._ensure_model("large-v3")
@@ -418,3 +420,46 @@ def test_models_have_readable_names():
     names = {m["id"]: m["name"] for m in make_service().models()}
     assert names["Flix-AI/flix-swissgerman-full"] == "Flix Schweizerdeutsch"
     assert names["large-v3-turbo"] == "Whisper large-v3 turbo"
+
+
+
+def test_model_updates_wait_for_approval_by_default(monkeypatch):
+    revisions, downloads = ["a" * 40], []
+    _patch_models(monkeypatch, revisions, lambda model: {"revision": "b" * 40, "changed": None}, downloads)
+    s = make_service()
+    assert s._s.model_auto_update == "off"
+    s._ensure_model("large-v3")
+    assert downloads == []                    # not without approval
+
+
+def test_model_update_on_request_and_state(monkeypatch):
+    revisions, downloads = ["a" * 40], []
+    _patch_models(monkeypatch, revisions, lambda model: {"revision": "b" * 40, "changed": "2026-11-02T08:00"},
+                  downloads)
+    s = make_service()
+    assert s.model_updates()["large-v3"]["revision"] == "bbbbbbb"
+    assert "large-v3" in s.state()["model_updates"]           # notice at start
+    s.dismiss_model_updates()
+    assert s.state()["model_updates"] == []
+    s.update_model("large-v3")
+    assert wait_until(lambda: s.state()["model_download"] is None)
+    assert downloads == ["large-v3"] and "aktualisiert" in s.state()["notice"]
+
+
+def test_model_rollback_from_settings(monkeypatch):
+    from verbalis.transcription import models as m
+    monkeypatch.setattr(m, "rollback", lambda model: "a" * 40)
+    s = make_service()
+    assert s.rollback_model("large-v3") == "a" * 40
+    assert "vorherigen Stand" in s.state()["notice"]
+
+
+def test_recordings_in_a_synced_folder_are_flagged(tmp_path):
+    from verbalis.settings import sync_warning
+    assert "synchronisierten" in sync_warning(tmp_path / "OneDrive - tocco AG" / "Verbalis")
+    assert sync_warning(tmp_path / "Dropbox" / "x")
+    assert sync_warning(tmp_path / "Library" / "Mobile Documents" / "x")
+    assert sync_warning(tmp_path / "Documents" / "Verbalis") is None
+    s = make_service()
+    s.save_settings({"recordings_dir": str(tmp_path / "OneDrive" / "Aufnahmen")})
+    assert s.settings()["storage_warning"]

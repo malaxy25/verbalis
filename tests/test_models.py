@@ -7,9 +7,60 @@ import pytest
 from verbalis.transcription import models
 
 
-def test_builtin_names_and_hf_ids_pass_through():
-    assert models.resolve("large-v3-turbo") == "large-v3-turbo"
-    assert models.resolve("Systran/faster-whisper-large-v3") == "Systran/faster-whisper-large-v3"
+def _cache(tmp_path, monkeypatch):
+    import huggingface_hub.constants as c
+    monkeypatch.setattr(c, "HF_HUB_CACHE", str(tmp_path / "hf"))
+    return tmp_path / "hf"
+
+
+def _snapshot(cache, repo, revision, sub=""):
+    folder = cache / ("models--" + repo.replace("/", "--"))
+    target = folder / "snapshots" / revision / sub
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "model.bin").write_bytes(revision.encode())
+    (folder / "refs").mkdir(exist_ok=True)
+    (folder / "refs" / "main").write_text(revision)
+    return target
+
+
+def test_downloaded_models_load_from_disk_without_asking_hugging_face(tmp_path, monkeypatch):
+    """Regression 0.7.11: faster-whisper fetched the newest model revision on every load."""
+    cache = _cache(tmp_path, monkeypatch)
+    folder = _snapshot(cache, "mobiuslabsgmbh/faster-whisper-large-v3-turbo", "a" * 40)
+    monkeypatch.setattr(models, "download", lambda *a, **k: pytest.fail("must not download"))
+    assert models.resolve("large-v3-turbo") == str(folder)        # a path, not a repo id
+
+
+def test_model_not_on_disk_is_downloaded_first(tmp_path, monkeypatch):
+    cache = _cache(tmp_path, monkeypatch)
+    calls = []
+
+    def fake_download(model, progress=None):
+        calls.append(model)
+        _snapshot(cache, "Systran/faster-whisper-large-v3", "b" * 40)
+        models._activate(model, "b" * 40)
+    monkeypatch.setattr(models, "download", fake_download)
+    assert models.resolve("large-v3").endswith("b" * 40) and calls == ["large-v3"]
+
+
+def test_update_keeps_previous_revision_for_rollback(tmp_path, monkeypatch):
+    cache = _cache(tmp_path, monkeypatch)
+    _snapshot(cache, "Systran/faster-whisper-large-v3", "a" * 40)
+    models._activate("large-v3", "a" * 40)
+    _snapshot(cache, "Systran/faster-whisper-large-v3", "b" * 40)     # an update arrives
+    models._activate("large-v3", "b" * 40)
+    assert models.active_revision("large-v3") == "b" * 40
+    assert models.previous_revision("large-v3") == "a" * 40
+    assert models.rollback("large-v3") == "a" * 40
+    assert models.resolve("large-v3").endswith("a" * 40)              # loads the old one again
+    assert models.previous_revision("large-v3") == "b" * 40           # and can go forward again
+
+
+def test_rollback_without_previous_revision_explains(tmp_path, monkeypatch):
+    cache = _cache(tmp_path, monkeypatch)
+    _snapshot(cache, "Systran/faster-whisper-large-v3", "a" * 40)
+    with pytest.raises(models.ModelError, match="kein vorheriger Stand"):
+        models.rollback("large-v3")
 
 
 def test_converted_model_is_preferred(home):
@@ -48,7 +99,6 @@ def test_repo_check():
 
 def test_download_sources():
     assert models.repo_for("Flix-AI/flix-swissgerman-full") == "malaxy/flix-swissgerman-ct2"
-    assert models.resolve("Flix-AI/flix-swissgerman-full") == "malaxy/flix-swissgerman-ct2"
     assert models.repo_for("large-v3") == "Systran/faster-whisper-large-v3"
     assert models.repo_for("someone/faster-model") == "someone/faster-model"
 
@@ -105,6 +155,7 @@ def test_local_revision_from_cache(tmp_path, monkeypatch):
     assert models.local_revision("large-v3") is None
     folder = tmp_path / "models--Systran--faster-whisper-large-v3"
     (folder / "snapshots" / ("a" * 40)).mkdir(parents=True)
+    (folder / "snapshots" / ("a" * 40) / "model.bin").write_bytes(b"x")
     (folder / "refs").mkdir()
     (folder / "refs" / "main").write_text("a" * 40)
     rev = models.local_revision("large-v3")
@@ -184,11 +235,13 @@ def test_subfolder_model(tmp_path, monkeypatch):
     (snap.parents[1] / "refs" / "main").write_text("abc")
     assert models.is_local(gcoli)
 
+    assert models.resolve(gcoli) == str(snap / "ct2")         # the CTranslate2 subfolder, from disk
+
     asked = {}
 
     def fake_snapshot(repo, allow_patterns):
         asked["patterns"] = allow_patterns
         return str(snap)
     monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot)
-    assert models.resolve(gcoli) == str(snap / "ct2")
+    models.download(gcoli)
     assert all(p.startswith("ct2/") for p in asked["patterns"])

@@ -47,6 +47,9 @@ seconds on Windows, Linux and macOS.
   - shell scripts (the macOS update swap) can't run on Windows → `skipif(sys.platform == "win32")`
   - on GitHub's Mac the real system audio helper is present, which changes the device list →
     device tests fix `mac_tap.available` explicitly (`use(..., system_audio=...)` in `test_devices.py`)
+- **Fault injection** for robustness (`test_robustness.py`): a recorder that doesn't stop
+  (`FakeRecorder.hangs`), device errors, a WAV left open by a crash (header sizes zeroed),
+  a cut-off `meta.json`, faked free disk space (`shutil.disk_usage` patched), a lost track.
 
 ## Not covered by automated tests
 
@@ -67,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-115 tests in 15 files.
+138 tests in 16 files.
 
 ### `test_app.py` (7)
 
@@ -137,7 +140,7 @@ Word error rate (WER) and loading references for model comparisons.
 - **Reference from corrected transcript**
 - **Reference from text file**
 
-### `test_logs.py` (4)
+### `test_logs.py` (5)
 
 Reading, filtering and exporting the log without personal data.
 
@@ -145,6 +148,7 @@ Reading, filtering and exporting the log without personal data.
 - **Errors only**
 - **No log yet**
 - **Export is anonymised and without personal settings**
+- **Export removes device and person names**
 
 ### `test_mac_tap.py` (6)
 
@@ -167,11 +171,14 @@ Migration from «Mitschrift» (≤ 0.6) to Verbalis.
 - **Existing new files are not overwritten**
 - **Missing custom folder falls back to default**
 
-### `test_models.py` (15)
+### `test_models.py` (18)
 
 Model names, download sources and subfolders, cache detection, updates, conversion checks.
 
-- **Builtin names and hf ids pass through**
+- **Downloaded models load from disk without asking hugging face** – Regression 0.7.11: faster-whisper fetched the newest model revision on every load.
+- **Model not on disk is downloaded first**
+- **Update keeps previous revision for rollback**
+- **Rollback without previous revision explains**
 - **Converted model is preferred**
 - **Local folder without model bin**
 - **Unknown name**
@@ -196,7 +203,25 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Track pads dropout**
 - **Pause writes nothing and pads no silence**
 
-### `test_service.py` (22)
+### `test_robustness.py` (13)
+
+Robustness of recordings: honest end states, no overwriting, crash recovery, disk space, shutdown.
+
+- **Meta is written atomically and damage is detected**
+- **Wav left open by a crash is repaired** – Regression guard: after a crash the WAV header still says 0 bytes of audio.
+- **New recording never reuses a folder**
+- **Recorder refuses to overwrite a wav**
+- **Complete recording is marked complete**
+- **Stop timeout is not treated as success**
+- **Device error keeps audio and marks incomplete**
+- **Single rescued track is transcribed and flagged**
+- **Interrupted recording is recovered at start**
+- **No recording without disk space**
+- **Low disk space warns and finally stops the recording**
+- **Shutdown during pause ends the worker**
+- **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
+
+### `test_service.py` (26)
 
 App flow without a window: recording → queue → transcript.
 
@@ -222,6 +247,10 @@ App flow without a window: recording → queue → transcript.
 - **No download when current or offline**
 - **Model updates are listed and cached**
 - **Models have readable names**
+- **Model updates wait for approval by default**
+- **Model update on request and state**
+- **Model rollback from settings**
+- **Recordings in a synced folder are flagged**
 
 ### `test_spelling.py` (5)
 
@@ -241,7 +270,7 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Long pause starts new paragraph**
 - **Markdown format**
 
-### `test_updates.py` (13)
+### `test_updates.py` (15)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -258,4 +287,6 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Mac update swaps bundle after app closed**
 - **Mac update rolls back if new app missing**
 - **Check picks the asset for this platform**
+- **Download checks sha256 and size**
+- **Check reads the github digest and name**
 <!-- catalog:end -->

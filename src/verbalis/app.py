@@ -112,6 +112,15 @@ class Api:
     def open_model_page(self, model):
         return self._call(self._s.open_model_page, model)
 
+    def update_model(self, model):
+        return self._call(self._s.update_model, model)
+
+    def rollback_model(self, model):
+        return self._call(self._s.rollback_model, model)
+
+    def dismiss_model_updates(self):
+        return self._call(self._s.dismiss_model_updates)
+
     def dismiss_notice(self):
         return self._call(self._s.dismiss_notice)
 
@@ -174,7 +183,7 @@ class Api:
             target = Path(result if isinstance(result, str) else result[0])
         if target.suffix.lower() != ".zip":
             target = target.with_suffix(".zip")
-        return {"path": str(logs.export(target, self._s.settings()))}
+        return {"path": str(logs.export(target, self._s.settings(), redact=self._s.device_names_for_redaction()))}
 
 
 # ---------------------------------------------------------------- window size and position

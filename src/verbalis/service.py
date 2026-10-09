@@ -38,6 +38,17 @@ from .transcription.base import Segment
 from .transcription.models import verbalis_home
 
 VALID_ID = re.compile(r"^[\w\-]+$")
+
+# Disk space: two 48 kHz 16-bit tracks ≈ 11.5 MB per minute before compression
+MB_PER_MINUTE = 2 * 48_000 * 2 * 60 / 1e6
+MIN_FREE_TO_START_MB = 500     # refuse to start below this
+WARN_FREE_MB = 2_000           # show how many minutes are left below this
+STOP_FREE_MB = 150             # stop and save the recording below this
+DISK_CHECK_EVERY_S = 5
+
+
+class ShuttingDown(Exception):
+    """Raised in the worker when the app closes while it waits (e.g. during a pause)."""
 CLEANUP = ":cleanup"          # queue task (not a valid recording ID)
 CLEANUP_EVERY_S = 3600        # additionally every hour while the app stays open
 SOUND_DB = -55.0              # louder than this counts as "something is coming through"
@@ -90,13 +101,22 @@ class Service:
         self._transcriber_model: str | None = None
         self._manual_pause = False
         self._speller = speller or Speller()   # loads the dictionary on first use
+        self._stopping = threading.Event()      # set by shutdown(); waiting loops give up
+        self._disk = {"checked": 0.0, "free_mb": None}
         self._update: dict | None = None        # result of the last update check
         self._notice: str | None = None         # neutral information for the UI, e.g. a model update
         self._model_updates: tuple[float, dict] | None = None   # (checked at, result) – cached
+        self._model_updates_dismissed = False
+        self._model_download: dict | None = None  # {"model", "progress"} while an update downloads
+        self._transcriber_revision: str | None = None
         self._update_progress: float | None = None
 
         self._worker = threading.Thread(target=self._work, name="transcription", daemon=True)
         self._worker.start()
+        try:
+            self._recover_interrupted()   # before anything else touches the recordings
+        except OSError:
+            log.exception("Checking for interrupted recordings failed")
         if cleanup_on_start:
             self._queue.put(CLEANUP)  # check old audio files
         if check_updates_on_start and self._s.update_check == "on":
@@ -133,6 +153,16 @@ class Service:
     def settings(self) -> dict:
         return self._s.as_dict()
 
+    def device_names_for_redaction(self) -> list[str]:
+        """Names of all audio devices – removed from a log export (they often contain personal names)."""
+        names = [self._s.microphone, self._s.speakers]
+        try:
+            found = self._list_devices() or {}
+            names += found.get("microphones", []) + found.get("speakers", [])
+        except Exception:
+            pass
+        return [n for n in names if n]
+
     def save_settings(self, data: dict) -> dict:
         with self._lock:
             old = self._s
@@ -149,7 +179,7 @@ class Service:
     def models(self) -> list[dict]:
         """Recommended and own models, with whether they are already on this computer."""
         from .transcription.models import (DISPLAY_NAMES, RECOMMENDED, SIZE_GB, converted_models, is_local,
-                                           local_revision, page_url, repo_for)
+                                           local_revision, page_url, previous_revision, repo_for)
 
         entries = list(RECOMMENDED) + [(m, "selbst konvertiert") for m in sorted(
             set(converted_models()) - {m for m, _ in RECOMMENDED})]
@@ -166,7 +196,9 @@ class Service:
                 status = f"wird bei Bedarf heruntergeladen (ca. {size:.1f} GB)".replace(".", ",", 1)
             else:
                 status = "wird bei Bedarf heruntergeladen"
+            cached = self._model_updates[1] if self._model_updates else {}
             entry = {"id": model, "name": DISPLAY_NAMES.get(model, model), "description": description,
+                     "previous": bool(local and previous_revision(model)), "update": cached.get(model),
                      "status": status, "local": local,
                      "size_gb": size, "label": f"{model} – {status}", "page": page_url(model),
                      "revision": None, "loaded": None, "source": "Hugging Face"}
@@ -222,9 +254,11 @@ class Service:
                 return
             local = is_local(model)
         except Exception:
-            return  # can't tell – faster-whisper will download it itself
+            return  # can't tell – resolve() will download it when loading
         before = local_revision(model) if local else None
         if local:
+            if self._s.model_auto_update != "on":
+                return   # updates only on request (update notice / settings)
             try:
                 update = check_update(model)
             except Exception as e:  # offline: use what is there
@@ -262,22 +296,25 @@ class Service:
             if not consent:
                 raise RuntimeError("Bitte zuerst bestätigen, dass alle Teilnehmenden der Aufnahme zugestimmt haben.")
 
+            free = self._free_mb(force=True)
+            if free is not None and free < MIN_FREE_TO_START_MB:
+                raise RuntimeError(f"Zu wenig Speicherplatz für eine Aufnahme (noch {free:.0f} MB frei). "
+                                   "Bitte Platz schaffen, z.B. alte Audiodateien löschen.")
             devices = self._select_devices(microphone or None, speakers or None)
             start = datetime.now().astimezone()
-            folder = self._s.recordings / start.strftime("%Y-%m-%d_%H%M%S")
+            folder = self._new_folder(start)
+            consent = datetime.now().astimezone().isoformat(timespec="seconds")
+            names = {"me": devices.microphone.name, "others": devices.loopback.name}
             rec = self._recorder_factory(devices.microphone, devices.loopback, folder)
+            # consent and start are on disk before the first sample – they survive a crash
+            pipeline.start_meta(folder, start, getattr(rec, "samplerate", 48_000), consent, names)
             rec.start()
 
             self._rec = rec
             self._recording_error = None
             self._others_last_sound = time.monotonic()
-            self._rec_info = {
-                "id": folder.name,
-                "folder": folder,
-                "start": start,
-                "consent": datetime.now().astimezone().isoformat(timespec="seconds"),
-                "devices": {"me": devices.microphone.name, "others": devices.loopback.name},
-            }
+            self._rec_info = {"id": folder.name, "folder": folder, "start": start, "consent": consent,
+                              "devices": names}
             # Remember the chosen devices for next time
             if (microphone, speakers) != (self._s.microphone, self._s.speakers):
                 self.save_settings({"microphone": microphone, "speakers": speakers})
@@ -296,23 +333,94 @@ class Service:
             self._rec.resume()
             self._others_last_sound = time.monotonic()  # silence during the pause doesn't count
 
-    def stop_recording(self) -> str | None:
+    def stop_recording(self, reason: str | None = None) -> str | None:
         with self._lock:
             rec, info = self._rec, self._rec_info
             if rec is None:
                 return None
-            rec.stop()
             self._rec, self._rec_info = None, {}
-
-        errors = [repr(e) for e in rec.errors]
-        if errors:
-            self._recording_error = "Die Aufnahme wurde wegen eines Gerätefehlers abgebrochen: " + "; ".join(errors)
-        duration = rec.active_seconds()
-        pipeline.write_meta(info["folder"], info["start"], duration, rec.samplerate,
-                            info["consent"], info["devices"], rec.status())
-        if duration >= 1:
+        state = self._finish(rec, info, reason)
+        if state in (pipeline.COMPLETE, pipeline.INCOMPLETE) and rec.active_seconds() >= 1 \
+                and pipeline.has_audio(info["folder"]):
             self.transcribe(info["id"])
         return info["id"]
+
+    def _finish(self, rec, info: dict, reason: str | None = None) -> str:
+        """Stop the recorder and record honestly in meta.json how the recording ended."""
+        ended = rec.stop()
+        errors = [repr(e) for e in rec.errors]
+        if not ended:
+            state = pipeline.STOP_TIMEOUT
+            problem = ("Eine Spur liess sich nicht rechtzeitig beenden. Das Audio bis dahin ist gesichert, "
+                       "wurde aber nicht automatisch transkribiert – bitte prüfen.")
+        elif errors:
+            state, problem = pipeline.INCOMPLETE, "Gerätefehler: " + "; ".join(errors)
+        elif reason:
+            state, problem = pipeline.INCOMPLETE, reason
+        else:
+            state, problem = pipeline.COMPLETE, None
+        if problem:
+            self._recording_error = ("Die Aufnahme wurde vorzeitig beendet. " if state != pipeline.STOP_TIMEOUT
+                                     else "") + problem
+            log.warning("Recording %s ended as %s: %s", info["id"], state, problem)
+        try:
+            pipeline.write_meta(info["folder"], info["start"], rec.active_seconds(), rec.samplerate,
+                                info["consent"], info["devices"], rec.status(), state, problem)
+        except OSError as e:  # e.g. disk full – the audio files are still there
+            log.exception("Writing meta.json for %s failed", info["id"])
+            self._recording_error = f"Die Angaben zur Aufnahme konnten nicht gespeichert werden ({e})."
+        return state
+
+    def _new_folder(self, start: datetime) -> Path:
+        """A new, empty recording folder – never an existing one (two starts in the same second)."""
+        base = self._s.recordings / start.strftime("%Y-%m-%d_%H%M%S")
+        base.parent.mkdir(parents=True, exist_ok=True)
+        for n in range(1, 100):
+            folder = base if n == 1 else base.with_name(f"{base.name}_{n}")
+            try:
+                folder.mkdir()
+                return folder
+            except FileExistsError:
+                continue
+        raise RuntimeError("Kein freier Name für den Aufnahmeordner gefunden.")
+
+    def _free_mb(self, force: bool = False) -> float | None:
+        """Free space where recordings are stored (checked at most every few seconds)."""
+        now = time.monotonic()
+        if force or now - self._disk["checked"] > DISK_CHECK_EVERY_S:
+            try:
+                folder = self._s.recordings
+                while not folder.exists() and folder != folder.parent:
+                    folder = folder.parent
+                self._disk["free_mb"] = shutil.disk_usage(folder).free / 1e6
+            except OSError:
+                self._disk["free_mb"] = None
+            self._disk["checked"] = now
+        return self._disk["free_mb"]
+
+    def _recover_interrupted(self) -> None:
+        """At start: recordings still marked as running were cut off by a crash or power loss.
+
+        Repair the WAV headers so the audio up to that point is readable and mark them,
+        so they show up as interrupted instead of looking finished.
+        """
+        base = self._s.recordings
+        if not base.exists():
+            return
+        for folder in base.iterdir():
+            if not folder.is_dir() or pipeline.read_meta(folder).get("state") != pipeline.RECORDING:
+                continue
+            for track in pipeline.TRACKS:
+                wav = folder / f"{track}.wav"
+                if wav.exists():
+                    try:
+                        pipeline.repair_wav(wav)
+                    except OSError:
+                        log.exception("Repairing %s failed", wav)
+            pipeline.update_meta(folder, state=pipeline.INTERRUPTED,
+                                 problem="Verbalis wurde während der Aufnahme beendet (Absturz oder Stromausfall). "
+                                         "Das Audio bis dahin ist gesichert.")
+            log.warning("Recording %s was interrupted – marked and repaired", folder.name)
 
     # ------------------------------------------------------------ transcription
 
@@ -327,11 +435,67 @@ class Service:
         self._queue.put(recording_id)
 
     def _get_model(self, model: str):
-        if self._transcriber is None or self._transcriber_model != model:
+        from .transcription.models import active_revision
+
+        try:
+            revision = active_revision(model)
+        except Exception:
+            revision = None
+        if (self._transcriber is None or self._transcriber_model != model
+                or self._transcriber_revision != revision):
             self._transcriber = None  # free the old one first
             self._transcriber = self._transcriber_factory(model)
             self._transcriber_model = model
+            self._transcriber_revision = revision
         return self._transcriber
+
+    # ------------------------------------------------------------ model updates on request
+
+    def update_model(self, model: str) -> None:
+        """Download the newer revision of a model in the background and make it the active one."""
+        with self._lock:
+            if self._model_download is not None:
+                raise RuntimeError("Es wird bereits ein Modell aktualisiert.")
+            self._model_download = {"model": model, "progress": 0.0}
+        threading.Thread(target=self._update_model, args=(model,), name="model-update", daemon=True).start()
+
+    def _update_model(self, model: str) -> None:
+        from .transcription.models import SIZE_GB, download, local_revision
+
+        size = SIZE_GB.get(model)
+
+        def progress(done: int) -> None:
+            with self._lock:
+                if self._model_download is not None and size:
+                    self._model_download["progress"] = min(done / 1e9 / size, 0.99)
+
+        before = local_revision(model)
+        try:
+            download(model, progress)
+            after = local_revision(model)
+            self._model_updates = None
+            if after and (not before or after["revision"] != before["revision"]):
+                self._notice = (f"Das Modell {model} wurde aktualisiert (Stand {after['revision'][:7]}). "
+                                "Falls es schlechter transkribiert: in den Einstellungen zurück auf den vorherigen Stand.")
+                log.info("Model %s updated on request → %s", model, after["revision"][:7])
+        except Exception as e:
+            log.exception("Model update of %s failed", model)
+            self._notice = f"Das Modell-Update ist fehlgeschlagen; der bisherige Stand bleibt aktiv. ({e})"
+        finally:
+            with self._lock:
+                self._model_download = None
+
+    def rollback_model(self, model: str) -> str:
+        from .transcription.models import rollback
+
+        revision = rollback(model)
+        self._model_updates = None
+        self._notice = f"Das Modell {model} verwendet wieder den vorherigen Stand ({revision[:7]})."
+        log.info("Model %s rolled back to %s", model, revision[:7])
+        return revision
+
+    def dismiss_model_updates(self) -> None:
+        self._model_updates_dismissed = True
 
     # ------------------------------------------------------------ pause
 
@@ -354,6 +518,8 @@ class Service:
         """Call from the worker thread: blocks while paused."""
         since = None
         while True:
+            if self._stopping.is_set():
+                raise ShuttingDown()
             with self._lock:
                 if self._pause_reason() is None:
                     if since is not None and self._job:
@@ -416,7 +582,10 @@ class Service:
             if recording_id == CLEANUP:
                 self._cleanup_safely()
                 continue
-            self._wait_while_paused()
+            try:
+                self._wait_while_paused()
+            except ShuttingDown:
+                return
             with self._lock:
                 if recording_id in self._queued:
                     self._queued.remove(recording_id)
@@ -460,6 +629,11 @@ class Service:
                     self._path(recording_id), tr, s.model, names, progress, paused_time, corrections)
                 if duration > 0 and compute > 0:
                     self._remember_factor(key, compute / duration)
+            except ShuttingDown:
+                log.info("Transcription of %s stopped because Verbalis is closing", recording_id)
+                with self._lock:
+                    self._job = None
+                return
             except Exception as ex:  # show the error per recording, the worker keeps running
                 log.exception("Transcription of %s failed", recording_id)
                 with self._lock:
@@ -668,6 +842,12 @@ class Service:
             log.info("Update check: latest %s, current %s", self._update["latest"], __version__)
         except Exception as e:  # offline or GitHub unreachable – not worth bothering the user
             log.warning("Update check failed: %s", e)
+        try:
+            found = self.model_updates()
+            if found:
+                log.info("Model updates available: %s", ", ".join(found))
+        except Exception as e:
+            log.warning("Model update check failed: %s", e)
 
     def check_updates(self) -> dict:
         """Manual check from the settings."""
@@ -687,6 +867,8 @@ class Service:
             raise RuntimeError("Es ist kein Update verfügbar.")
         if not info.get("can_install"):
             raise RuntimeError("In dieser Installation (Entwicklungsversion) bitte über git aktualisieren.")
+        if not updates.expected_name(info):
+            raise RuntimeError(f"Unerwartete Update-Datei «{info.get('installer_name')}» – sie wird nicht ausgeführt.")
         if self._rec is not None or self._job is not None or self._queued:
             raise RuntimeError("Bitte zuerst die Aufnahme beenden bzw. die Transkription abwarten.")
         import tempfile
@@ -703,7 +885,10 @@ class Service:
             self._update_progress = fraction
 
         try:
-            updates.download_installer(info["installer_url"], target, progress)
+            updates.download_installer(info["installer_url"], target, progress,
+                                       sha256=info.get("installer_sha256"), size=info.get("installer_size"))
+            if not info.get("installer_sha256"):
+                log.warning("Release asset has no SHA-256 from GitHub – size checked only")
             if bundle is not None:
                 # unpack next to the running app (same disk, so the final move is instant)
                 new_app = updates.unpack_mac_update(target, bundle.parent / ".verbalis-update")
@@ -768,6 +953,9 @@ class Service:
                     "start": meta.get("start") or folder.name,
                     "duration_s": meta.get("duration_s"),
                     "status": self._status(folder.name, folder),
+                    "state": "damaged" if meta.get("damaged") else meta.get("state", pipeline.COMPLETE),
+                    "problem": meta.get("problem"),
+                    "missing_tracks": pipeline.missing_tracks(folder) if audio else [],
                     "error": self._errors.get(folder.name),
                     "audio": bool(audio) or recording,
                     "audio_mb": round(audio / MB, 1),
@@ -830,10 +1018,21 @@ class Service:
             pause = self._pause_reason()
         if rec is not None and recording is None:
             self.stop_recording()
+        elif recording is not None:
+            free = self._free_mb()
+            if free is not None and free < STOP_FREE_MB:
+                self.stop_recording(reason=f"Der Speicher ist fast voll (noch {free:.0f} MB). "
+                                           "Die Aufnahme wurde gestoppt und bis hierhin gesichert.")
+                recording = None
+            elif free is not None and free < WARN_FREE_MB:
+                recording["disk_minutes_left"] = max(int((free - STOP_FREE_MB) / MB_PER_MINUTE), 0)
         update = self._update
         return {"recording": recording, "job": job, "queued": queued, "pause": pause,
                 "recording_error": self._recording_error, "notice": self._notice,
                 "update": {"latest": update["latest"]} if update and update.get("available") else None,
+                "model_updates": (sorted(self._model_updates[1]) if self._model_updates and self._model_updates[1]
+                                  and not self._model_updates_dismissed else []),
+                "model_download": dict(self._model_download) if self._model_download else None,
                 "update_progress": self._update_progress}
 
     def shutdown(self, wait_s: float = 0.0) -> None:
@@ -841,12 +1040,11 @@ class Service:
 
         wait_s: how long to wait for the background thread to end (tests).
         """
+        self._stopping.set()
         if self._rec is not None:
             rec, info = self._rec, self._rec_info
-            rec.stop()
             self._rec, self._rec_info = None, {}
-            pipeline.write_meta(info["folder"], info["start"], rec.active_seconds(), rec.samplerate,
-                                info["consent"], info["devices"], rec.status())
+            self._finish(rec, info)
         self._queue.put(None)
         if wait_s:
             self._worker.join(wait_s)

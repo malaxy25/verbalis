@@ -68,28 +68,61 @@ def check(timeout: float = 8.0, opener: Callable = urllib.request.urlopen) -> di
         "notes": data.get("body") or "",
         "page": data.get("html_url") or RELEASES_PAGE,
         "installer_url": installer.get("browser_download_url") if installer else None,
+        "installer_name": installer.get("name") if installer else None,
+        "installer_size": installer.get("size") if installer else None,
+        # GitHub computes a SHA-256 for every release asset – detects damaged or swapped downloads
+        "installer_sha256": _sha256_of(installer.get("digest")) if installer else None,
         "installer_mb": round(installer.get("size", 0) / 1e6) if installer else None,
         "can_install": bool(installer) and is_installed() and (sys.platform == "win32" or app_bundle() is not None),
         "platform": sys.platform,
     }
 
 
+def _sha256_of(digest: str | None) -> str | None:
+    return digest.split(":", 1)[1].lower() if digest and digest.lower().startswith("sha256:") else None
+
+
 def download_installer(url: str, target: Path, progress: Callable[[float], None] | None = None,
-                       opener: Callable = urllib.request.urlopen) -> Path:
-    """Download the installer to `target`; progress(fraction 0..1)."""
+                       opener: Callable = urllib.request.urlopen, sha256: str | None = None,
+                       size: int | None = None) -> Path:
+    """Download the installer to `target`; progress(fraction 0..1).
+
+    Checks size and SHA-256 (from the GitHub release) before the file is used; a
+    mismatch deletes it. This catches damaged and swapped downloads. It does not
+    protect against a compromised GitHub account – only code signing does.
+    """
+    import hashlib
+
     request = urllib.request.Request(url, headers={"User-Agent": f"Verbalis/{__version__}"})
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".part")
+    hasher = hashlib.sha256()
     with opener(request, timeout=60) as response, tmp.open("wb") as f:
         total = int(response.headers.get("Content-Length") or 0)
         done = 0
         while chunk := response.read(1 << 20):
             f.write(chunk)
+            hasher.update(chunk)
             done += len(chunk)
             if progress and total:
                 progress(done / total)
+    problem = None
+    if size and done != size:
+        problem = f"unvollständig ({done:,} statt {size:,} Bytes)"
+    elif sha256 and hasher.hexdigest() != sha256:
+        problem = "die Prüfsumme stimmt nicht mit der von GitHub überein"
+    if problem:
+        tmp.unlink(missing_ok=True)
+        raise RuntimeError(f"Das heruntergeladene Update ist nicht in Ordnung: {problem}. Es wurde nicht ausgeführt.")
     tmp.replace(target)
     return target
+
+
+def expected_name(info: dict) -> bool:
+    """The asset must be the Verbalis update for exactly the announced version and this platform."""
+    name, version = info.get("installer_name") or "", info.get("latest") or ""
+    suffix = ASSET_SUFFIX.get(sys.platform, "")
+    return bool(version) and name == f"Verbalis-{version}{suffix}"
 
 
 # ---------------------------------------------------------------- macOS: swap the app bundle

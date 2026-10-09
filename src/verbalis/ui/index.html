@@ -208,6 +208,16 @@
     background: var(--amber-soft); color: var(--ink);
   }
   .silent-hint[hidden] { display: none; }
+  .problem-box {
+    margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; border-left: 3px solid var(--amber);
+    background: var(--surface-2); color: var(--ink); font-size: 14px;
+  }
+  .problem-box strong { display: block; margin-bottom: 2px; }
+  .flag { font-size: 11px; font-weight: 600; color: var(--amber); white-space: nowrap; }
+  .disk-hint { grid-column: 1 / -1; margin: 0; color: var(--amber); font-size: 14px; }
+  .disk-hint[hidden] { display: none; }
+  .warning-text { color: var(--amber) !important; }
+  .card-actions { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
   .notice {
     grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: 8px;
     background: var(--limmat-soft); color: var(--ink); display: flex; gap: 12px; align-items: flex-start;
@@ -387,6 +397,7 @@
   <ol class="list" id="list"></ol>
   <footer>
     <button type="button" class="update-banner" id="btn-update" hidden></button>
+    <button type="button" class="update-banner" id="btn-model-update" hidden></button>
     <button type="button" id="btn-settings">Einstellungen</button>
     <button type="button" id="btn-folder">Aufnahmeordner öffnen</button>
     <a href="#" class="version" id="version" title="Was ist neu? Versionshinweise auf GitHub öffnen"></a>
@@ -434,6 +445,7 @@
     </label>
 
     <p class="silent-hint" id="silent-hint" role="status" hidden></p>
+    <p class="disk-hint" id="disk-hint" role="status" hidden></p>
     <p class="notice" id="notice" role="status" hidden><span id="notice-text"></span><button type="button" id="btn-notice-close" aria-label="Hinweis schliessen" title="Schliessen">×</button></p>
     <p class="message" id="message" role="alert" hidden></p>
   </section>
@@ -519,7 +531,8 @@
     </label>
     <div class="field">
       <span>Updates</span>
-      <label class="consent-like"><input type="checkbox" name="update_check"> Beim Start nach einer neuen Version suchen</label>
+      <label class="consent-like"><input type="checkbox" name="update_check"> Beim Start nach neuen Versionen von Verbalis und den Modellen suchen</label>
+      <label class="consent-like"><input type="checkbox" name="model_auto_update"> Modell-Updates automatisch übernehmen (sonst erst nach Bestätigung)</label>
       <div class="field-row">
         <button type="button" class="action" id="btn-check-update">Jetzt prüfen</button>
         <small id="update-result">Fragt bei GitHub nach der neuesten Version. Dabei wird nichts über dich übermittelt.</small>
@@ -657,6 +670,7 @@ function renderList() {
       element("span", { class: "date" }, shortDate(a)),
       element("span", { class: "duration" }, a.duration_s != null ? timeText(a.duration_s) : ""),
       element("span", { class: `status ${statusClass}` }, STATUS_TEXT[a.status] || ""),
+      STATE_SHORT[a.state] ? element("span", { class: "flag", title: STATE_TEXT[a.state] }, STATE_SHORT[a.state]) : null,
     );
     list.append(element("li", {}, button));
   }
@@ -737,6 +751,7 @@ async function renderContent(force = false) {
     case "none":
       content.replaceChildren(element("div", { class: "empty" },
         element("h2", {}, "Noch kein Transkript"),
+        problemBox(a),
         element("p", {}, a.audio
           ? "Für diese Aufnahme gibt es noch kein Transkript, zum Beispiel weil die App während der Transkription geschlossen wurde."
           : "Das Audio dieser Aufnahme wurde gelöscht, ein Transkript lässt sich nicht mehr erstellen."),
@@ -748,6 +763,24 @@ async function renderContent(force = false) {
       await renderTranscript(a);
       return;
   }
+}
+
+const STATE_SHORT = { incomplete: "unvollständig", interrupted: "unterbrochen", stop_timeout: "prüfen", damaged: "Angaben defekt" };
+const STATE_TEXT = {
+  incomplete: "Die Aufnahme wurde vorzeitig beendet.",
+  interrupted: "Die Aufnahme wurde unterbrochen.",
+  stop_timeout: "Die Aufnahme liess sich nicht sauber beenden.",
+  damaged: "Die Angaben zu dieser Aufnahme (meta.json) sind beschädigt; das Audio ist davon nicht betroffen.",
+};
+
+function problemBox(a) {
+  const missing = (a.missing_tracks || []).map((t) => t === "me" ? (state.settings.name || "Ich") : (state.settings.others || "Gegenüber"));
+  if (!STATE_TEXT[a.state] && !missing.length) return null;
+  return element("div", { class: "problem-box", role: "note" },
+    element("strong", {}, STATE_TEXT[a.state] || "Diese Aufnahme ist unvollständig."),
+    a.problem ? element("span", {}, a.problem + " ") : null,
+    missing.length ? element("span", {}, `Es fehlt die Spur von: ${missing.join(", ")}.`) : null,
+  );
 }
 
 function folderButton(id) {
@@ -776,6 +809,7 @@ async function renderTranscript(a) {
 
   const header = element("header", { class: "transcript-header" },
     element("h2", {}, longDate(a)),
+    problemBox(a),
     headerList,
     element("div", { class: "actions" },
       copyButton,
@@ -993,6 +1027,7 @@ function showRecording(recording) {
     setLevel("others", recording.levels.others);
   }
   showSilentHint(recording);
+  showDiskHint(recording);
 }
 
 async function togglePauseRecording() {
@@ -1010,6 +1045,16 @@ async function togglePauseRecording() {
 }
 
 const SILENT_AFTER_S = 60;
+
+function showDiskHint(recording) {
+  const hint = $("disk-hint");
+  const minutes = recording ? recording.disk_minutes_left : undefined;
+  hint.hidden = minutes == null;
+  if (minutes != null) {
+    hint.textContent = `Wenig Speicherplatz: noch etwa ${minutes} Minuten Aufnahme möglich. `
+      + "Bei vollem Speicher stoppt Verbalis die Aufnahme und sichert sie.";
+  }
+}
 
 function showSilentHint(recording) {
   const hint = $("silent-hint");
@@ -1091,6 +1136,7 @@ async function poll() {
     if (z.recording_error) showMessage(z.recording_error);
     state.lastState = z;
     showUpdateBanner(z);
+    showModelBanner(z);
     $("notice").hidden = !z.notice;
     if (z.notice) $("notice-text").textContent = z.notice;
     showProgress(z);
@@ -1212,7 +1258,7 @@ function badge(text, kind) {
 }
 
 function modelCard(m, selected) {
-  const update = (state.modelUpdates || {})[m.id];
+  const update = (state.modelUpdates || {})[m.id] || m.update;
   const radio = element("input", { type: "radio", name: "model_choice", value: m.id });
   radio.checked = selected;
   const details = [];
@@ -1220,7 +1266,8 @@ function modelCard(m, selected) {
   else if (m.local) details.push(element("span", {}, m.source === "Hugging Face" ? "Auf diesem PC" : `Auf diesem PC (${m.source})`));
   if (update) {
     details.push(element("span", { class: "update" },
-      `Update verfügbar: Stand ${update.revision} vom ${dateText(update.changed)} – wird beim nächsten Transkribieren geladen`));
+      `Update verfügbar: Stand ${update.revision} vom ${dateText(update.changed)}`
+      + (state.settings.model_auto_update === "on" ? " – wird beim nächsten Transkribieren geladen" : "")));
   }
   return element("label", { class: "model-card" },
     radio,
@@ -1233,12 +1280,67 @@ function modelCard(m, selected) {
       m.name && m.name !== m.id ? element("span", { class: "card-id" }, m.id) : null,
       element("span", { class: "card-text" }, m.description),
       ...details,
-      m.page ? element("button", {
-        type: "button", class: "link-button",
-        onclick: (event) => { event.preventDefault(); call("open_model_page", m.id).catch((e) => showMessage(e.message)); },
-      }, "Modellseite auf Hugging Face öffnen") : null,
+      modelActions(m, update),
     ),
   );
+}
+
+function modelActions(m, update) {
+  const downloading = state.lastState && state.lastState.model_download;
+  const busy = downloading && downloading.model === m.id;
+  const actions = element("span", { class: "card-actions" });
+  const act = (label, handler) => element("button", { type: "button", class: "link-button",
+    onclick: async (event) => { event.preventDefault(); await handler(); } }, label);
+  if (busy) {
+    actions.append(element("span", { class: "update", "data-model-progress": m.id },
+      `Update wird geladen … ${Math.round((downloading.progress || 0) * 100)} %`));
+  } else if (update) {
+    actions.append(act(`Update laden (Stand ${update.revision})`, async () => {
+      try { await call("update_model", m.id); await poll(); renderModelCardsKeep(); } catch (e) { $("model-status").textContent = e.message; }
+    }));
+  }
+  if (m.previous && !busy) {
+    actions.append(act("Zurück auf vorherigen Stand", async () => {
+      try { await call("rollback_model", m.id); await refreshModels(); } catch (e) { $("model-status").textContent = e.message; }
+    }));
+  }
+  if (m.page) {
+    actions.append(act("Modellseite auf Hugging Face öffnen", () => call("open_model_page", m.id).catch((e) => showMessage(e.message))));
+  }
+  return actions;
+}
+
+function renderModelCardsKeep() {
+  const chosen = chosenModel();
+  const typed = $("form-settings").elements.model_custom.value;
+  renderModelCards(chosen === CUSTOM ? typed : chosen, typed);
+}
+
+async function refreshModels() {
+  try { state.models = await call("models"); state.modelUpdates = await call("model_updates"); } catch (_) { return; }
+  renderModelCardsKeep();
+}
+
+function showModelBanner(z) {
+  const banner = $("btn-model-update");
+  const names = z.model_updates || [];
+  banner.hidden = !names.length;
+  if (names.length) banner.textContent = names.length === 1 ? "Modell-Update verfügbar" : `${names.length} Modell-Updates verfügbar`;
+  // finished downloading while the settings are open: show the new state
+  if (state.wasDownloading && !z.model_download && $("dlg-settings").open) refreshModels();
+  if (z.model_download && $("dlg-settings").open) {
+    const label = document.querySelector(`[data-model-progress="${CSS.escape(z.model_download.model)}"]`);
+    if (label) label.textContent = `Update wird geladen … ${Math.round((z.model_download.progress || 0) * 100)} %`;
+    else renderModelCardsKeep();
+  }
+  state.wasDownloading = !!z.model_download;
+}
+
+async function openModelUpdates() {
+  await openSettings();
+  call("dismiss_model_updates").catch(() => {});
+  const cards = $("model-cards");
+  if (cards) cards.scrollIntoView({ block: "center" });
 }
 
 function customCard(selected, value) {
@@ -1299,13 +1401,15 @@ async function openSettings() {
   const e = state.settings;
   for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb"]) form.elements[field].value = e[field] || "";
   form.elements.update_check.checked = e.update_check !== "off";
+  form.elements.model_auto_update.checked = e.model_auto_update === "on";
   call("audio_usage").then((sp) => {
     $("audio-hint").textContent = "Leer heisst unbegrenzt, 0 Tage heisst gleich nach dem Transkribieren. "
       + "Transkripte bleiben immer erhalten, Aufnahmen ohne Transkript werden nie automatisch gelöscht. "
       + `Belegt: ${sp.audio_mb.toLocaleString("de-CH")} MB.`;
   }).catch(() => {});
   form.elements.quality.value = e.quality || "accurate";
-  $("folder-hint").textContent = `Leer lassen für den Standard. Aktuell: ${e.recordings_path}`;
+  $("folder-hint").textContent = e.storage_warning || `Leer lassen für den Standard. Aktuell: ${e.recordings_path}`;
+  $("folder-hint").classList.toggle("warning-text", !!e.storage_warning);
   try { state.models = await call("models"); } catch (_) { state.models = []; }
   fillModelChoice(e.model);
   loadModelUpdates();      // asks Hugging Face in the background, the dialog doesn't wait
@@ -1627,6 +1731,7 @@ async function saveSettings(event) {
   const data = {};
   for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "audio_days", "audio_max_mb"]) data[field] = form.elements[field].value;
   data.update_check = form.elements.update_check.checked ? "on" : "off";
+  data.model_auto_update = form.elements.model_auto_update.checked ? "on" : "off";
   for (const field of ["audio_days", "audio_max_mb"]) {
     if (data[field].trim() && !/^\d+$/.test(data[field].trim())) {
       $("audio-hint").textContent = "Bitte bei Tagen und MB nur ganze Zahlen eingeben oder das Feld leer lassen.";
@@ -1677,6 +1782,7 @@ async function init() {
   });
   $("btn-corr-add").addEventListener("click", addCorrection);
   $("btn-update").addEventListener("click", openUpdate);
+  $("btn-model-update").addEventListener("click", openModelUpdates);
   $("btn-update-later").addEventListener("click", () => $("dlg-update").close());
   $("btn-update-go").addEventListener("click", startUpdate);
   $("btn-news-ok").addEventListener("click", closeWhatsNew);

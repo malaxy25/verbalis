@@ -71,6 +71,10 @@ def cmd_record(args) -> int:
     start = datetime.now().astimezone()
     base = Path(args.output_dir) if args.output_dir else Settings.load().recordings
     folder = base / start.strftime("%Y-%m-%d_%H%M%S")
+    n = 1
+    while folder.exists():              # never write into an existing recording
+        n += 1
+        folder = base / f"{start:%Y-%m-%d_%H%M%S}_{n}"
 
     print(f"\nMikrofon:   {devices.microphone.name}")
     print(f"Loopback:   {devices.loopback.name}")
@@ -95,18 +99,21 @@ def cmd_record(args) -> int:
     except KeyboardInterrupt:
         pass
     finally:
-        rec.stop()
+        ended = rec.stop()
     print("\n")
 
-    if rec.errors:
-        for error in rec.errors:
-            print(f"Fehler in einer Spur: {error!r}")
-        return 2
-
+    from .pipeline import COMPLETE, INCOMPLETE, STOP_TIMEOUT
+    state = COMPLETE if ended and not rec.errors else (STOP_TIMEOUT if not ended else INCOMPLETE)
+    problem = None if state == COMPLETE else (
+        "Eine Spur liess sich nicht rechtzeitig beenden." if not ended
+        else "Gerätefehler: " + "; ".join(repr(e) for e in rec.errors))
     meta = write_meta(
-        folder, start, time.monotonic() - rec.t0, rec.samplerate, consent_time,
-        {"me": devices.microphone.name, "others": devices.loopback.name}, rec.status(),
+        folder, start, rec.active_seconds(), rec.samplerate, consent_time,
+        {"me": devices.microphone.name, "others": devices.loopback.name}, rec.status(), state, problem,
     )
+    if problem:
+        print(f"Achtung: {problem} Das Audio bis dahin ist gesichert.")
+        return 2
     for name, info in meta["tracks"].items():
         print(f"{name:7s} {info['length_s']:7.1f} s   aufgefüllte Stille: {info['padded_silence_s']} s")
 

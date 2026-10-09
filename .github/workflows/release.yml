@@ -181,8 +181,9 @@ jobs:
           if os.environ["MAC_RESULT"] == "success":
               notes += ["", f"**Mac (experimentell, Apple Silicon):** `Verbalis-{version}-macos-arm64.zip` entpacken und "
                             "Verbalis in «Programme» ziehen. Beim ersten Öffnen blockiert macOS die nicht signierte App: "
-                            "Systemeinstellungen → Datenschutz & Sicherheit → «Trotzdem öffnen». Für den Ton der anderen "
-                            "braucht es BlackHole, siehe README."]
+                            "Systemeinstellungen → Datenschutz & Sicherheit → «Trotzdem öffnen». Ab macOS 14.2 nimmt "
+                            "Verbalis den Ton der anderen selbst auf (Berechtigung «Audioaufnahme» erlauben); "
+                            "nur ältere Macs brauchen BlackHole, siehe README."]
           open("release-notes.md", "w", encoding="utf-8").write("\n".join(notes) + "\n")
           PY
           ls -l dist

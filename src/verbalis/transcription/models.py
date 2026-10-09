@@ -111,18 +111,16 @@ def resolve(model: str) -> str:
     if (converted / "model.bin").exists():
         return str(converted)
 
-    if model in DOWNLOAD_REPO:
-        return DOWNLOAD_REPO[model]  # ready-converted copy, faster-whisper downloads it
-
-    if model in SUBFOLDER:
-        # faster-whisper can't pick a subfolder itself: fetch it (from the cache if there) and pass the path
-        from huggingface_hub import snapshot_download
-
-        folder = snapshot_download(model, allow_patterns=_patterns(model))
-        return str(Path(folder) / SUBFOLDER[model])
-
-    if model in builtin_models() or "/" in model:
-        return model  # faster-whisper downloads it
+    if repo_for(model) is not None:
+        # Always load the approved revision from disk – faster-whisper would otherwise
+        # ask Hugging Face on every load and silently take a newer version.
+        folder = active_folder(model)
+        if folder is None:            # not downloaded yet (CLI); the app downloads first, with progress
+            download(model)
+            folder = active_folder(model)
+        if folder is None:
+            raise ModelError(f"Das Modell {model} konnte nicht geladen werden.")
+        return str(folder)
 
     raise ModelError(
         f"Unbekanntes Modell '{model}'. Erlaubt sind eingebaute Namen "
@@ -160,6 +158,91 @@ def _cache_folder(repo: str) -> Path:
     from huggingface_hub import constants
 
     return Path(constants.HF_HUB_CACHE) / ("models--" + repo.replace("/", "--"))
+
+
+# ---------------------------------------------------------------- approved revisions
+# ~/.verbalis/models.json: {model: {"active": revision, "previous": revision}}
+# The active revision is what Verbalis loads; an update downloads a new revision
+# next to it and keeps the previous one for going back.
+
+def _registry_path() -> Path:
+    return verbalis_home() / "models.json"
+
+
+def _registry() -> dict:
+    try:
+        import json
+        return json.loads(_registry_path().read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def _save_registry(data: dict) -> None:
+    import json
+    path = _registry_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _snapshot(model: str, revision: str | None) -> Path | None:
+    repo = repo_for(model)
+    if not repo or not revision:
+        return None
+    folder = _cache_folder(repo) / "snapshots" / revision
+    if SUBFOLDER.get(model):
+        folder = folder / SUBFOLDER[model]
+    return folder if (folder / "model.bin").exists() else None
+
+
+def _cached_main(model: str) -> str | None:
+    repo = repo_for(model)
+    try:
+        return (_cache_folder(repo) / "refs" / "main").read_text(encoding="utf-8").strip() if repo else None
+    except OSError:
+        return None
+
+
+def active_revision(model: str) -> str | None:
+    """The approved revision on this computer (falls back to the cached one for older installations)."""
+    entry = _registry().get(model, {})
+    for revision in (entry.get("active"), _cached_main(model)):
+        if _snapshot(model, revision) is not None:
+            return revision
+    return None
+
+
+def active_folder(model: str) -> Path | None:
+    return _snapshot(model, active_revision(model))
+
+
+def previous_revision(model: str) -> str | None:
+    previous = _registry().get(model, {}).get("previous")
+    return previous if _snapshot(model, previous) is not None else None
+
+
+def _activate(model: str, revision: str) -> None:
+    data = _registry()
+    entry = data.get(model, {})
+    if entry.get("active") and entry["active"] != revision:
+        entry["previous"] = entry["active"]
+    entry["active"] = revision
+    data[model] = entry
+    _save_registry(data)
+
+
+def rollback(model: str) -> str:
+    """Go back to the previous revision (the current one stays available as «previous»)."""
+    previous = previous_revision(model)
+    if previous is None:
+        raise ModelError("Für dieses Modell ist kein vorheriger Stand mehr vorhanden.")
+    data = _registry()
+    entry = data.get(model, {})
+    entry["previous"], entry["active"] = active_revision(model), previous
+    data[model] = entry
+    _save_registry(data)
+    return previous
 
 
 def _folder_bytes(folder: Path) -> int:
@@ -206,6 +289,9 @@ def download(model: str, progress=None) -> None:
         raise ModelError(
             f"Das Modell konnte nicht heruntergeladen werden ({repo}). Internetverbindung prüfen. "
             f"Details: {result['error']}") from result["error"]
+    new = _cached_main(model)
+    if new and _snapshot(model, new) is not None:
+        _activate(model, new)
 
 
 def page_url(model: str) -> str | None:
@@ -217,18 +303,16 @@ def page_url(model: str) -> str | None:
 
 
 def local_revision(model: str) -> dict | None:
-    """Which revision of a downloaded model is on this computer, and since when."""
-    repo = repo_for(model)
-    if repo is None:
+    """Which revision of a downloaded model Verbalis uses on this computer, and since when."""
+    revision = active_revision(model)
+    folder = _snapshot(model, revision)
+    if folder is None:
         return None
-    folder = _cache_folder(repo)
     try:
-        sha = (folder / "refs" / "main").read_text(encoding="utf-8").strip()
-        snapshot = folder / "snapshots" / sha
-        loaded = datetime.fromtimestamp(snapshot.stat().st_mtime).astimezone()
-    except (FileNotFoundError, OSError):
+        loaded = datetime.fromtimestamp((folder / "model.bin").stat().st_mtime).astimezone()
+    except OSError:
         return None
-    return {"revision": sha, "loaded": loaded.isoformat(timespec="minutes")}
+    return {"revision": revision, "loaded": loaded.isoformat(timespec="minutes")}
 
 
 def remote_revision(model: str, timeout: float = 6.0) -> dict | None:

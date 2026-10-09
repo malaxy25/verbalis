@@ -41,6 +41,29 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 Devices at tocco are not centrally managed, so Verbalis is distributed as an
 installer via GitHub Releases with an update notice in the app.
 
+### Release checklist (from the review of 0.7.11)
+
+Done in the code (0.7.11):
+- [x] Both tracks are stopped on an error and the data recorded so far is kept
+- [x] A stop timeout is never shown as a finished recording
+- [x] Crash and full disk lead to a visible recovery state («unterbrochen», «unvollständig»)
+- [x] Recording folders and files are never overwritten; meta.json is written atomically
+- [x] App and model updates only after confirmation (models: setting for automatic, off by default)
+- [x] Downloads checked against size and SHA-256 from GitHub; a failed model update keeps the old revision
+- [x] Model revision fixed and reproducible, rollback to the previous one
+- [x] Storage location, retention and what the organisation must arrange documented (README)
+- [x] Log export without names and device names
+
+Still open:
+- [ ] Installers signed, signature checked before running (needs SignPath / Apple, see «Code signing») **[ops]**
+- [ ] Windows install and update tested on a clean machine (see «First installer test») **[ops]**
+- [ ] macOS system audio tested on real hardware **[ops]**
+- [ ] Consent and information process approved by tocco's data protection **[tocco]**
+- [ ] Disk encryption, backups, leaving employees and device replacement arranged by tocco IT **[tocco]**
+- [ ] Pilot with a few colleagues, results documented **[tocco]**
+
+### Tasks
+
 - [ ] **First installer test** – install the latest release in Windows Sandbox, on a second machine or in a fresh user account (without Python); check recording, transcription, shortcut, update over an existing installation and uninstall. **[ops]**
 - [ ] **Offline use** – the spelling dictionary is downloaded on first use like the models; for machines without internet provide both on an internal share. **[ops]**
 - [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
@@ -49,4 +72,4 @@ installer via GitHub Releases with an update notice in the app.
 - [ ] Talk to IT and data protection: local processing, consent per recording, retention (audio deleted after N days).
 - [ ] Check the licence situation of the default model (Flix: Apache 2.0, trained under the Swiss TDM research exception).
 - [ ] Standard consent text for customer calls (German and English).
-- [ ] Decide on defaults for colleagues: retention, model, storage location (not in a OneDrive-synced folder).
+- [ ] Decide on defaults for colleagues: retention, model, storage location (Verbalis warns about synced folders since 0.7.11).

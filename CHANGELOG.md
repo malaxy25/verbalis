@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.7.11 – 2026-10-09
+Hardening after an external review (ChatGPT, checked against the code).
+
+**Recordings**
+- Stop is checked: if a track doesn't end in time, the recording is marked «nicht sauber beendet» and not
+  transcribed automatically, instead of being processed as if it were finished
+- `meta.json` is written at the start (consent and start survive a crash) and atomically (never half a
+  file); a damaged one is shown as such instead of looking empty. It states how the recording ended:
+  complete, incomplete (device error, full disk), stop timeout or interrupted.
+- **Crash recovery:** at start, recordings still marked as running are repaired (WAV headers fixed so the
+  audio up to the crash is readable) and shown as «unterbrochen»
+- A recording never reuses a folder (two starts in the same second) and a WAV is never overwritten
+- A single rescued track can be transcribed; the transcript says which track is missing
+- **Disk space:** no start below 500 MB free; below 2 GB the remaining minutes are shown; below 150 MB
+  the recording is stopped and saved
+- Closing Verbalis during a paused transcription ends cleanly
+- The consent stored per recording includes the wording and its version
+
+**Models and updates**
+- **Model updates only after confirmation:** models are loaded from a fixed, approved revision on disk –
+  faster-whisper no longer fetches newer versions on its own. At start Verbalis checks for model updates
+  together with app updates and shows «Modell-Update verfügbar»; the tiles offer «Update laden» and
+  «Zurück auf vorherigen Stand» (the previous revision is kept).
+- Setting «Modell-Updates automatisch übernehmen» (off by default)
+- App updates are checked against the size and SHA-256 that GitHub publishes for every release file, and
+  against the expected file name; a mismatch deletes the download and nothing is run
+
+**Privacy**
+- Warning when the recordings folder lies in a folder synchronised by OneDrive, Dropbox, iCloud & co.
+- Log export also removes audio device names and the names of the user and the others
+- README: what Verbalis does with data, and what the organisation has to arrange
+
+**Fixes**
+- Release notes for the Mac no longer say BlackHole is required
+- CLI: never writes into an existing folder; records how the recording ended
+
 ## 0.7.10 – 2026-10-08
 - **macOS version (experimental, Apple Silicon):** the release workflow also builds `Verbalis.app`,
   self-tests it on a GitHub Mac and attaches `Verbalis-X.Y.Z-macos-arm64.zip` to the release

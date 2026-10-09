@@ -55,7 +55,15 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
 - **Consent** must be confirmed before every recording (Swiss law, StGB 179ter).
 - **Own spell checker** (spylls + LibreOffice de_CH dictionary, downloaded – GPL, so not
   in the repo) instead of the WebView2 context menu, which was unreliable.
-- **Model updates** count only when the model files change, not the model card.
+- **Model updates** count only when the model files change, not the model card. Models load
+  from an approved revision on disk (`models.json`), never «latest»; updates need confirmation
+  (setting for automatic), the previous revision is kept for rollback.
+- **Recording end states** are explicit in `meta.json` (`recording`, `complete`, `incomplete`,
+  `stop_timeout`, `interrupted`); meta is written at the start and atomically; WAVs open in
+  exclusive mode; interrupted recordings are repaired at start. Never present a partial
+  recording as complete.
+- **Review 0.7.11:** an external review (ChatGPT) was checked finding by finding; the open
+  organisational items (encryption, backups, consent process, signing) are in BACKLOG.
 - **Pinned build versions** (`packaging/requirements-build.txt`, generated with uv) make the
   installer reproducible; huggingface-hub ≥ 2 is ignored until tokenizers supports it.
 - **macOS:** no loopback; a small Swift helper (`tools/macos/audiotap.swift`, compiled in CI,

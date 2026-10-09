@@ -104,8 +104,8 @@ class Track(threading.Thread):
     def _record(self) -> None:
         block = int(self.samplerate * BLOCK_SECONDS)
         s = self.status
-        with sf.SoundFile(
-            s.path, "w", samplerate=self.samplerate, channels=1, subtype="PCM_16"
+        with sf.SoundFile(   # "x": never overwrite an existing recording
+            s.path, "x", samplerate=self.samplerate, channels=1, subtype="PCM_16"
         ) as file, self.device.recorder(samplerate=self.samplerate, blocksize=block) as rec:
             while not self.stop_event.is_set():
                 data = rec.record(numframes=block)
@@ -179,11 +179,18 @@ class TwoTrackRecorder:
         """Recorded time without pauses."""
         return time.monotonic() - self.t0 - self.paused_time()
 
-    def stop(self, timeout: float = 5.0) -> None:
+    def stop(self, timeout: float = 5.0) -> bool:
+        """Stop both tracks. True only if both have really ended (and closed their files).
+
+        A device that blocks can keep a track alive; the caller must then not
+        process the files as a finished recording.
+        """
         self.resume()  # count a running pause
         self.stop_event.set()
+        deadline = time.monotonic() + timeout
         for track in self.tracks:
-            track.join(timeout)
+            track.join(max(deadline - time.monotonic(), 0.1))
+        return not any(t.is_alive() for t in self.tracks)
 
     @property
     def running(self) -> bool:

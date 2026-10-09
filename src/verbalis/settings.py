@@ -25,6 +25,7 @@ class Settings:
     audio_days: str = "3"             # delete audio after N days; empty = never, 0 = right after transcription
     audio_max_mb: str = ""            # all audio at most N MB; empty = unlimited
     update_check: str = "on"          # "on" = ask GitHub for a newer version at start, "off"
+    model_auto_update: str = "off"    # "on" = take newer model files automatically before transcribing
     last_seen_version: str = ""       # version whose «what's new» was shown last
 
     @property
@@ -67,6 +68,8 @@ class Settings:
         s.model = s.model or DEFAULT_MODEL
         if s.update_check not in ("on", "off"):
             s.update_check = "on"
+        if s.model_auto_update not in ("on", "off"):
+            s.model_auto_update = "off"
         for name, default in (("audio_days", "3"), ("audio_max_mb", "")):
             value = getattr(s, name)
             if value and not (value.isdigit() and int(value) < 100_000):
@@ -78,4 +81,24 @@ class Settings:
         self.path().write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False), encoding="utf-8")
 
     def as_dict(self) -> dict:
-        return {**asdict(self), "recordings_path": str(self.recordings)}
+        return {**asdict(self), "recordings_path": str(self.recordings),
+                "storage_warning": sync_warning(self.recordings)}
+
+
+SYNC_FOLDERS = ("onedrive", "dropbox", "google drive", "googledrive", "icloud", "mobile documents",
+                "nextcloud", "owncloud", "sharepoint", "box sync", "pcloud")
+
+
+def sync_warning(path: Path) -> str | None:
+    """Warn when recordings would land in a folder that a cloud service synchronises.
+
+    Verbalis itself uploads nothing – but OneDrive & co. would copy confidential
+    calls to the cloud without anybody noticing.
+    """
+    lowered = [part.lower() for part in Path(path).expanduser().parts]
+    for part in lowered:
+        for name in SYNC_FOLDERS:
+            if part == name or part.startswith(name + " ") or part.startswith(name + "-"):
+                return (f"Der Aufnahmeordner liegt in einem synchronisierten Ordner ({Path(path).name} in «{part}»). "
+                        "Aufnahmen würden so in die Cloud kopiert – für vertrauliche Gespräche einen lokalen Ordner wählen.")
+    return None

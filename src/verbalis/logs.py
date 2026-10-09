@@ -61,8 +61,19 @@ def _anonymise(text: str) -> str:
     return text
 
 
-def export(target: Path, settings: dict) -> Path:
-    """Write the log export as a ZIP to `target`."""
+def _redact(text: str, secrets: list[str]) -> str:
+    for secret in sorted({s for s in secrets if s and len(s) >= 3}, key=len, reverse=True):
+        text = text.replace(secret, "<entfernt>")
+    return text
+
+
+def export(target: Path, settings: dict, redact: list[str] | None = None) -> Path:
+    """Write the log export as a ZIP to `target`.
+
+    `redact`: further texts to remove – device names (often contain a person's name,
+    e.g. «AirPods von Andrea»), the user's name and the label for the others.
+    """
+    secrets = list(redact or []) + [settings.get("name", ""), settings.get("others", "")]
     info = {
         "app_version": __version__,
         "exported": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -73,9 +84,10 @@ def export(target: Path, settings: dict) -> Path:
     }
     target.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as z:
-        z.writestr("info.json", _anonymise(json.dumps(info, indent=2, ensure_ascii=False)))
+        z.writestr("info.json", _redact(_anonymise(json.dumps(info, indent=2, ensure_ascii=False)), secrets))
         for path in _files():
-            z.writestr(path.name, _anonymise(path.read_text(encoding="utf-8", errors="replace")))
+            text = path.read_text(encoding="utf-8", errors="replace")
+            z.writestr(path.name, _redact(_anonymise(text), secrets))
     return target
 
 

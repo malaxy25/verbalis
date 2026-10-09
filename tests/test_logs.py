@@ -52,3 +52,16 @@ def test_export_is_anonymised_and_without_personal_settings(home, tmp_path):
     dumped = json.dumps(info, ensure_ascii=False)
     assert "Andrea" not in dumped and "tocco" not in dumped and "geheim" not in dumped
     assert Path.home().as_posix() not in log_text and "~/dev/verbalis" in log_text
+
+
+def test_export_removes_device_and_person_names(home, tmp_path):
+    from verbalis.transcription.models import verbalis_home
+    log_file = verbalis_home() / "verbalis.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("ERROR Gerät «AirPods von Andrea» getrennt\nINFO Name Andrea gespeichert\n", encoding="utf-8")
+    target = logs.export(tmp_path / "x.zip", {"name": "Andrea", "others": "Gegenüber"},
+                         redact=["AirPods von Andrea"])
+    with zipfile.ZipFile(target) as z:
+        text = z.read("verbalis.log").decode("utf-8")
+    assert "Andrea" not in text and "AirPods" not in text and "<entfernt>" in text
+    assert "getrennt" in text                       # the useful part stays
