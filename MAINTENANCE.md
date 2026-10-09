@@ -91,8 +91,10 @@ about changes made on GitHub in the meantime (e.g. merged Dependabot PRs).
 
 1. Version in `pyproject.toml` and `src/verbalis/__init__.py`, section in `CHANGELOG.md`.
 2. `pytest -q`, commit, `git tag -a vX.Y.Z -m "Version X.Y.Z"`, push commit and tag.
-3. The Release workflow builds `Verbalis-X.Y.Z-setup.exe` and publishes it under
-   **Releases** with the changelog section. It refuses to run if tag and version differ.
+3. The Release workflow builds `Verbalis-X.Y.Z-setup.exe` and the experimental
+   `Verbalis-X.Y.Z-macos-arm64.zip` and publishes them under **Releases** with the changelog
+   section. It refuses to run if tag and version differ. If only the Mac build fails, the
+   release is published with the Windows installer alone – check the macOS job's log.
 
 ## Occasionally
 

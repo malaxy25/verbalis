@@ -53,6 +53,26 @@ Ubuntu additionally needs PipeWire with `pipewire-pulse` (default on Ubuntu) and
 GTK or Qt for the window, e.g. `sudo apt install python3-gi gir1.2-webkit2-4.1`
 or `pip install pywebview[qt]`.
 
+## Mac (experimental)
+
+Releases contain `Verbalis-X.Y.Z-macos-arm64.zip` for Macs with Apple Silicon. It is
+built and self-tested automatically; tests on a real Mac are in progress.
+
+1. Unzip and drag **Verbalis** into «Programme».
+2. First start: the app isn't signed, so macOS blocks it. Open System Settings →
+   Privacy & Security → «Open anyway».
+3. On the first recording macOS asks twice: for the **microphone** and for **recording
+   audio** (the others' voices). Allow both.
+
+From **macOS 14.2** Verbalis records the system audio itself – «Ton der anderen kommt über:
+Systemton (alle Programme)», preselected, like loopback on Windows. You keep hearing the call.
+
+Older Macs need the free virtual audio device **BlackHole 2ch** instead: install it, create a
+«Gerät mit mehreren Ausgängen» in Audio-MIDI-Setup with your headset **and** BlackHole, let
+Teams play through it and choose BlackHole in Verbalis.
+
+Updates install themselves from the update notice, like on Windows.
+
 ## Start by double-click (Windows)
 
 Once, inside the repo with the `.venv` activated:
@@ -200,7 +220,9 @@ Pushing a version tag (`git tag -a v0.7.2 …`, `git push origin v0.7.2`) starts
    (app, no console) and `verbalis-cli.exe` (command line),
 2. runs `verbalis-cli selftest` on the bundle,
 3. builds `Verbalis-<version>-setup.exe` with Inno Setup (`packaging/verbalis.iss`),
-4. publishes it as a GitHub Release with the matching CHANGELOG section.
+4. builds `Verbalis.app` for macOS in parallel (experimental, self-tested on a GitHub Mac),
+5. publishes one GitHub Release with both files and the matching CHANGELOG section – a failing
+   Mac build doesn't block the Windows release.
 
 The tag must match `verbalis.__version__`. The installer installs per user into
 `%LOCALAPPDATA%\Programs\Verbalis` without admin rights; installing a newer
@@ -226,7 +248,12 @@ Dependabot proposes grouped dependency updates once a month as pull requests;
 merge them when the tests are green.
 Open work is tracked in [`BACKLOG.md`](BACKLOG.md), changes in
 [`CHANGELOG.md`](CHANGELOG.md), the maintenance routine in
-[`MAINTENANCE.md`](MAINTENANCE.md).
+[`MAINTENANCE.md`](MAINTENANCE.md). How the code is tested – and what isn't – is in
+[`docs/TESTING.md`](docs/TESTING.md); a quick start for a new developer or AI in
+[`docs/AI-CONTEXT.md`](docs/AI-CONTEXT.md).
+
+After adding or renaming tests run `python tools/test_catalog.py` (CI checks it).
+The UI can be viewed in a browser with sample data: `python tools/ui_preview.py`.
 
 ## License
 

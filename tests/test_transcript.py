@@ -1,3 +1,5 @@
+"""Merging both tracks into paragraphs and the Markdown output."""
+
 from verbalis.transcript import merge, to_markdown
 from verbalis.transcription.base import Segment
 

@@ -1,3 +1,5 @@
+"""Update check, installer download, macOS bundle swap, what's new from the changelog."""
+
 import io
 import json
 from contextlib import contextmanager
@@ -36,7 +38,8 @@ def test_versions():
     assert not updates.is_newer("", "0.7.4")
 
 
-def test_check_finds_newer_release_and_installer():
+def test_check_finds_newer_release_and_installer(monkeypatch):
+    monkeypatch.setattr(updates.sys, "platform", "win32")
     release = {"tag_name": "v99.0.0", "body": "- Neu", "html_url": "https://github.com/x",
                "assets": [{"name": "Verbalis-99.0.0-setup.exe", "browser_download_url": "https://dl/x.exe",
                            "size": 250_000_000}]}
@@ -99,3 +102,61 @@ def test_update_check_setting_is_validated():
     from verbalis.settings import Settings
     assert Settings.from_dict({"update_check": "maybe"}).update_check == "on"
     assert Settings.from_dict({"update_check": "off"}).update_check == "off"
+
+
+def _fake_app(folder, version):
+    app = folder / "Verbalis.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    (app / "Contents" / "MacOS" / "Verbalis").write_text(version)
+    return app
+
+
+def test_app_bundle_found_from_executable(tmp_path):
+    app = _fake_app(tmp_path, "0.7.9")
+    assert updates.app_bundle(str(app / "Contents" / "MacOS" / "Verbalis")) == app
+    assert updates.app_bundle(str(tmp_path / "python")) is None
+
+
+def test_mac_update_swaps_bundle_after_app_closed(tmp_path):
+    import subprocess
+    import time
+    applications = tmp_path / "Applications"
+    old = _fake_app(applications, "old")
+    staged = applications / ".verbalis-update"
+
+    def fake_extract(zip_path, dest):          # stands in for ditto on Linux
+        _fake_app(dest, "new")
+
+    new = updates.unpack_mac_update(tmp_path / "update.zip", staged, extract=fake_extract)
+    running = subprocess.Popen(["sleep", "1"])  # stands in for the running Verbalis
+    opened = tmp_path / "opened.txt"
+    script = updates.write_swap_script(old, new, running.pid, tmp_path / "swap.sh",
+                                       reopen=f"echo >{opened}")
+    proc = subprocess.Popen(["/bin/sh", str(script)])
+    time.sleep(0.3)
+    assert (old / "Contents" / "MacOS" / "Verbalis").read_text() == "old"   # still waiting
+    running.wait()
+    proc.wait(timeout=10)
+    assert (old / "Contents" / "MacOS" / "Verbalis").read_text() == "new"
+    assert not staged.exists() and not (applications / "Verbalis.app.old").exists()
+    assert opened.exists() and not script.exists()
+
+
+def test_mac_update_rolls_back_if_new_app_missing(tmp_path):
+    import subprocess
+    applications = tmp_path / "Applications"
+    old = _fake_app(applications, "old")
+    missing = applications / ".verbalis-update" / "Verbalis.app"
+    script = updates.write_swap_script(old, missing, 999999, tmp_path / "swap.sh", reopen="true")
+    subprocess.run(["/bin/sh", str(script)], timeout=10, check=True)
+    assert (old / "Contents" / "MacOS" / "Verbalis").read_text() == "old"   # old version restored
+
+
+def test_check_picks_the_asset_for_this_platform(monkeypatch):
+    release = {"tag_name": "v99.0.0", "assets": [
+        {"name": "Verbalis-99.0.0-setup.exe", "browser_download_url": "https://dl/win.exe", "size": 1},
+        {"name": "Verbalis-99.0.0-macos-arm64.zip", "browser_download_url": "https://dl/mac.zip", "size": 1}]}
+    monkeypatch.setattr(updates.sys, "platform", "darwin")
+    assert updates.check(opener=fake_opener(release))["installer_url"] == "https://dl/mac.zip"
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+    assert updates.check(opener=fake_opener(release))["installer_url"] == "https://dl/win.exe"

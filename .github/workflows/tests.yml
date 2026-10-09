@@ -12,6 +12,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python: ["3.11", "3.13"]
+        include:
+          - os: macos-latest      # experimental Mac version
+            python: "3.12"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -19,9 +22,18 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
+      - name: Compile the macOS system audio helper (Swift)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p tools/macos/build
+          swiftc -O -swift-version 5 -target arm64-apple-macos14.2 \
+            -o tools/macos/build/verbalis-audiotap tools/macos/audiotap.swift
+          tools/macos/build/verbalis-audiotap --version
       - run: pip install -e ".[dev]" pyflakes
       - run: pyflakes src tests tools
       - run: pytest -q
+      - name: Test catalogue up to date (docs/TESTING.md)
+        run: python tools/test_catalog.py --check
 
   build-versions:
     # exactly the versions of the installer build (packaging/requirements-build.txt):

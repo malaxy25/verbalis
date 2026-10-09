@@ -27,6 +27,7 @@ numpy==2.5.3              # via ctranslate2, onnxruntime, scipy, soundcard, soun
 onnxruntime==1.30.0       # via faster-whisper
 packaging==26.3           # via huggingface-hub, onnxruntime, pyinstaller, pyinstaller-hooks-contrib, qtpy
 pefile==2024.8.26 ; sys_platform == 'win32'  # via pyinstaller
+pillow==12.3.0 ; sys_platform == 'darwin'  # via verbalis (pyproject.toml)
 protobuf==7.36.2          # via onnxruntime
 proxy-tools==0.1.0        # via pywebview
 pycparser==3.1 ; implementation_name != 'PyPy'  # via cffi

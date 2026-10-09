@@ -691,7 +691,12 @@ class Service:
             raise RuntimeError("Bitte zuerst die Aufnahme beenden bzw. die Transkription abwarten.")
         import tempfile
 
-        target = Path(tempfile.gettempdir()) / f"Verbalis-{info['latest']}-setup.exe"
+        bundle = updates.app_bundle() if sys.platform == "darwin" else None
+        if bundle is not None and not updates.can_write(bundle.parent):
+            raise RuntimeError(f"Verbalis darf «{bundle.parent}» nicht ändern. Das Update bitte von der "
+                               "Release-Seite laden oder Verbalis in einen Ordner mit Schreibrechten verschieben.")
+        name = info["installer_url"].rsplit("/", 1)[-1]
+        target = Path(tempfile.gettempdir()) / name
         self._update_progress = 0.0
 
         def progress(fraction: float) -> None:
@@ -699,11 +704,19 @@ class Service:
 
         try:
             updates.download_installer(info["installer_url"], target, progress)
+            if bundle is not None:
+                # unpack next to the running app (same disk, so the final move is instant)
+                new_app = updates.unpack_mac_update(target, bundle.parent / ".verbalis-update")
+                script = updates.write_swap_script(bundle, new_app, os.getpid(),
+                                                   Path(tempfile.gettempdir()) / "verbalis-update.sh")
+                log.info("Swapping app bundle %s → %s", new_app, bundle)
+                updates.start_swap(script)
+            else:
+                log.info("Starting installer %s", target)
+                subprocess.Popen([str(target)], close_fds=True)
         except Exception as e:
             self._update_progress = None
-            raise RuntimeError(f"Der Download des Updates ist fehlgeschlagen. ({e})") from e
-        log.info("Starting installer %s", target)
-        subprocess.Popen([str(target)], close_fds=True)
+            raise RuntimeError(f"Das Update konnte nicht vorbereitet werden. ({e})") from e
         self._update_progress = None
         return {"started": True}
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.10 – 2026-10-08
+- **macOS version (experimental, Apple Silicon):** the release workflow also builds `Verbalis.app`,
+  self-tests it on a GitHub Mac and attaches `Verbalis-X.Y.Z-macos-arm64.zip` to the release
+- **System audio on the Mac without extra software:** a small Swift helper (`tools/macos/audiotap.swift`)
+  records what all programs play through a Core Audio tap (macOS 14.2+) – the counterpart of loopback
+  on Windows; you keep hearing the call. It is preselected as «Systemton (alle Programme)». macOS asks
+  once for permission to record audio. Older Macs can still use a virtual device such as BlackHole.
+  The helper is compiled on every push on a GitHub Mac, so errors show up before a release.
+- **Updates on the Mac install themselves**, like on Windows: the update notice downloads the Mac
+  version, a small script waits until Verbalis has closed, swaps the app bundle (rolling back if
+  anything fails) and starts the new version
+- Fix: the development version (started from Python) showed the Python logo in the Windows taskbar;
+  it now has its own taskbar identity. The installed version was not affected.
+- Release workflow restructured: version check, Windows and macOS builds in parallel, one publish
+  step; a failing Mac build doesn't block the Windows release. Tests also run on macOS.
+- **`docs/TESTING.md`:** how the code is tested, what isn't covered, and a catalogue of all tests –
+  generated from the tests by `tools/test_catalog.py`; CI fails if it is out of date
+- **`docs/AI-CONTEXT.md`:** quick start for a new developer or AI – purpose, architecture, decisions
+  and pitfalls of the ZIP workflow
+- **UI preview** in the repo: `python tools/ui_preview.py` opens the interface in a browser with a
+  fake backend (`tools/ui-preview/mock.js`)
+
 ## 0.7.9 – 2026-10-08
 - **New test job «build versions»:** installs exactly the pinned versions of the installer
   (`packaging/requirements-build.txt`) and runs the tests. Dependabot PRs whose pin doesn't fit the

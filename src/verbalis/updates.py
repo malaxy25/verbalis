@@ -2,8 +2,12 @@
 
 - `check()` asks the GitHub API for the latest release (one small request, only
   when enabled in the settings). Nothing about the user is sent.
-- `download_installer()` fetches Verbalis-X.Y.Z-setup.exe; the app then starts it
-  and closes, the installer replaces the program files and keeps ~/.verbalis.
+- `download_installer()` fetches the update for this platform:
+  Windows: Verbalis-X.Y.Z-setup.exe – the app starts it and closes, the installer
+  replaces the program files.
+  macOS: Verbalis-X.Y.Z-macos-arm64.zip – unpacked next to the running app; a small
+  script waits until Verbalis has closed, swaps the app bundle and opens the new one.
+  Both keep ~/.verbalis (settings, corrections, models, recordings).
 - `changes_between()` reads CHANGELOG.md (bundled with the app) and returns the
   sections newer than the version the user had before – shown once after an update.
 """
@@ -11,7 +15,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -23,6 +30,7 @@ REPO = "malaxy25/verbalis"
 LATEST_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases"
 SECTION = re.compile(r"^## (\d+(?:\.\d+)*)\b(.*)$")
+ASSET_SUFFIX = {"win32": "-setup.exe", "darwin": "-macos-arm64.zip"}   # update file per platform
 
 
 def parse_version(text: str) -> tuple[int, ...]:
@@ -50,8 +58,9 @@ def check(timeout: float = 8.0, opener: Callable = urllib.request.urlopen) -> di
     with opener(request, timeout=timeout) as response:
         data = json.loads(response.read().decode("utf-8"))
     version = ".".join(map(str, parse_version(data.get("tag_name", ""))))
+    suffix = ASSET_SUFFIX.get(sys.platform)
     installer = next((a for a in data.get("assets", [])
-                      if a.get("name", "").lower().endswith("-setup.exe")), None)
+                      if suffix and a.get("name", "").lower().endswith(suffix)), None)
     return {
         "current": __version__,
         "latest": version,
@@ -60,7 +69,8 @@ def check(timeout: float = 8.0, opener: Callable = urllib.request.urlopen) -> di
         "page": data.get("html_url") or RELEASES_PAGE,
         "installer_url": installer.get("browser_download_url") if installer else None,
         "installer_mb": round(installer.get("size", 0) / 1e6) if installer else None,
-        "can_install": bool(installer) and is_installed() and sys.platform == "win32",
+        "can_install": bool(installer) and is_installed() and (sys.platform == "win32" or app_bundle() is not None),
+        "platform": sys.platform,
     }
 
 
@@ -80,6 +90,70 @@ def download_installer(url: str, target: Path, progress: Callable[[float], None]
                 progress(done / total)
     tmp.replace(target)
     return target
+
+
+# ---------------------------------------------------------------- macOS: swap the app bundle
+
+def app_bundle(executable: str | None = None) -> Path | None:
+    """The running Verbalis.app (macOS), or None when not running from an app bundle."""
+    for parent in Path(executable or sys.executable).resolve().parents:
+        if parent.suffix == ".app":
+            return parent
+    return None
+
+
+def unpack_mac_update(zip_path: Path, workdir: Path, extract: Callable | None = None) -> Path:
+    """Unpack the downloaded zip and return the new Verbalis.app inside it.
+
+    `ditto` keeps symlinks, permissions and the code signature of the bundle –
+    Python's zipfile would lose them.
+    """
+    import shutil
+
+    if workdir.exists():
+        shutil.rmtree(workdir)   # leftovers of an earlier, interrupted update
+    workdir.mkdir(parents=True)
+    (extract or (lambda z, d: subprocess.run(["ditto", "-x", "-k", str(z), str(d)], check=True)))(zip_path, workdir)
+    found = sorted(workdir.glob("*.app"))
+    if not found:
+        raise RuntimeError("Im heruntergeladenen Update wurde keine Verbalis.app gefunden.")
+    return found[0]
+
+
+def write_swap_script(old_app: Path, new_app: Path, pid: int, script: Path, reopen: str = "open") -> Path:
+    """Shell script: wait for Verbalis (pid) to exit, replace the bundle, start the new version.
+
+    The old app is moved aside first and only deleted once the new one is in place,
+    so a failed swap can be rolled back.
+    """
+    old, new, backup = shlex.quote(str(old_app)), shlex.quote(str(new_app)), shlex.quote(str(old_app) + ".old")
+    unpacked = shlex.quote(str(new_app.parent))
+    script.write_text(f"""#!/bin/sh
+# Written by Verbalis to install an update – deletes itself when done.
+while kill -0 {pid} 2>/dev/null; do sleep 0.5; done
+rm -rf {backup}
+if mv {old} {backup} && mv {new} {old}; then
+  rm -rf {backup}
+  command -v xattr >/dev/null && xattr -dr com.apple.quarantine {old} 2>/dev/null
+else
+  [ -e {old} ] || mv {backup} {old}
+fi
+rm -rf {unpacked}
+{reopen} {old}
+rm -f "$0"
+""", encoding="utf-8")
+    script.chmod(0o755)
+    return script
+
+
+def start_swap(script: Path) -> None:
+    """Run the swap script detached, so it survives Verbalis closing."""
+    subprocess.Popen(["/bin/sh", str(script)], start_new_session=True, close_fds=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def can_write(folder: Path) -> bool:
+    return os.access(folder, os.W_OK)
 
 
 # ---------------------------------------------------------------- what's new

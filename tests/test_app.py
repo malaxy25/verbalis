@@ -1,3 +1,5 @@
+"""Window size and position, log output without console, file dialog filter."""
+
 from types import SimpleNamespace
 
 from verbalis.app import _ToLog, window_position, window_size
@@ -47,3 +49,21 @@ def test_zip_filter_is_valid_for_pywebview():
     from verbalis.app import ZIP_FILTER
 
     assert parse_file_type(ZIP_FILTER) == ("ZIP Archiv", "*.zip")
+
+
+
+def test_taskbar_identity_only_for_development_version_on_windows():
+    """Regression: the development version showed the Python logo in the taskbar."""
+    from verbalis.app import set_taskbar_identity
+
+    calls = []
+
+    class Shell32:
+        def SetCurrentProcessExplicitAppUserModelID(self, app_id):
+            calls.append(app_id)
+
+    assert set_taskbar_identity("win32", frozen=False, shell32=Shell32()) is True
+    assert calls == ["Frehner.Verbalis"]
+    assert set_taskbar_identity("win32", frozen=True, shell32=Shell32()) is False   # Verbalis.exe has its own
+    assert set_taskbar_identity("darwin", frozen=False, shell32=Shell32()) is False
+    assert len(calls) == 1

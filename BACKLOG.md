@@ -32,7 +32,9 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 - [ ] **Echo without headset** – reduce remote voices on the microphone track. **[quality]**
 - [ ] **Taskbar icon on Windows** – may still show the Python icon; set an AppUserModelID / window icon. **[ux]**
 - [ ] **Ubuntu test** – PipeWire monitor source, pywebview with GTK or Qt. **[ops]**
-- [ ] **macOS support** – system audio via ScreenCaptureKit or BlackHole. **[ops]**
+- [ ] **Test the Mac version on Andrea's Mac** – install, both permission prompts, recording with «Systemton» (Core Audio tap via the Swift helper), transcription, update to the next version. **[ops]**
+
+- [ ] **Intel Macs** – only Apple Silicon is built; add an Intel build if needed. **[ops]**
 
 ## Before using it at tocco **[tocco]**
 
@@ -42,7 +44,7 @@ installer via GitHub Releases with an update notice in the app.
 - [ ] **First installer test** – install the latest release in Windows Sandbox, on a second machine or in a fresh user account (without Python); check recording, transcription, shortcut, update over an existing installation and uninstall. **[ops]**
 - [ ] **Offline use** – the spelling dictionary is downloaded on first use like the models; for machines without internet provide both on an internal share. **[ops]**
 - [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
-- [ ] **Code signing** – without a signature Windows SmartScreen warns about an unknown publisher on first install. Decide whether to buy a certificate or document the warning. **[ops]**
+- [ ] **Code signing** – Windows: SignPath Foundation offers free certificates for open-source projects (fully automated build required, each release approved by hand; SmartScreen reputation still builds up over time). macOS: Apple Developer Program (99 USD/year) for signing and notarization. **[ops]**
 
 - [ ] Talk to IT and data protection: local processing, consent per recording, retention (audio deleted after N days).
 - [ ] Check the licence situation of the default model (Flix: Apache 2.0, trained under the Swiss TDM research exception).

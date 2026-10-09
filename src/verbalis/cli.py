@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -314,7 +315,7 @@ def cmd_selftest(_args) -> int:
         importlib.import_module("webview")
 
     def audio_devices_library():
-        if sys.platform == "win32":  # on Linux it needs a running PulseAudio
+        if sys.platform in ("win32", "darwin"):  # on Linux it needs a running PulseAudio
             importlib.import_module("soundcard")
 
     check("Audio komprimieren und lesen", audio_roundtrip)
@@ -324,6 +325,16 @@ def cmd_selftest(_args) -> int:
     check("Fenster (pywebview)", window_library)
     check("Audiogeräte (soundcard)", audio_devices_library)
     check("Rechtschreibung (spylls)", lambda: importlib.import_module("spylls.hunspell"))
+
+    def system_audio_helper():
+        from .audio.mac_tap import helper_path
+        helper = helper_path()
+        assert helper is not None, "verbalis-audiotap fehlt"
+        out = subprocess.run([str(helper), "--version"], capture_output=True, text=True, timeout=10)
+        assert out.returncode == 0 and "verbalis-audiotap" in out.stdout, out.stderr
+
+    if sys.platform == "darwin":
+        check("Systemton-Hilfsprogramm (macOS)", system_audio_helper)
 
     def release_notes():
         from .updates import changelog_path, changes_between

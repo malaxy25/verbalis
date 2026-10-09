@@ -1,10 +1,11 @@
 name: Release
 
-# Builds the Windows installer.
-# - Version tag (v1.2.3): build, self-test, publish a GitHub Release with the installer
-#   and the matching CHANGELOG section. The tag must match verbalis.__version__.
-# - Manual run (Actions → Release → Run workflow): build and self-test only; the
-#   installer is attached to the run as an artifact, nothing is published.
+# Builds Verbalis for Windows (installer) and macOS (app, experimental).
+# - Version tag (v1.2.3): build both, self-test, publish ONE GitHub Release with the
+#   matching CHANGELOG section. The tag must match verbalis.__version__.
+#   A failing macOS build doesn't block the Windows release.
+# - Manual run (Actions → Release → Run workflow): build and self-test only; the files
+#   are attached to the run as artifacts, nothing is published.
 #   Use it after merging dependency updates, before the next tag.
 
 on:
@@ -16,14 +17,32 @@ permissions:
   contents: write   # needed to create the release
 
 jobs:
-  windows-installer:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read and check version
+        id: read
+        run: |
+          set -euo pipefail
+          version=$(python3 -c "import re; print(re.search(r'__version__ = \"(.+?)\"', open('src/verbalis/__init__.py').read()).group(1))")
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match verbalis.__version__ ($version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version $version"
+
+  windows:
+    needs: version
     runs-on: windows-latest
     defaults:
       run:
         shell: pwsh
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -31,21 +50,8 @@ jobs:
 
       - name: Install dependencies (exact versions)
         run: |
-          # Exact versions from packaging/requirements-build.txt make the installer reproducible;
-          # updates come as Dependabot PRs and are verified before a release.
           pip install -c packaging/requirements-build.txt -e ".[build]"
           if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
-
-      - name: Read and check version
-        id: version
-        run: |
-          $version = python -c "import verbalis; print(verbalis.__version__)"
-          if ($LASTEXITCODE -ne 0) { throw "could not read the version" }
-          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
-            throw "Tag $env:GITHUB_REF_NAME does not match verbalis.__version__ ($version)"
-          }
-          "version=$version" >> $env:GITHUB_OUTPUT
-          Write-Host "Version $version"
 
       - name: Bundle with PyInstaller
         run: |
@@ -74,35 +80,117 @@ jobs:
 
       - name: Build installer
         run: |
-          & $env:ISCC "/DAppVersion=${{ steps.version.outputs.version }}" packaging\verbalis.iss
+          & $env:ISCC "/DAppVersion=${{ needs.version.outputs.version }}" packaging\verbalis.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
           Get-ChildItem dist\Verbalis-*-setup.exe | ForEach-Object { "{0}  {1:N0} MB" -f $_.Name, ($_.Length / 1MB) }
 
-      - name: Release notes from CHANGELOG
-        run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $lines = Get-Content CHANGELOG.md -Encoding utf8
-          $start = ($lines | Select-String -Pattern "^## $([regex]::Escape($version)) " | Select-Object -First 1).LineNumber
-          if (-not $start) { throw "CHANGELOG.md has no section for $version" }
-          $notes = @()
-          foreach ($line in $lines[$start..($lines.Count - 1)]) {
-            if ($line -match "^## ") { break }
-            $notes += $line
-          }
-          $notes += "", "**Installation:** Verbalis-$version-setup.exe herunterladen und ausführen. Ein Update installiert man genauso – Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten."
-          $notes | Set-Content release-notes.md -Encoding utf8
-
       - uses: actions/upload-artifact@v6
         with:
-          name: Verbalis-${{ steps.version.outputs.version }}-setup
+          name: Verbalis-${{ needs.version.outputs.version }}-windows
           path: dist/Verbalis-*-setup.exe
           if-no-files-found: error
 
+  macos:
+    # Experimental. System audio via the Swift helper (Core Audio tap, macOS 14.2+).
+    needs: version
+    runs-on: macos-latest      # Apple Silicon (arm64)
+    continue-on-error: true    # must not block the Windows release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies (exact versions)
+        run: |
+          set -euo pipefail
+          pip install -c packaging/requirements-build.txt -e ".[build]"
+
+      - name: Build the system audio helper (Swift)
+        run: |
+          set -euo pipefail
+          mkdir -p tools/macos/build
+          swiftc -O -swift-version 5 -target arm64-apple-macos14.2 \
+            -o tools/macos/build/verbalis-audiotap tools/macos/audiotap.swift
+          tools/macos/build/verbalis-audiotap --version
+
+      - name: Bundle with PyInstaller
+        run: |
+          set -euo pipefail
+          pyinstaller packaging/verbalis.spec --noconfirm
+          test -x dist/Verbalis.app/Contents/MacOS/Verbalis
+          test -x dist/Verbalis.app/Contents/MacOS/verbalis-cli
+
+      - name: Self-test of the app bundle
+        env:
+          VERBALIS_HOME: ${{ runner.temp }}/verbalis-home
+          MITSCHRIFT_HOME: ${{ runner.temp }}/no-old-home
+        run: |
+          set -euo pipefail
+          dist/Verbalis.app/Contents/MacOS/verbalis-cli --version
+          dist/Verbalis.app/Contents/MacOS/verbalis-cli selftest
+
+      - name: Pack the app
+        run: |
+          set -euo pipefail
+          # ditto keeps the bundle structure, symlinks and the (ad-hoc) code signature intact
+          ditto -c -k --sequesterRsrc --keepParent dist/Verbalis.app \
+            "dist/Verbalis-${{ needs.version.outputs.version }}-macos-arm64.zip"
+          ls -lh dist/*.zip
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Verbalis-${{ needs.version.outputs.version }}-macos
+          path: dist/Verbalis-*-macos-arm64.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [version, windows, macos]
+    # publish whenever Windows succeeded – with or without the experimental Mac build
+    if: always() && github.ref_type == 'tag' && needs.windows.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Verbalis-*
+          path: dist
+          merge-multiple: true
+
+      - name: Release notes from CHANGELOG
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          MAC_RESULT: ${{ needs.macos.result }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          version = os.environ["VERSION"]
+          lines = open("CHANGELOG.md", encoding="utf-8").read().splitlines()
+          start = next((i for i, l in enumerate(lines) if re.match(rf"^## {re.escape(version)} ", l)), None)
+          if start is None:
+              raise SystemExit(f"CHANGELOG.md has no section for {version}")
+          notes = []
+          for line in lines[start + 1:]:
+              if line.startswith("## "):
+                  break
+              notes.append(line)
+          notes += ["", f"**Windows:** `Verbalis-{version}-setup.exe` herunterladen und ausführen. Ein Update "
+                        "installiert man genauso – Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten."]
+          if os.environ["MAC_RESULT"] == "success":
+              notes += ["", f"**Mac (experimentell, Apple Silicon):** `Verbalis-{version}-macos-arm64.zip` entpacken und "
+                            "Verbalis in «Programme» ziehen. Beim ersten Öffnen blockiert macOS die nicht signierte App: "
+                            "Systemeinstellungen → Datenschutz & Sicherheit → «Trotzdem öffnen». Für den Ton der anderen "
+                            "braucht es BlackHole, siehe README."]
+          open("release-notes.md", "w", encoding="utf-8").write("\n".join(notes) + "\n")
+          PY
+          ls -l dist
+
       - name: Publish GitHub Release
-        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
-          name: Verbalis ${{ steps.version.outputs.version }}
+          name: Verbalis ${{ needs.version.outputs.version }}
           body_path: release-notes.md
-          files: dist/Verbalis-*-setup.exe
+          files: dist/*
           fail_on_unmatched_files: true

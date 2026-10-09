@@ -1,3 +1,5 @@
+"""Correction list: unique targets, variants, applying rules, suggestions from edits."""
+
 from verbalis.corrections import CorrectionList, suggestions
 
 

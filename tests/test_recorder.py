@@ -1,3 +1,5 @@
+"""Two-track recorder: padding dropouts with silence, pausing without padding."""
+
 import threading
 from contextlib import contextmanager
 

@@ -13,3 +13,5 @@ transcript*.json
 comparison*.md
 *.wav
 *.flac
+tools/ui-preview/preview.html
+tools/macos/build/

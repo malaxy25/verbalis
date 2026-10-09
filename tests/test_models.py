@@ -1,3 +1,5 @@
+"""Model names, download sources and subfolders, cache detection, updates, conversion checks."""
+
 import json
 
 import pytest

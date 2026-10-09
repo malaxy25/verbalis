@@ -243,6 +243,8 @@
   }
   .link-button:hover { color: var(--ink); }
   .link-button:disabled { opacity: .5; cursor: default; }
+  .device-hint { flex-basis: 100%; color: var(--amber); font-size: 13px; }
+  .device-hint[hidden] { display: none; }
 
   /* Log */
   .log-body { padding: 16px 26px 20px; display: grid; gap: 12px; }
@@ -421,6 +423,7 @@
         <select id="sel-speakers"></select>
       </label>
       <button type="button" class="link-button" id="btn-reload-devices">Geräte neu laden</button>
+      <small class="device-hint" id="device-hint" hidden></small>
     </div>
 
     <label class="consent">
@@ -1103,7 +1106,7 @@ async function poll() {
 /* ---------- Devices & settings ---------- */
 
 function fillOptions(select, names, fallback, chosen) {
-  select.replaceChildren(element("option", { value: "" }, `Systemstandard (${fallback})`));
+  select.replaceChildren(element("option", { value: "" }, fallback ? `Systemstandard (${fallback})` : "Bitte Gerät wählen …"));
   for (const n of names) select.append(element("option", { value: n }, n));
   select.value = names.includes(chosen) ? chosen : "";
 }
@@ -1181,6 +1184,10 @@ async function loadDevices() {
     const g = await call("devices");
     fillOptions($("sel-microphone"), g.microphones, g.default_microphone, state.settings.microphone);
     fillOptions($("sel-speakers"), g.speakers, g.default_speakers, state.settings.speakers);
+    const hint = $("device-hint");
+    hint.hidden = !(g.platform === "darwin" && !g.virtual_device);
+    hint.textContent = "Für den Ton der anderen braucht dieser Mac macOS 14.2 oder neuer – oder ein virtuelles "
+      + "Audiogerät wie BlackHole (kostenlos), hier gewählt. Anleitung im README.";
   } catch (e) {
     showMessage("Audiogeräte konnten nicht gelesen werden: " + e.message);
   }
@@ -1400,7 +1407,10 @@ async function openUpdate() {
   go.disabled = false;
   if (info.can_install) {
     go.textContent = "Herunterladen und installieren";
-    $("update-line").textContent = `Download ca. ${info.installer_mb} MB. Verbalis schliesst sich danach, der Installer übernimmt. Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten.`;
+    const how = info.platform === "darwin"
+      ? "Verbalis schliesst sich, wird ersetzt und startet neu."
+      : "Verbalis schliesst sich danach, der Installer übernimmt.";
+    $("update-line").textContent = `Download ca. ${info.installer_mb} MB. ${how} Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten.`;
   } else {
     go.textContent = "Release-Seite öffnen";
     $("update-line").textContent = "Diese Verbalis läuft aus dem Quellcode (Entwicklungsversion): bitte mit git aktualisieren.";
@@ -1419,7 +1429,9 @@ async function startUpdate() {
   try {
     await call("install_update");
     state.updateStarted = true;
-    $("update-line").textContent = "Der Installer startet. Verbalis wird jetzt geschlossen.";
+    $("update-line").textContent = state.update.platform === "darwin"
+      ? "Das Update wird installiert. Verbalis schliesst sich und startet gleich neu."
+      : "Der Installer startet. Verbalis wird jetzt geschlossen.";
   } catch (e) {
     $("update-line").textContent = e.message;
     go.disabled = false;

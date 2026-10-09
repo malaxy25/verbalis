@@ -1,6 +1,6 @@
 [project]
 name = "verbalis"
-version = "0.7.9"
+version = "0.7.10"
 description = "Record and transcribe conversations locally (microphone + system audio), Standard and Swiss German"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,7 +18,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 # Only needed to build the Windows installer (see packaging/ and .github/workflows/release.yml)
-build = ["pyinstaller>=6.10"]
+build = ["pyinstaller>=6.10", "pillow; sys_platform == 'darwin'"]  # Pillow converts the icon for macOS
 # Only needed to convert Hugging Face models (e.g. Swiss German fine-tunes)
 convert = ["transformers>=4.40", "torch", "accelerate", "huggingface_hub"]
 

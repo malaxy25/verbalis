@@ -1,3 +1,5 @@
+"""Reading, filtering and exporting the log without personal data."""
+
 import json
 import zipfile
 from pathlib import Path

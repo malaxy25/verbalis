@@ -222,6 +222,7 @@ def window_position(width: int, height: int, screen) -> tuple[int | None, int | 
 def start() -> None:
     import webview
 
+    set_taskbar_identity()   # before any window exists
     service = Service(check_updates_on_start=True)
     try:
         screen = webview.screens[0]
@@ -258,7 +259,29 @@ def start() -> None:
     api._window = window
     window.events.resized += remember_size
     window.events.closing += on_closing
-    webview.start(icon=str(ICON))  # icon applies on Linux; on Windows it comes from the shortcut
+    webview.start(icon=str(ICON))
+
+
+def set_taskbar_identity(platform: str = sys.platform, frozen: bool | None = None, shell32=None) -> bool:
+    """Own taskbar identity when running from Python (development version).
+
+    Windows groups taskbar buttons by an «application user model ID». A Python
+    program without one counts as pythonw.exe and gets the Python logo, whatever
+    icon the window has. The installed Verbalis.exe has its own identity already.
+    """
+    if frozen is None:
+        frozen = bool(getattr(sys, "frozen", False))
+    if platform != "win32" or frozen:
+        return False
+    try:
+        if shell32 is None:
+            import ctypes
+            shell32 = ctypes.windll.shell32
+        shell32.SetCurrentProcessExplicitAppUserModelID("Frehner.Verbalis")
+        return True
+    except Exception as e:  # cosmetic – never stop the app for it
+        log.warning("Could not set the taskbar identity: %s", e)
+        return False
 
 
 # ---------------------------------------------------------------- start by double-click

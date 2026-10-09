@@ -1,3 +1,5 @@
+"""Word error rate (WER) and loading references for model comparisons."""
+
 import pytest
 
 from verbalis.evaluation import error_rate, normalize
