@@ -1,4 +1,4 @@
-name: Dictionary check
+name: 3 · Monthly check – spelling dictionary
 
 # Dependabot doesn't know the spelling dictionary (it is a data file from the
 # LibreOffice repo, not a package). This workflow does the same job monthly:

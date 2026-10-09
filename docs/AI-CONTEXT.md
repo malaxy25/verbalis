@@ -88,9 +88,11 @@ New versions come as a ZIP from Claude and are extracted over the local repo
   because a failed `Rename-Item`/`cd` left it in the parent folder. Scripts must stop on
   errors (`$ErrorActionPreference = "Stop"`, check `$LASTEXITCODE` after every git call)
   and only touch explicit paths.
+- **Releases are automatic:** raise the version (`pyproject.toml`, `src/verbalis/__init__.py`),
+  add a `CHANGELOG.md` section, push. The Release workflow runs only after green Tests, only
+  for a version without tag, builds the tested commit and creates the tag. Never tag by hand.
 - **Published tags are never reused or moved** (protected by a ruleset); a fix gets a new
-  version number. Version lives in `pyproject.toml` and `src/verbalis/__init__.py` and must
-  match the tag, plus a section in `CHANGELOG.md`.
+  version number.
 - `main` is protected against force-push and deletion; direct pushes are fine.
 
 ## Testing

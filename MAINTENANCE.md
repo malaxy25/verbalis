@@ -92,12 +92,21 @@ about changes made on GitHub in the meantime (e.g. merged Dependabot PRs).
 
 ## Releasing
 
-1. Version in `pyproject.toml` and `src/verbalis/__init__.py`, section in `CHANGELOG.md`.
-2. `pytest -q`, commit, `git tag -a vX.Y.Z -m "Version X.Y.Z"`, push commit and tag.
-3. The Release workflow builds `Verbalis-X.Y.Z-setup.exe` and the experimental
-   `Verbalis-X.Y.Z-macos-arm64.zip` and publishes them under **Releases** with the changelog
-   section. It refuses to run if tag and version differ. If only the Mac build fails, the
-   release is published with the Windows installer alone – check the macOS job's log.
+1. Raise the version in `pyproject.toml` and `src/verbalis/__init__.py` and add a section
+   `## X.Y.Z – date` at the top of `CHANGELOG.md`.
+2. `pytest -q`, commit, **push** – no tag.
+3. GitHub runs **1 · Tests**. Only if all jobs are green, **2 · Build & Release**
+   starts by itself: it sees that `vX.Y.Z` doesn't exist yet, builds exactly the tested commit
+   (`Verbalis-X.Y.Z-setup.exe`, experimental `Verbalis-X.Y.Z-macos-arm64.zip`), self-tests both,
+   creates the tag `vX.Y.Z` and publishes the release with the changelog section.
+4. Afterwards `git pull` fetches the new tag.
+
+- Pushes without a new version (docs, fixes collected for later) release nothing.
+- Tests red → no release; fix and push again.
+- New version without changelog section → the release run fails with a clear message.
+- Only the Mac build failed → the release is published with the Windows installer alone.
+- A bad release slipped through anyway: edit it on GitHub and mark it as «Pre-release» – the
+  update check ignores pre-releases. The tag stays (protected); the fix is the next version.
 
 ## Occasionally
 

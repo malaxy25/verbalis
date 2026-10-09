@@ -1,7 +1,12 @@
-name: Tests
+name: 1 · Tests
+# Title in the run list: what was tested (commit or pull request)
+run-name: >-
+  Tests: ${{ github.event_name == 'pull_request' && format('PR #{0} {1}', github.event.number, github.event.pull_request.title)
+  || github.event.head_commit.message }}
 
 on:
   push:
+    branches: [main]     # not for tags – the release workflow tags after the tests anyway
   pull_request:
 
 jobs:

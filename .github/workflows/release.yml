@@ -1,16 +1,24 @@
-name: Release
+name: 2 · Build & Release
+# Title in the run list: which tested commit is built
+run-name: >-
+  Build & Release: ${{ github.event.workflow_run.head_commit.message || format('manual build of {0}', github.ref_name) }}
 
-# Builds Verbalis for Windows (installer) and macOS (app, experimental).
-# - Version tag (v1.2.3): build both, self-test, publish ONE GitHub Release with the
-#   matching CHANGELOG section. The tag must match verbalis.__version__.
-#   A failing macOS build doesn't block the Windows release.
-# - Manual run (Actions → Release → Run workflow): build and self-test only; the files
-#   are attached to the run as artifacts, nothing is published.
-#   Use it after merging dependency updates, before the next tag.
+# Builds Verbalis for Windows (installer) and macOS (app, experimental) and publishes it.
+#
+# Automatic: runs when the «Tests» workflow has finished for a push to main.
+#   - Tests not all green           → nothing happens.
+#   - version in src/verbalis/__init__.py already has a tag → nothing happens (no new version).
+#   - new version                   → build exactly the tested commit, self-test, create the tag
+#                                     v<version> and publish ONE GitHub Release with the matching
+#                                     CHANGELOG section. A failing macOS build doesn't block Windows.
+#   So a release = raise the version + CHANGELOG section + push. No manual tagging.
+# Manual (Actions → Release → Run workflow): build and self-test only, files attached to the run,
+#   nothing published. Use it after merging dependency updates.
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_run:
+    workflows: ["1 · Tests"]   # must match the name in tests.yml exactly
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -18,31 +26,57 @@ permissions:
 
 jobs:
   version:
+    # only after green tests of a push to main (or when started by hand)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.read.outputs.version }}
+      release: ${{ steps.read.outputs.release }}
+      sha: ${{ steps.read.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
-      - name: Read and check version
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}   # exactly the tested commit
+      - name: Read version, decide whether to release
         id: read
+        env:
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
           version=$(python3 -c "import re; print(re.search(r'__version__ = \"(.+?)\"', open('src/verbalis/__init__.py').read()).group(1))")
-          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match verbalis.__version__ ($version)"
-            exit 1
-          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Version $version"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" != "workflow_run" ]; then
+            echo "Manual run: build and self-test $version only"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already released – nothing to do"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            if ! grep -qE "^## ${version//./\\.} " CHANGELOG.md; then
+              echo "::error::New version $version but CHANGELOG.md has no section «## $version – …»"
+              exit 1
+            fi
+            echo "New version $version – building release"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
 
   windows:
     needs: version
+    if: needs.version.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     defaults:
       run:
         shell: pwsh
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -93,10 +127,13 @@ jobs:
   macos:
     # Experimental. System audio via the Swift helper (Core Audio tap, macOS 14.2+).
     needs: version
+    if: needs.version.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest      # Apple Silicon (arm64)
     continue-on-error: true    # must not block the Windows release
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -148,10 +185,12 @@ jobs:
   publish:
     needs: [version, windows, macos]
     # publish whenever Windows succeeded – with or without the experimental Mac build
-    if: always() && github.ref_type == 'tag' && needs.windows.result == 'success'
+    if: always() && needs.version.outputs.release == 'true' && needs.windows.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -188,9 +227,21 @@ jobs:
           PY
           ls -l dist
 
+      - name: Create the version tag on the tested commit
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          SHA: ${{ needs.version.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" "$SHA" -m "Version $VERSION"
+          git push origin "v$VERSION"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: v${{ needs.version.outputs.version }}
           name: Verbalis ${{ needs.version.outputs.version }}
           body_path: release-notes.md
           files: dist/*

@@ -243,8 +243,9 @@ Recordings contain personal data; they are excluded from the repo via `.gitignor
 
 ## Releases and installer
 
-Pushing a version tag (`git tag -a v0.7.2 …`, `git push origin v0.7.2`) starts the
-**Release** GitHub Action:
+A release needs no manual tag: raise the version, add a CHANGELOG section and push.
+When the **Tests** workflow is green for that push and the version has no tag yet, the
+**Release** GitHub Action builds exactly the tested commit:
 
 1. bundles Verbalis with PyInstaller (`packaging/verbalis.spec`) into `Verbalis.exe`
    (app, no console) and `verbalis-cli.exe` (command line),
@@ -254,7 +255,7 @@ Pushing a version tag (`git tag -a v0.7.2 …`, `git push origin v0.7.2`) starts
 5. publishes one GitHub Release with both files and the matching CHANGELOG section – a failing
    Mac build doesn't block the Windows release.
 
-The tag must match `verbalis.__version__`. The installer installs per user into
+Then it creates the tag `v<version>`. The installer installs per user into
 `%LOCALAPPDATA%\Programs\Verbalis` without admin rights; installing a newer
 version updates in place and keeps `~/.verbalis`. Without a code signature Windows
 SmartScreen warns on first install («Weitere Informationen» → «Trotzdem ausführen»).

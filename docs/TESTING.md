@@ -19,10 +19,10 @@ seconds on Windows, Linux and macOS.
 
 | Where | What |
 |---|---|
-| **Tests** workflow, job *tests* | every push and pull request: Windows + Ubuntu (Python 3.11, 3.13, 3.14), macOS (3.12); lint (pyflakes), all tests, catalogue check – with the newest compatible library versions |
-| **Tests** workflow, job *build versions* | same tests with exactly the pinned versions of the installer (`packaging/requirements-build.txt`); catches Dependabot pins that don't fit together |
-| **Release** workflow | `verbalis-cli selftest` inside the bundled app on Windows and macOS: audio compression, silence filter (VAD), model runtime, UI files, window and audio libraries, spelling library, changelog |
-| **Dictionary check** / **Model check** (monthly) | not tests, but watch external data: LibreOffice dictionary and the Flix original |
+| **1 · Tests**, job *tests* | every push and pull request: Windows + Ubuntu (Python 3.11, 3.13, 3.14), macOS (3.12); lint (pyflakes), all tests, catalogue check – with the newest compatible library versions |
+| **1 · Tests**, job *build versions* | same tests with exactly the pinned versions of the installer (`packaging/requirements-build.txt`); catches Dependabot pins that don't fit together |
+| **2 · Build & Release** | starts only after the Tests workflow is green for a push to main with a new version; then `verbalis-cli selftest` inside the bundled app on Windows and macOS: audio compression, silence filter (VAD), model runtime, UI files, window and audio libraries, spelling library, changelog |
+| **3 · / 4 · Monthly check** | not tests, but watch external data: LibreOffice dictionary and the Flix original |
 
 ## How the tests are built
 
@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-147 tests in 17 files.
+153 tests in 18 files.
 
 ### `test_app.py` (7)
 
@@ -206,6 +206,17 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Pause writes nothing and pads no silence**
 - **Device with unreadable format records with fixed channels** – Regression 0.7.12: «AssertionError» from soundcard stopped the recording at once.
 - **Device that cannot record explains why**
+
+### `test_release_workflow.py` (6)
+
+The release workflow: only after green tests, only for a new version, exactly the tested commit.
+
+- **Release waits for exactly the tests workflow** – The release workflow finds the tests by name – renaming only one of them would silently stop
+- **Tests run once per push to main and for pull requests**
+- **Release starts after tests not on tags**
+- **Every job builds the tested commit**
+- **Tag only after a successful windows build**
+- **Decision step**
 
 ### `test_robustness.py` (13)
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.15 – 2026-10-09
+- **Releases happen automatically after green tests:** raise the version, add a CHANGELOG section and
+  push – no more manual tags. The Release workflow starts when the Tests workflow has finished; it only
+  continues if all tests passed for a push to main and the version has no tag yet. It builds exactly the
+  tested commit, creates the tag only after the Windows build succeeded, and stops with a clear message
+  if the CHANGELOG section is missing. Pushes without a new version release nothing.
+- Tests for the release workflow itself (`test_release_workflow.py`), including its decision step
+  against a local git repository
+- Clearer GitHub Actions list: numbered workflows («1 · Tests», «2 · Build & Release», «3 · / 4 · Monthly
+  check …») and run titles that start with the type («Tests: …», «Build & Release: …»). Tests run once per
+  push to main (no second run for the tag) and for pull requests. A test makes sure the release workflow
+  refers to the tests by their exact name.
+
 ## 0.7.14 – 2026-10-09
 - Fix: devices that report a plain audio format, such as the **Jabra Link 380** in hands-free mode, still
   couldn't be recorded. The audio library only accepts one specific format (and describes it with wrong

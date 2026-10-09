@@ -1,4 +1,4 @@
-name: Model check
+name: 4 · Monthly check – Flix model
 
 # Our Flix copy (malaxy/flix-swissgerman-ct2) is converted from Flix-AI/flix-swissgerman-full.
 # Installations only get a new Flix when we upload a new conversion. This workflow checks
