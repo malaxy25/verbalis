@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.12 – 2026-10-09
+- Fix: on a PC without a default microphone (or speakers) both device lists stayed empty with
+  «Error 0x80070490» (Windows: element not found). Verbalis now takes the first device when no default
+  is set, lists the other kind of device anyway, and explains in plain words what to do when there is
+  no microphone at all (connect one, allow microphone access for desktop apps in Windows privacy settings).
+  Found by installing the release on a second PC.
+
 ## 0.7.11 – 2026-10-09
 Hardening after an external review (ChatGPT, checked against the code).
 

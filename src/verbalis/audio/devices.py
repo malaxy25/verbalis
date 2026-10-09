@@ -74,10 +74,33 @@ def _is_virtual(name: str) -> bool:
     return any(v in name.lower() for v in VIRTUAL_DEVICES)
 
 
+NO_MICROPHONE = ("Es wurde kein Mikrofon gefunden. Headset oder Mikrofon anschliessen – und unter Windows "
+                 "in den Einstellungen → Datenschutz und Sicherheit → Mikrofon den Zugriff für Desktop-Apps erlauben. "
+                 "Danach «Geräte neu laden».")
+NO_SPEAKERS = ("Es wurde kein Ausgabegerät gefunden. Lautsprecher oder Headset anschliessen und "
+               "«Geräte neu laden».")
+
+
+def _default(get, available: list):
+    """The system's default device – or the first one, if Windows has none set.
+
+    Windows answers «element not found» (0x80070490) when no default device
+    exists, e.g. on a desktop PC without a microphone. That must not break the
+    whole device list.
+    """
+    try:
+        return get()
+    except Exception:
+        return available[0] if available else None
+
+
 def device_names() -> dict:
-    """Device names for the UI."""
+    """Device names for the UI. Never fails because one kind of device is missing."""
     sc = soundcard_module()
-    mics = [m.name for m in sc.all_microphones()]
+    mic_list = sc.all_microphones()
+    mics = [m.name for m in mic_list]
+    default_mic = _default(sc.default_microphone, mic_list)
+    problems = [] if mic_list else [NO_MICROPHONE]
     if sys.platform == "darwin":
         from . import mac_tap
 
@@ -85,21 +108,30 @@ def device_names() -> dict:
         virtual = [n for n in mics if _is_virtual(n)]
         default = mac_tap.SYSTEM_AUDIO if tap else (virtual[0] if virtual else "")
         return {"microphones": mics, "speakers": ([mac_tap.SYSTEM_AUDIO] if tap else []) + mics,
-                "default_microphone": sc.default_microphone().name, "default_speakers": default,
-                "platform": "darwin", "virtual_device": tap or bool(virtual), "system_audio": tap}
+                "default_microphone": default_mic.name if default_mic else "", "default_speakers": default,
+                "platform": "darwin", "virtual_device": tap or bool(virtual), "system_audio": tap,
+                "problems": problems}
+    speaker_list = sc.all_speakers()
+    default_spk = _default(sc.default_speaker, speaker_list)
+    if not speaker_list:
+        problems.append(NO_SPEAKERS)
     return {
         "microphones": mics,
-        "speakers": [s.name for s in sc.all_speakers()],
-        "default_microphone": sc.default_microphone().name,
-        "default_speakers": sc.default_speaker().name,
+        "speakers": [s.name for s in speaker_list],
+        "default_microphone": default_mic.name if default_mic else "",
+        "default_speakers": default_spk.name if default_spk else "",
         "platform": sys.platform,
         "virtual_device": True,
+        "problems": problems,
     }
 
 
 def select(microphone: str | None = None, speakers: str | None = None) -> DeviceSelection:
     sc = soundcard_module()
-    mic = _pick(sc.all_microphones(), microphone, sc.default_microphone())
+    mic_list = sc.all_microphones()
+    mic = _pick(mic_list, microphone, _default(sc.default_microphone, mic_list))
+    if mic is None:
+        raise ValueError(NO_MICROPHONE)
     if sys.platform == "darwin":
         from . import mac_tap
 
@@ -117,7 +149,10 @@ def select(microphone: str | None = None, speakers: str | None = None) -> Device
             raise ValueError("Mikrofon und «Ton der anderen» sind dasselbe Gerät. Für den Ton der anderen "
                              "das virtuelle Audiogerät (z.B. BlackHole) wählen.")
         return DeviceSelection(microphone=mic, speakers=others, loopback=others)
-    spk = _pick(sc.all_speakers(), speakers, sc.default_speaker())
+    speaker_list = sc.all_speakers()
+    spk = _pick(speaker_list, speakers, _default(sc.default_speaker, speaker_list))
+    if spk is None:
+        raise ValueError(NO_SPEAKERS)
     return DeviceSelection(microphone=mic, speakers=spk, loopback=loopback_for(sc, spk))
 
 

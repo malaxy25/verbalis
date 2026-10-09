@@ -1231,9 +1231,13 @@ async function loadDevices() {
     fillOptions($("sel-microphone"), g.microphones, g.default_microphone, state.settings.microphone);
     fillOptions($("sel-speakers"), g.speakers, g.default_speakers, state.settings.speakers);
     const hint = $("device-hint");
-    hint.hidden = !(g.platform === "darwin" && !g.virtual_device);
-    hint.textContent = "Für den Ton der anderen braucht dieser Mac macOS 14.2 oder neuer – oder ein virtuelles "
-      + "Audiogerät wie BlackHole (kostenlos), hier gewählt. Anleitung im README.";
+    const notes = [...(g.problems || [])];
+    if (g.platform === "darwin" && !g.virtual_device) {
+      notes.push("Für den Ton der anderen braucht dieser Mac macOS 14.2 oder neuer – oder ein virtuelles "
+        + "Audiogerät wie BlackHole (kostenlos), hier gewählt. Anleitung im README.");
+    }
+    hint.hidden = !notes.length;
+    hint.textContent = notes.join(" ");
   } catch (e) {
     showMessage("Audiogeräte konnten nicht gelesen werden: " + e.message);
   }

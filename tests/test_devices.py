@@ -60,3 +60,36 @@ def test_mac_without_virtual_device_explains_what_to_do(monkeypatch):
         devices.select(None, None)
     with pytest.raises(ValueError, match="dasselbe Gerät"):
         devices.select(None, "MacBook-Mikrofon")
+
+
+
+class NoDefaults(FakeSoundcard):
+    """Windows without a default device answers «element not found» (0x80070490)."""
+
+    def default_microphone(self):
+        raise RuntimeError("Error 0x80070490")
+
+    def default_speaker(self):
+        raise RuntimeError("Error 0x80070490")
+
+
+def test_missing_default_device_does_not_break_the_list(monkeypatch):
+    """Regression 0.7.11: on a PC without a default microphone both device lists stayed empty."""
+    monkeypatch.setattr(devices.sys, "platform", "win32")
+    sc = NoDefaults(["USB-Mikrofon"], ["Lautsprecher"])
+    monkeypatch.setattr(devices, "soundcard_module", lambda: sc)
+    names = devices.device_names()
+    assert names["microphones"] == ["USB-Mikrofon"] and names["default_microphone"] == "USB-Mikrofon"
+    assert names["default_speakers"] == "Lautsprecher" and names["problems"] == []
+    assert devices.select(None, None).microphone.name == "USB-Mikrofon"     # first one instead of failing
+
+
+def test_no_microphone_at_all_explains_what_to_do(monkeypatch):
+    monkeypatch.setattr(devices.sys, "platform", "win32")
+    sc = NoDefaults([], ["Lautsprecher"])
+    monkeypatch.setattr(devices, "soundcard_module", lambda: sc)
+    names = devices.device_names()
+    assert names["speakers"] == ["Lautsprecher"]                            # the rest still works
+    assert names["default_microphone"] == "" and "kein Mikrofon" in names["problems"][0]
+    with pytest.raises(ValueError, match="kein Mikrofon"):
+        devices.select(None, None)

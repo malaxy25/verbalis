@@ -1,6 +1,6 @@
 [project]
 name = "verbalis"
-version = "0.7.11"
+version = "0.7.12"
 description = "Record and transcribe conversations locally (microphone + system audio), Standard and Swiss German"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -64,13 +64,13 @@ in the README and in `BACKLOG.md`):
 
 **User interface:** the HTML/JavaScript UI can be opened in any browser with a fake
 backend: `python tools/ui_preview.py` writes `tools/ui-preview/preview.html`
-(scenarios via `#transcript`, `#recording`, `#paused`, `#news`, `#notice`, `#empty`, `#dev`).
+(scenarios via `#transcript`, `#recording`, `#paused`, `#news`, `#notice`, `#empty`, `#dev`, `#nomic`).
 During development every UI change was clicked through this way with Playwright.
 
 ## Catalogue
 
 <!-- catalog:start -->
-138 tests in 16 files.
+140 tests in 16 files.
 
 ### `test_app.py` (7)
 
@@ -121,13 +121,15 @@ Correction list: unique targets, variants, applying rules, suggestions from edit
 - **Suggestions from edit**
 - **No suggestions for rephrasing and insertions**
 
-### `test_devices.py` (3)
+### `test_devices.py` (5)
 
 Device selection, including macOS where the others' voices come from a virtual input device.
 
 - **Windows uses loopback of speakers**
 - **Mac uses virtual input device**
 - **Mac without virtual device explains what to do**
+- **Missing default device does not break the list** – Regression 0.7.11: on a PC without a default microphone both device lists stayed empty.
+- **No microphone at all explains what to do**
 
 ### `test_evaluation.py` (6)
 
