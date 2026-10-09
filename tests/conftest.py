@@ -30,3 +30,19 @@ def shutdown_services(monkeypatch):
     yield
     for s in created:
         s.shutdown(wait_s=10)
+
+
+@pytest.fixture(autouse=True)
+def no_real_diarization(monkeypatch):
+    """Tests never download or run the diarization models: one speaker per track by default.
+
+    Tests that check speaker diarization set `fake_turns.value` to the turns they want.
+    """
+    from verbalis import diarization
+
+    turns = type("Turns", (), {"value": [], "real_ensure_models": staticmethod(diarization.ensure_models),
+                               "real_models_ready": staticmethod(diarization.models_ready)})()
+    monkeypatch.setattr(diarization, "models_ready", lambda folder=None: True)
+    monkeypatch.setattr(diarization, "ensure_models", lambda *a, **k: None)
+    monkeypatch.setattr(diarization, "find_turns", lambda audio, folder=None: list(turns.value))
+    return turns

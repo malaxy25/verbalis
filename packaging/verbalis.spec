@@ -21,7 +21,7 @@ datas = [(str(ROOT / "src" / "verbalis" / "ui"), "verbalis/ui"),
          (str(ROOT / "CHANGELOG.md"), ".")]          # for «Was ist neu» after an update
 datas += collect_data_files("faster_whisper")   # Silero VAD model for the silence filter
 datas += collect_data_files("soundcard")        # C headers that soundcard reads at runtime (cffi)
-binaries = collect_dynamic_libs("ctranslate2") + collect_dynamic_libs("soxr")
+binaries = collect_dynamic_libs("ctranslate2") + collect_dynamic_libs("soxr") + collect_dynamic_libs("sherpa_onnx")
 
 if sys.platform == "darwin":
     # Swift helper for the system audio (tools/macos/audiotap.swift), compiled by the workflow first
@@ -35,7 +35,7 @@ a = Analysis(
     pathex=[str(ROOT / "src")],
     binaries=binaries,
     datas=datas,
-    hiddenimports=collect_submodules("verbalis") + ["soundcard", "soxr", "faster_whisper"],
+    hiddenimports=collect_submodules("verbalis") + collect_submodules("sherpa_onnx") + ["soundcard", "soxr", "faster_whisper"],
     # only needed to convert models (`pip install -e ".[convert]"`), far too big for the installer
     excludes=["torch", "transformers", "accelerate", "tkinter", "matplotlib", "IPython", "pytest"],
     noarchive=False,

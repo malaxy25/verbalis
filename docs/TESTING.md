@@ -21,7 +21,7 @@ seconds on Windows, Linux and macOS.
 |---|---|
 | **1 · Tests**, job *tests* | every push and pull request: Windows + Ubuntu (Python 3.11, 3.13, 3.14), macOS (3.12); lint (pyflakes), all tests, catalogue check – with the newest compatible library versions |
 | **1 · Tests**, job *build versions* | same tests with exactly the pinned versions of the installer (`packaging/requirements-build.txt`); catches Dependabot pins that don't fit together |
-| **2 · Build & Release** | starts only after the Tests workflow is green for a push to main with a new version; then `verbalis-cli selftest` inside the bundled app on Windows and macOS: audio compression, silence filter (VAD), model runtime, UI files, window and audio libraries, spelling library, changelog |
+| **2 · Build & Release** | starts only after the Tests workflow is green for a push to main with a new version; then `verbalis-cli selftest` inside the bundled app on Windows and macOS: audio compression, silence filter (VAD), model runtime, UI files, window and audio libraries, spelling library, changelog, speaker diarization with the real models after the silence filter (both ONNX runtimes in one process) |
 | **3 · / 4 · Monthly check** | not tests, but watch external data: LibreOffice dictionary and the Flix original |
 
 ## How the tests are built
@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-153 tests in 18 files.
+164 tests in 19 files.
 
 ### `test_app.py` (7)
 
@@ -130,6 +130,22 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Mac without virtual device explains what to do**
 - **Missing default device does not break the list** – Regression 0.7.11: on a PC without a default microphone both device lists stayed empty.
 - **No microphone at all explains what to do**
+
+### `test_diarization.py` (11)
+
+Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
+
+- **Speakers numbered in order of appearance**
+- **One speaker keeps the track name**
+- **Segment goes to the speaker who talks most or the nearest**
+- **Models are downloaded once and checked**
+- **Transcript has speakers of the others**
+- **Switched off means no speakers**
+- **Failing diarization keeps the transcript**
+- **Settings switch diarization per track**
+- **Rename merge and reassign**
+- **Speaker sample is playable wav**
+- **Reference and compare use the track not the name**
 
 ### `test_evaluation.py` (6)
 

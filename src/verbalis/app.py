@@ -112,6 +112,21 @@ class Api:
     def open_model_page(self, model):
         return self._call(self._s.open_model_page, model)
 
+    def speakers(self, recording_id):
+        return self._call(self._s.speakers, recording_id)
+
+    def rename_speakers(self, recording_id, names):
+        return self._call(self._s.rename_speakers, recording_id, names)
+
+    def merge_speakers(self, recording_id, source, target):
+        return self._call(self._s.merge_speakers, recording_id, source, target)
+
+    def set_paragraph_speaker(self, recording_id, index, speaker_id):
+        return self._call(self._s.set_paragraph_speaker, recording_id, index, speaker_id)
+
+    def speaker_sample(self, recording_id, speaker_id):
+        return self._call(self._s.speaker_sample, recording_id, speaker_id)
+
     def update_model(self, model):
         return self._call(self._s.update_model, model)
 

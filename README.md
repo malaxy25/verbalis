@@ -103,6 +103,12 @@ the repo, so updates take effect immediately. Errors are logged to
 - **Settings:** your name, label for the others, model, speed (accurate/fast),
   keywords, correction list (add entries by hand, click a word to add another
   variant), audio retention and recordings folder.
+- **Speakers:** on the Teams track Verbalis tells the other participants apart
+  («Gegenüber 1», «Gegenüber 2», …). Above the transcript, listen to a short sample of
+  each, give names, merge two that are the same person; click a name in the text to move
+  a paragraph to someone else. On by default for the others, off for the own microphone
+  (switch on for meetings in a room); both in the settings. Voice prints are only used
+  within one recording and never stored.
 - **Updates:** Verbalis checks GitHub for a newer version at start (can be
   switched off). A notice bottom left opens the release notes and installs the
   update. After an update, «Neu in Verbalis» shows what changed.

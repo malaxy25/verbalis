@@ -625,8 +625,16 @@ class Service:
                     with self._lock:
                         return self._job["paused_s"] if self._job else 0.0
 
+                def phase(text: str) -> None:
+                    with self._lock:
+                        if self._job:
+                            self._job["phase"] = text
+                    self._wait_while_paused()
+
+                diarize = {"others": s.diarize_others == "on", "me": s.diarize_me == "on"}
                 _, compute, duration = pipeline.create_transcript(
-                    self._path(recording_id), tr, s.model, names, progress, paused_time, corrections)
+                    self._path(recording_id), tr, s.model, names, progress, paused_time, corrections,
+                    diarize=diarize, phase=phase)
                 if duration > 0 and compute > 0:
                     self._remember_factor(key, compute / duration)
             except ShuttingDown:
@@ -775,6 +783,92 @@ class Service:
         corrections = CorrectionList.load()
         proposals = [corrections.classify(v, t) for v, t in suggestions(old, text)]
         return {"suggestions": [p for p in proposals if p["kind"] != "known"]}
+
+    # ------------------------------------------------------------ speakers
+
+    def _transcript_data(self, recording_id: str) -> tuple[Path, dict]:
+        folder = self._path(recording_id)
+        path = folder / "transcript.json"
+        if not path.exists():
+            raise ValueError("Für diese Aufnahme gibt es noch kein Transkript.")
+        return folder, json.loads(path.read_text(encoding="utf-8"))
+
+    def speakers(self, recording_id: str) -> list[dict]:
+        """Speakers told apart in this transcript, with how long each talks."""
+        _, data = self._transcript_data(recording_id)
+        talk: dict[str, float] = {}
+        for seg in data["segments"]:
+            if seg.get("speaker_id"):
+                talk[seg["speaker_id"]] = talk.get(seg["speaker_id"], 0.0) + seg["end"] - seg["start"]
+        return [{"id": sid, "name": info["name"], "track": info.get("track"), "seconds": round(talk.get(sid, 0.0))}
+                for sid, info in data.get("speakers", {}).items() if sid in talk]
+
+    def rename_speakers(self, recording_id: str, names: dict[str, str]) -> list[dict]:
+        """Give speakers names, e.g. {"others-1": "Hans Muster"}."""
+        folder, data = self._transcript_data(recording_id)
+        speakers = data.get("speakers", {})
+        for sid, name in names.items():
+            name = " ".join((name or "").split())
+            if sid not in speakers:
+                raise ValueError("Diesen Sprecher gibt es in diesem Transkript nicht.")
+            if not name:
+                raise ValueError("Ein Name darf nicht leer sein.")
+            speakers[sid]["name"] = name
+        for seg in data["segments"]:
+            if seg.get("speaker_id") in names:
+                seg["speaker"] = speakers[seg["speaker_id"]]["name"]
+        self._write_transcript(folder, data)
+        return self.speakers(recording_id)
+
+    def merge_speakers(self, recording_id: str, source: str, target: str) -> list[dict]:
+        """One person was recognised as two: give all of «source» to «target»."""
+        folder, data = self._transcript_data(recording_id)
+        speakers = data.get("speakers", {})
+        if source not in speakers or target not in speakers or source == target:
+            raise ValueError("Diese Sprecher lassen sich nicht zusammenlegen.")
+        for seg in data["segments"]:
+            if seg.get("speaker_id") == source:
+                seg["speaker_id"], seg["speaker"] = target, speakers[target]["name"]
+        del speakers[source]
+        data["segments"] = _join_neighbours(data["segments"])
+        self._write_transcript(folder, data)
+        return self.speakers(recording_id)
+
+    def set_paragraph_speaker(self, recording_id: str, index: int, speaker_id: str) -> None:
+        """A paragraph was assigned to the wrong person."""
+        folder, data = self._transcript_data(recording_id)
+        segments, speakers = data["segments"], data.get("speakers", {})
+        if not 0 <= index < len(segments):
+            raise ValueError("Diesen Absatz gibt es nicht (mehr).")
+        if speaker_id not in speakers or speakers[speaker_id].get("track") != segments[index].get("track"):
+            raise ValueError("Dieser Sprecher gehört nicht zu dieser Spur.")
+        segments[index]["speaker_id"], segments[index]["speaker"] = speaker_id, speakers[speaker_id]["name"]
+        self._write_transcript(folder, data)
+
+    def speaker_sample(self, recording_id: str, speaker_id: str, seconds: float = 8.0) -> dict:
+        """A few seconds of this speaker as a WAV data URL, to hear who it is."""
+        import base64
+        import io
+
+        import soundfile as sf
+
+        folder, data = self._transcript_data(recording_id)
+        own = [s for s in data["segments"] if s.get("speaker_id") == speaker_id]
+        if not own:
+            raise ValueError("Von diesem Sprecher gibt es keinen Abschnitt.")
+        longest = max(own, key=lambda s: s["end"] - s["start"])
+        audio_path = pipeline.audio_file(folder, longest.get("track") or "others")
+        if audio_path is None:
+            raise ValueError("Das Audio dieser Aufnahme wurde schon gelöscht – eine Hörprobe ist nicht mehr möglich.")
+        with sf.SoundFile(audio_path) as f:
+            start = max(longest["start"] + 0.3, 0)
+            f.seek(min(int(start * f.samplerate), max(f.frames - 1, 0)))
+            clip = f.read(int(min(seconds, longest["end"] - start) * f.samplerate), dtype="float32")
+            rate = f.samplerate
+        buffer = io.BytesIO()
+        sf.write(buffer, clip, rate, format="WAV", subtype="PCM_16")
+        return {"url": "data:audio/wav;base64," + base64.b64encode(buffer.getvalue()).decode("ascii"),
+                "start": round(start, 1)}
 
     def remember_corrections(self, recording_id: str, rules: list[dict]) -> dict:
         """Save the chosen suggestions and apply them to the whole transcript right away."""
@@ -1048,3 +1142,17 @@ class Service:
         self._queue.put(None)
         if wait_s:
             self._worker.join(wait_s)
+
+
+def _join_neighbours(segments: list[dict], max_pause: float = 2.0) -> list[dict]:
+    """After merging speakers: paragraphs of the same speaker that now follow each other become one."""
+    joined: list[dict] = []
+    for seg in segments:
+        last = joined[-1] if joined else None
+        if (last and seg.get("speaker_id") and last.get("speaker_id") == seg["speaker_id"]
+                and seg["start"] - last["end"] <= max_pause):
+            last["end"] = max(last["end"], seg["end"])
+            last["text"] = f"{last['text']} {seg['text']}"
+        else:
+            joined.append(dict(seg))
+    return joined

@@ -17,7 +17,8 @@ MAX_PAUSE_IN_PARAGRAPH_S = 2.0
 
 def merge(tracks: dict[str, list[Segment]]) -> list[Segment]:
     """tracks: display name → segments."""
-    everything = [replace(s, speaker=name) for name, segments in tracks.items() for s in segments]
+    # a speaker set by diarization stays; otherwise the track's display name
+    everything = [replace(s, speaker=s.speaker or name) for name, segments in tracks.items() for s in segments]
     everything.sort(key=lambda s: (s.start, s.end))
 
     paragraphs: list[Segment] = []
@@ -55,6 +56,16 @@ def save(folder: Path, filename: str, paragraphs: list[Segment], title: str, hea
     """
     md = folder / f"{filename}.md"
     md.write_text(to_markdown(paragraphs, title, header), encoding="utf-8")
-    data = {"title": title, "header": header, "tracks": tracks or {}, "segments": [asdict(p) for p in paragraphs]}
+    data = {"title": title, "header": header, "tracks": tracks or {}, "speakers": speakers_of(paragraphs),
+            "segments": [asdict(p) for p in paragraphs]}
     (folder / f"{filename}.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     return md
+
+
+def speakers_of(paragraphs: list[Segment]) -> dict[str, dict]:
+    """speaker id → {"name", "track"} for paragraphs from speaker diarization, in order of appearance."""
+    found: dict[str, dict] = {}
+    for p in paragraphs:
+        if p.speaker_id and p.speaker_id not in found:
+            found[p.speaker_id] = {"name": p.speaker, "track": p.track}
+    return found

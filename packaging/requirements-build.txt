@@ -46,6 +46,7 @@ pyyaml==6.0.3             # via ctranslate2, huggingface-hub
 qtpy==2.4.3 ; sys_platform == 'openbsd6'  # via pywebview
 scipy==1.18.1             # via verbalis (pyproject.toml)
 setuptools==84.0.0        # via pyinstaller
+sherpa-onnx==1.13.8       # via verbalis (pyproject.toml)
 soundcard==0.4.6          # via verbalis (pyproject.toml)
 soundfile==0.14.0         # via verbalis (pyproject.toml)
 soxr==1.1.0               # via verbalis (pyproject.toml)

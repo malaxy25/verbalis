@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from dataclasses import replace
 import os
 import platform
 import time
@@ -15,6 +17,8 @@ from .transcript import merge, save
 
 if TYPE_CHECKING:
     from .corrections import CorrectionList
+
+log = logging.getLogger(__name__)
 
 TRACKS = ("me", "others")
 AUDIO_EXTENSIONS = (".flac", ".wav")
@@ -240,7 +244,9 @@ def recording_start(folder: Path) -> datetime | None:
 # ---------------------------------------------------------------- transcription
 
 def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float | None = None,
-               progress: Progress | None = None, paused_time: Callable[[], float] | None = None):
+               progress: Progress | None = None, paused_time: Callable[[], float] | None = None,
+               diarize: dict[str, bool] | None = None, phase: Callable[[str], None] | None = None,
+               problems: list[str] | None = None):
     """Transcribe both tracks. Returns (paragraphs, compute_s, recording_s).
 
     names: track → display name. paused_time returns the seconds spent paused
@@ -265,10 +271,32 @@ def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float 
                 progress(n, min(position / total, 1.0) if total else 1.0)
 
         t, p = time.monotonic(), paused_time()
-        tracks[display_name] = transcriber.transcribe(audio, progress=report)
+        segments = [replace(s, track=track) for s in transcriber.transcribe(audio, progress=report)]
+        if (diarize or {}).get(track) and segments:
+            segments = _diarize(segments, audio, track, display_name, phase, problems)
+        tracks[display_name] = segments
         compute += (time.monotonic() - t) - (paused_time() - p)
         report(1, 1)
     return merge(tracks), compute, recording
+
+
+def _diarize(segments, audio, track, display_name, phase, problems):
+    """Tell the speakers of one track apart. Never loses the transcript: on errors it stays as it is."""
+    from . import diarization
+
+    try:
+        if not diarization.models_ready():
+            if phase:
+                phase("Modelle für die Sprechererkennung werden geladen (ca. 46 MB)")
+            diarization.ensure_models()
+        if phase:
+            phase(f"Sprecher in «{display_name}» werden erkannt")
+        return diarization.assign(segments, diarization.find_turns(audio), track, display_name)
+    except Exception as e:
+        log.exception("Diarization of %s failed", track)
+        if problems is not None:
+            problems.append(f"Sprechererkennung für «{display_name}» nicht möglich: {e}")
+        return segments
 
 
 def header(folder: Path, model: str, compute_s: float, recording_s: float) -> dict[str, str]:
@@ -293,10 +321,13 @@ def apply_corrections(paragraphs: list, corrections: "CorrectionList | None") ->
 def create_transcript(folder: Path, transcriber, model: str, names: dict[str, str],
                       progress: Progress | None = None,
                       paused_time: Callable[[], float] | None = None,
-                      corrections: "CorrectionList | None" = None) -> tuple[Path, float, float]:
-    """Returns (path, compute_s, recording_s)."""
+                      corrections: "CorrectionList | None" = None, diarize: dict[str, bool] | None = None,
+                      phase: Callable[[str], None] | None = None) -> tuple[Path, float, float]:
+    """Returns (path, compute_s, recording_s). diarize: track → tell speakers apart."""
+    problems: list[str] = []
     paragraphs, compute, recording = transcribe(folder, transcriber, names, progress=progress,
-                                                paused_time=paused_time)
+                                                paused_time=paused_time, diarize=diarize, phase=phase,
+                                                problems=problems)
     h = header(folder, model, compute, recording)
     if missing := missing_tracks(folder):
         h["Hinweis"] = "Unvollständig – keine Aufnahme von: " + ", ".join(names.get(t, t) for t in missing)
@@ -305,6 +336,8 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
         h["Aufnahme"] = (h.get("Aufnahme") or "") + " (nicht vollständig aufgenommen)"
     if n := apply_corrections(paragraphs, corrections):
         h["Korrekturen"] = f"{n} automatisch ersetzt"
+    if problems:
+        h["Sprecher"] = " ".join(problems)
     path = save(folder, "transcript", paragraphs, f"Transkript {folder.name}", h, tracks=names)
     (folder / "transcript_original.json").unlink(missing_ok=True)  # older edits are obsolete
     return path, compute, recording

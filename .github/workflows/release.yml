@@ -96,6 +96,7 @@ jobs:
         env:
           VERBALIS_HOME: ${{ runner.temp }}\verbalis-home
           MITSCHRIFT_HOME: ${{ runner.temp }}\no-old-home
+          VERBALIS_SELFTEST_DIARIZATION: "1"   # real models: both ONNX runtimes in one process
         run: |
           dist\Verbalis\verbalis-cli.exe --version
           if ($LASTEXITCODE -ne 0) { throw "verbalis-cli --version failed" }
@@ -163,6 +164,7 @@ jobs:
         env:
           VERBALIS_HOME: ${{ runner.temp }}/verbalis-home
           MITSCHRIFT_HOME: ${{ runner.temp }}/no-old-home
+          VERBALIS_SELFTEST_DIARIZATION: "1"
         run: |
           set -euo pipefail
           dist/Verbalis.app/Contents/MacOS/verbalis-cli --version

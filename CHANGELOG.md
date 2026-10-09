@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.16 – 2026-10-09
+- **Speakers on the Teams track:** Verbalis tells the other participants apart and labels them
+  «Gegenüber 1», «Gegenüber 2», … Above the transcript a «Sprecher» box lets you play a short sample of each
+  person, give names (written into the transcript and the Markdown file) and merge two speakers that are the
+  same person. Clicking a name in the text moves a paragraph to another speaker of the same track.
+- Settings: «Sprechererkennung» for the others (on by default) and for the own microphone (off; for meetings
+  in a room where everybody speaks into the same microphone)
+- Uses sherpa-onnx (Apache 2.0) with pyannote segmentation 3.0 (MIT) and 3D-Speaker ERes2Net (Apache 2.0);
+  the two models (about 46 MB) are downloaded on first use with fixed SHA-256. No torch, no account needed.
+  In a test with three synthetic voices all turns were assigned correctly.
+- Voice prints are only used within one recording and never stored
+- If diarization fails, the transcript is kept without speakers and says why
+- Model comparison (`compare`) counts the error rate per track by the track, not the speaker name
+- Release self-test runs the real diarization models after the silence filter on Windows and macOS (two
+  ONNX runtimes in one process)
+
 ## 0.7.15 – 2026-10-09
 - **Releases happen automatically after green tests:** raise the version, add a CHANGELOG section and
   push – no more manual tags. The Release workflow starts when the Tests workflow has finished; it only

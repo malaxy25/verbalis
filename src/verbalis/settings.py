@@ -26,6 +26,8 @@ class Settings:
     audio_max_mb: str = ""            # all audio at most N MB; empty = unlimited
     update_check: str = "on"          # "on" = ask GitHub for a newer version at start, "off"
     model_auto_update: str = "off"    # "on" = take newer model files automatically before transcribing
+    diarize_others: str = "on"        # tell the others apart (Gegenüber 1, 2, …)
+    diarize_me: str = "off"           # tell speakers apart on the own microphone (meetings in a room)
     last_seen_version: str = ""       # version whose «what's new» was shown last
 
     @property
@@ -70,6 +72,10 @@ class Settings:
             s.update_check = "on"
         if s.model_auto_update not in ("on", "off"):
             s.model_auto_update = "off"
+        if s.diarize_others not in ("on", "off"):
+            s.diarize_others = "on"
+        if s.diarize_me not in ("on", "off"):
+            s.diarize_me = "off"
         for name, default in (("audio_days", "3"), ("audio_max_mb", "")):
             value = getattr(s, name)
             if value and not (value.isdigit() and int(value) < 100_000):

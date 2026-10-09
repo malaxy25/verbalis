@@ -10,7 +10,8 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## Next
 
-- [ ] **Speaker diarization** – separate remote speakers on the "other side" track (pyannote). Requires a Hugging Face token for the gated models; explain setup in the app. **[quality]**
+- [ ] **Speaker diarization: test with real calls** – 0.7.16 tells speakers apart (sherpa-onnx, no token needed). Check quality with 2–4 people on Teams and with similar voices; adjust `THRESHOLD` in `diarization.py` if people are split or merged too often; measure the extra time per hour in the log. **[quality]**
+- [ ] **Number of speakers from the meeting** – with meeting details (attendees) the expected number of speakers could guide the clustering. **[quality]**
 - [ ] **Name speakers** – per transcript, play a short snippet per detected speaker and assign a name; transcript updates everywhere. **[ux]**
 - [ ] **Audio playback** – click a timestamp/paragraph to hear that part; makes correcting much easier. **[ux]**
 - [ ] **Standard German reference text** – second read-aloud text with reference, check that the Swiss German model does not get worse on Standard German. **[quality]**

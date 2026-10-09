@@ -210,7 +210,8 @@ def cmd_compare(args) -> int:
             if per_track:
                 for track, display in names.items():
                     ref_text = reference.tracks.get(track, "")
-                    hyp_text = " ".join(p.text for p in paragraphs if p.speaker == display)
+                    hyp_text = " ".join(p.text for p in paragraphs
+                                        if (p.track == track if p.track else p.speaker == display))
                     cell = f"{error_rate(ref_text, hyp_text).wer:.1%}" if ref_text.strip() else "–"
                     track_cells += f" {cell} |"
                     print(f"  {display}: {cell}")
@@ -342,6 +343,29 @@ def cmd_selftest(_args) -> int:
 
     if sys.platform == "darwin":
         check("Systemton-Hilfsprogramm (macOS)", system_audio_helper)
+
+    def speaker_diarization():
+        """Both ONNX runtimes in one process, in the app's order: silence filter first, then diarization.
+
+        With VERBALIS_SELFTEST_DIARIZATION=1 (set in the release workflow) the real models are
+        downloaded and run – this catches a clash between faster-whisper's onnxruntime and the
+        one bundled with sherpa-onnx on Windows before anybody installs the release.
+        """
+        import os
+
+        import numpy as np
+        importlib.import_module("sherpa_onnx")
+        from faster_whisper.vad import VadOptions, get_speech_timestamps
+
+        from . import diarization
+
+        noise = np.random.default_rng(0).normal(0, 0.05, 16_000 * 5).astype(np.float32)
+        get_speech_timestamps(noise, VadOptions())
+        if os.environ.get("VERBALIS_SELFTEST_DIARIZATION") == "1":
+            diarization.ensure_models()
+            diarization.find_turns(noise)
+
+    check("Sprechererkennung (sherpa-onnx)", speaker_diarization)
 
     def release_notes():
         from .updates import changelog_path, changes_between

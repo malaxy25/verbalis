@@ -1,6 +1,6 @@
 [project]
 name = "verbalis"
-version = "0.7.15"
+version = "0.7.16"
 description = "Record and transcribe conversations locally (microphone + system audio), Standard and Swiss German"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,6 +13,7 @@ dependencies = [
     "soxr>=0.3",
     "pywebview>=5",
     "spylls>=0.1.7",
+    "sherpa-onnx>=1.12",          # speaker diarization (Apache 2.0)
 ]
 
 [project.optional-dependencies]

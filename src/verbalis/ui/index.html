@@ -323,6 +323,19 @@
     padding: 10px 0; border-top: 1px solid var(--line);
   }
   .paragraph .who { font-weight: 600; font-size: 14px; }
+  .who-button { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;
+    text-decoration: underline dotted; text-underline-offset: 3px; }
+  .who-select { font-size: 13px; max-width: 100%; }
+  .speakers-panel { max-width: 52em; box-sizing: border-box; margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface); display: grid; gap: 10px; }
+  .speakers-panel h3 { margin: 0; font-size: 15px; }
+  .speakers-panel .hint { margin: 0; color: var(--muted); font-size: 13px; }
+  .speaker-row { display: grid; grid-template-columns: auto minmax(10em, 1fr) auto auto; gap: 10px; align-items: center; }
+  .speaker-row .talk { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .play-button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2);
+    cursor: pointer; color: var(--ink); }
+  .play-button:hover { border-color: var(--ink); }
+  .speakers-panel .row-actions { display: flex; gap: 10px; align-items: center; }
   .paragraph.others .who { color: var(--limmat); }
   .paragraph time { display: block; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .paragraph .text {
@@ -506,6 +519,12 @@
       <input type="text" name="keywords" autocomplete="off">
       <small>Namen und Fachbegriffe, mit Komma getrennt, z.B. tocco, Höngg</small>
     </label>
+    <div class="field">
+      <span>Sprechererkennung</span>
+      <label class="consent-like"><input type="checkbox" name="diarize_others"> Gegenüber: verschiedene Personen unterscheiden (Teams-Calls mit mehreren Teilnehmenden)</label>
+      <label class="consent-like"><input type="checkbox" name="diarize_me"> Eigene Spur: verschiedene Personen unterscheiden (Besprechung vor Ort, alle am selben Mikrofon)</label>
+      <small>Die Stimmen werden nur innerhalb einer Aufnahme verglichen und nicht gespeichert. Beim ersten Gebrauch werden dafür zwei Modelle geladen (ca. 46 MB).</small>
+    </div>
     <div class="field">
       <span>Korrekturliste</span>
       <ul class="correction-list" id="correction-list"></ul>
@@ -825,17 +844,103 @@ async function renderTranscript(a) {
   if (!t.segments.length) {
     body.append(element("p", { class: "empty" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
   }
+  const speakers = Object.entries(t.speakers || {});
   t.segments.forEach((s, index) => {
-    const track = s.speaker === meName ? "me" : "others";
+    const track = s.track || (s.speaker === meName ? "me" : "others");
     const text = element("p", { class: "text", title: "Zum Korrigieren klicken" }, s.text);
+    const sameTrack = speakers.filter(([, info]) => info.track === track);
+    const who = s.speaker_id && sameTrack.length > 1
+      ? element("button", { type: "button", class: "who who-button", title: "Einer anderen Person zuweisen",
+          onclick: (event) => chooseSpeaker(a.id, index, s, sameTrack, event.currentTarget) }, s.speaker || "")
+      : element("div", { class: "who" }, s.speaker || "");
     const paragraph = element("div", { class: `paragraph ${track}` },
-      element("div", {}, element("div", { class: "who" }, s.speaker || ""), element("time", {}, timeText(s.start))),
+      element("div", {}, who, element("time", {}, timeText(s.start))),
       element("div", {}, text),
     );
     text.addEventListener("click", () => editParagraph(a.id, index, paragraph, text));
     body.append(paragraph);
   });
-  $("content").replaceChildren(header, body);
+  $("content").replaceChildren(...[header, speakersPanel(a, t), body].filter(Boolean));
+}
+
+/* ---------- Speakers ---------- */
+
+function speakersPanel(a, t) {
+  const entries = Object.entries(t.speakers || {});
+  if (!entries.length) return null;
+  const talk = {};
+  for (const s of t.segments) if (s.speaker_id) talk[s.speaker_id] = (talk[s.speaker_id] || 0) + (s.end - s.start);
+  const inputs = {};
+  const rows = entries.filter(([id]) => talk[id]).map(([id, info]) => {
+    const input = element("input", { type: "text", value: info.name, "aria-label": `Name für ${info.name}`, autocomplete: "off" });
+    inputs[id] = input;
+    const others = entries.filter(([other, o]) => other !== id && o.track === info.track && talk[other]);
+    const merge = others.length ? element("select", { "aria-label": `${info.name} zusammenlegen mit`,
+      onchange: async (event) => {
+        const target = event.target.value;
+        if (!target) return;
+        try { await call("merge_speakers", a.id, id, target); await renderContent(true); } catch (e) { showMessage(e.message); }
+      } },
+      element("option", { value: "" }, "Zusammenlegen mit …"),
+      ...others.map(([other, o]) => element("option", { value: other }, o.name))) : element("span");
+    const play = element("button", { type: "button", class: "play-button", title: "Hörprobe abspielen", "aria-label": `Hörprobe von ${info.name}`,
+      onclick: () => playSample(a.id, id, play) }, "▶");
+    return element("div", { class: "speaker-row" }, play, input,
+      element("span", { class: "talk" }, `${timeText(talk[id])} Redezeit`), merge);
+  });
+  const save = element("button", { type: "button", class: "action", onclick: async () => {
+    const names = {};
+    for (const [id, input] of Object.entries(inputs)) {
+      const value = input.value.trim();
+      if (value && value !== t.speakers[id].name) names[id] = value;
+    }
+    if (!Object.keys(names).length) return;
+    try { await call("rename_speakers", a.id, names); await renderContent(true); } catch (e) { showMessage(e.message); }
+  } }, "Namen speichern");
+  return element("section", { class: "speakers-panel", "aria-label": "Sprecher" },
+    element("h3", {}, "Sprecher"),
+    element("p", { class: "hint" }, "Mit ▶ eine Hörprobe anhören, Namen eintragen und speichern. "
+      + "Wurde eine Person doppelt erkannt: zusammenlegen. Einzelne Absätze lassen sich über den Namen im Text umhängen."),
+    ...rows,
+    element("div", { class: "row-actions" }, save),
+  );
+}
+
+async function playSample(id, speakerId, button) {
+  const player = state.player || (state.player = new Audio());
+  if (state.playing === speakerId && !player.paused) {
+    player.pause();
+    button.textContent = "▶";
+    return;
+  }
+  document.querySelectorAll(".play-button").forEach((b) => { b.textContent = "▶"; });
+  try {
+    const sample = await call("speaker_sample", id, speakerId);
+    player.src = sample.url;
+    state.playing = speakerId;
+    button.textContent = "■";
+    player.onended = () => { button.textContent = "▶"; };
+    await player.play();
+  } catch (e) {
+    button.textContent = "▶";
+    showMessage(e.message);
+  }
+}
+
+function chooseSpeaker(id, index, segment, sameTrack, button) {
+  const select = element("select", { class: "who-select", "aria-label": "Absatz zuweisen an" },
+    ...sameTrack.map(([sid, info]) => element("option", { value: sid }, info.name)));
+  select.value = segment.speaker_id;
+  const done = async () => {
+    if (select.value !== segment.speaker_id) {
+      try { await call("set_paragraph_speaker", id, index, select.value); } catch (e) { showMessage(e.message); }
+    }
+    await renderContent(true);
+  };
+  select.addEventListener("change", done);
+  select.addEventListener("blur", done);
+  button.replaceWith(select);
+  select.focus();
 }
 
 function audioText(a) {
@@ -1406,6 +1511,8 @@ async function openSettings() {
   for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb"]) form.elements[field].value = e[field] || "";
   form.elements.update_check.checked = e.update_check !== "off";
   form.elements.model_auto_update.checked = e.model_auto_update === "on";
+  form.elements.diarize_others.checked = e.diarize_others !== "off";
+  form.elements.diarize_me.checked = e.diarize_me === "on";
   call("audio_usage").then((sp) => {
     $("audio-hint").textContent = "Leer heisst unbegrenzt, 0 Tage heisst gleich nach dem Transkribieren. "
       + "Transkripte bleiben immer erhalten, Aufnahmen ohne Transkript werden nie automatisch gelöscht. "
@@ -1736,6 +1843,8 @@ async function saveSettings(event) {
   for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "audio_days", "audio_max_mb"]) data[field] = form.elements[field].value;
   data.update_check = form.elements.update_check.checked ? "on" : "off";
   data.model_auto_update = form.elements.model_auto_update.checked ? "on" : "off";
+  data.diarize_others = form.elements.diarize_others.checked ? "on" : "off";
+  data.diarize_me = form.elements.diarize_me.checked ? "on" : "off";
   for (const field of ["audio_days", "audio_max_mb"]) {
     if (data[field].trim() && !/^\d+$/.test(data[field].trim())) {
       $("audio-hint").textContent = "Bitte bei Tagen und MB nur ganze Zahlen eingeben oder das Feld leer lassen.";

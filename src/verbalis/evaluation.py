@@ -91,7 +91,11 @@ def load_reference(value: str, folder: Path, until_s: float | None = None) -> Re
     data = json.loads(path.read_text(encoding="utf-8"))
     segments = [s for s in data.get("segments", []) if not until_s or s["start"] < until_s]
     names = data.get("tracks") or {}
-    per_track = {track: " ".join(s["text"] for s in segments if s.get("speaker") == name)
+    def belongs(seg: dict, track: str, name: str) -> bool:
+        # since 0.7.16 segments carry their track; older transcripts only the speaker name
+        return seg.get("track") == track if seg.get("track") else seg.get("speaker") == name
+
+    per_track = {track: " ".join(s["text"] for s in segments if belongs(s, track, name))
                  for track, name in names.items()}
     return Reference(" ".join(s["text"] for s in segments), per_track or None,
                      bool(data.get("edited")), str(path))

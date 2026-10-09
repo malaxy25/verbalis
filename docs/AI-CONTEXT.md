@@ -74,6 +74,12 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   its struct has wrong offsets). `audio/wasapi_fix.py` wraps its `_AudioClient.__init__`: on its assertion
   the stream is opened with an own packed float32 format and AUTOCONVERTPCM. Check this file when
   updating soundcard.
+- **Speaker diarization** (`diarization.py`): sherpa-onnx with pyannote segmentation 3.0 (MIT) and
+  3D-Speaker ERes2Net (Apache) – chosen because it needs no torch and no Hugging Face token. Models
+  downloaded once with fixed SHA-256. Segments carry `track` and `speaker_id`; `transcript.json` has a
+  `speakers` map; names are changed there. Threshold 0.7 grouped three synthetic voices correctly.
+  sherpa-onnx bundles its own onnxruntime next to faster-whisper's – the release self-test runs both
+  in one process with the real models on Windows and macOS.
 - **Not signed** yet (Windows SmartScreen / macOS Gatekeeper warn on first install).
 
 ## How work is delivered (important pitfalls)

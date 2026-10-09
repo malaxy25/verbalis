@@ -19,6 +19,8 @@ class Segment:
     end: float
     text: str
     speaker: str | None = None   # display name, e.g. "Andrea"
+    track: str | None = None     # "me" or "others"
+    speaker_id: str | None = None   # e.g. "others-2" when speakers were told apart within a track
 
 
 class Transcriber(Protocol):
