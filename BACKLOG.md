@@ -4,7 +4,7 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.19 – planned with Andrea (proposals marked «Vorschlag» still need his OK)
+## 0.7.19 – planned and decided with Andrea
 
 Build as one version. UI texts German, code and docs English. Show Andrea a screenshot or a description of
 the new list, the recording form and the call notice before finishing.
@@ -12,7 +12,7 @@ the new list, the recording form and the call notice before finishing.
 1. **Recording details (metadata)** in `meta.json`, editable at the top of a recording:
    - **Name** (title), editable; default «Aufnahme Mo 13.10., 14:30». Shown in the list instead of the date,
      in the transcript header and the Markdown file. The folder name stays the id.
-   - **Projekt**: free text with suggestions from earlier recordings (Vorschlag: no fixed project list).
+   - **Projekt**: free text with suggestions from earlier recordings (decided: no fixed project list).
    - **Datum und Startzeit**: from the recording; for a planned recording the planned time.
    - **Teilnehmende** per track («Am Mikrofon», «Im Call»): names, one per line or comma-separated. They
      preset «Anzahl Personen» and are offered as names in the speaker box (choose instead of typing).
@@ -22,15 +22,16 @@ the new list, the recording form and the call notice before finishing.
    record button – consent is still confirmed right before recording. Recording fills this planned entry
    (same id); a planned entry that is never recorded can be deleted. Retention and clean-up ignore it.
    (Later: import from the Outlook calendar.)
-3. **List grouped by time**: «Geplant», «Heute», «Diese Woche», «Letzte Woche», «Älter» (Vorschlag: «Älter»
-   split by month – «September 2026», … – once it gets long). Groups can be collapsed.
+3. **List grouped by time**: «Geplant», «Heute», «Diese Woche», «Letzte Woche», then by month («September
+   2026», …) for everything older (decided). Groups can be collapsed.
 4. **Recognise calls (Windows first)**: while Verbalis runs and isn't recording, check every few seconds
    whether another app uses the microphone (Windows records this in the registry: CapabilityAccessManager
    ConsentStore, the same source as the microphone icon in the taskbar). Verbalis itself is ignored (level
    meters). Then suggest «Teams-Call erkannt – aufnehmen?»: in the window as a notice; when Verbalis is
    minimised as a Windows notification. If a planned recording is due (± 30 min), the notice offers that one.
    A click opens Verbalis ready to record – **never records by itself**, consent stays a checkbox (StGB
-   179ter). Only once per call, «Nicht mehr fragen» for this call; setting «Calls erkennen» (Vorschlag: on).
+   179ter). Only once per call, «Nicht mehr fragen» for this call; setting «Calls erkennen» (decided: on by
+   default, switchable in the settings).
    macOS later via the Swift helper (any app using the microphone) – needs Andrea's test.
 
 ## Now
