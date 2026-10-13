@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-184 tests in 20 files.
+187 tests in 20 files.
 
 ### `test_app.py` (7)
 
@@ -133,7 +133,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Missing default device does not break the list** – Regression 0.7.11: on a PC without a default microphone both device lists stayed empty.
 - **No microphone at all explains what to do**
 
-### `test_diarization.py` (16)
+### `test_diarization.py` (17)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -153,6 +153,7 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Small speaker merged only when the voice is close**
 - **Reassign with known number of people keeps given names**
 - **Speakers test prints only numbers**
+- **Diarization runs in its own process and reports errors** – 0.7.18 bug: sherpa-onnx blocks Python while it computes – the app froze during «Neu zuordnen».
 
 ### `test_evaluation.py` (6)
 
@@ -261,7 +262,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (28)
+### `test_service.py` (30)
 
 App flow without a window: recording → queue → transcript.
 
@@ -293,6 +294,8 @@ App flow without a window: recording → queue → transcript.
 - **Recordings in a synced folder are flagged**
 - **Levels before recording open and close the devices** – 0.7.17: level meters while choosing devices – without recording, closed again when not needed.
 - **Level preview with broken device does not flood the log**
+- **Transcription waits for the user by default** – 0.7.18: after a meeting the number of people is entered first – transcribing starts by hand.
+- **Audio clip mixes both tracks**
 
 ### `test_spelling.py` (5)
 

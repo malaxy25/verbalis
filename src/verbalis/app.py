@@ -79,8 +79,11 @@ class Api:
     def transcript(self, recording_id):
         return self._call(self._s.transcript, recording_id)
 
-    def transcribe(self, recording_id):
-        return self._call(self._s.transcribe, recording_id)
+    def transcribe(self, recording_id, people=None):
+        return self._call(self._s.transcribe, recording_id, people)
+
+    def audio_clip(self, recording_id, start, end):
+        return self._call(self._s.audio_clip, recording_id, start, end)
 
     def pause(self):
         return self._call(self._s.pause)

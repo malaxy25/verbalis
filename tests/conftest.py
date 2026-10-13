@@ -42,6 +42,7 @@ def no_real_diarization(monkeypatch):
 
     turns = type("Turns", (), {"value": [], "real_ensure_models": staticmethod(diarization.ensure_models),
                                "real_models_ready": staticmethod(diarization.models_ready)})()
+    monkeypatch.setattr(diarization, "SEPARATE_PROCESS", False)   # the fake below only exists in this process
     monkeypatch.setattr(diarization, "models_ready", lambda folder=None: True)
     monkeypatch.setattr(diarization, "ensure_models", lambda *a, **k: None)
     monkeypatch.setattr(diarization, "find_turns", lambda audio, folder=None, **kwargs: list(turns.value))

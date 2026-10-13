@@ -383,6 +383,8 @@
   }
   .paragraph .text:hover { background: var(--surface-2); }
   .paragraph .text.readonly { cursor: default; }
+  .play-passage { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 11px; padding: 0 4px; margin-left: 4px; border-radius: 4px; }
+  .play-passage:hover { color: var(--ink); background: var(--surface-2); }
   .paragraph .text.readonly:hover { background: none; }
   /* interjections: a narrow grey column next to the paragraph they were said during */
   .transcript { max-width: 66em; }
@@ -407,6 +409,11 @@
   .speaker-count { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding-top: 6px; border-top: 1px solid var(--line); }
   .speaker-count input { width: 4em; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); text-align: right; }
   .speaker-count small { color: var(--muted); font-size: 13px; flex-basis: 100%; }
+  .people-fields { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 0 0 16px; }
+  .people-fields label { display: grid; gap: 3px; color: var(--ink); }
+  .people-fields span { font-weight: 600; font-size: 14px; }
+  .people-fields input { width: 9em; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  .people-fields small { color: var(--muted); font-size: 13px; }
   .paragraph .text[contenteditable] { background: var(--surface); outline: 2px solid var(--limmat); outline-offset: 0; cursor: auto; }
   .paragraph .edit-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 2px; }
   .paragraph .edit-bar small { color: var(--muted); }
@@ -592,6 +599,11 @@
           </div>
         </div>
         <div class="column">
+          <div class="field">
+            <span>Nach der Aufnahme</span>
+            <label class="consent-like"><input type="checkbox" name="auto_transcribe"> Sofort automatisch transkribieren</label>
+            <small>Ausgeschaltet: Nach dem Meeting zuerst die Anzahl Personen erfassen und dann mit «Transkribieren» starten – die Sprecher werden so zuverlässiger erkannt.</small>
+          </div>
           <fieldset>
             <legend>Tempo</legend>
             <label><input type="radio" name="quality" value="accurate"> Genau <small>beste Qualität, langsamer</small></label>
@@ -876,17 +888,23 @@ async function renderContent(force = false) {
           deleteRecordingButton(a.id)),
       ));
       return;
-    case "none":
+    case "none": {
+      const people = a.audio ? peopleFields(a) : null;
       content.replaceChildren(element("div", { class: "empty" },
-        element("h2", {}, "Noch kein Transkript"),
+        element("h2", {}, a.audio ? "Bereit zum Transkribieren" : "Noch kein Transkript"),
         problemBox(a),
         element("p", {}, a.audio
-          ? "Für diese Aufnahme gibt es noch kein Transkript, zum Beispiel weil die App während der Transkription geschlossen wurde."
+          ? "Wie viele Personen sprechen auf jeder Spur? Leer lassen, wenn du es nicht weisst – dann schätzt Verbalis es selbst."
           : "Das Audio dieser Aufnahme wurde gelöscht, ein Transkript lässt sich nicht mehr erstellen."),
-        element("div", { class: "actions" }, a.audio ? transcribeButton("Transkribieren") : null, folderButton(a.id),
-          deleteRecordingButton(a.id)),
+        people ? people.box : null,
+        element("div", { class: "actions" },
+          a.audio ? element("button", { type: "button", class: "action primary", onclick: async () => {
+            try { await call("transcribe", a.id, people.values()); await loadList(); } catch (e) { showMessage(e.message); }
+          } }, "Transkribieren") : null,
+          folderButton(a.id), deleteRecordingButton(a.id)),
       ));
       return;
+    }
     case "done":
       await renderTranscript(a);
       return;
@@ -909,6 +927,26 @@ function problemBox(a) {
     a.problem ? element("span", {}, a.problem + " ") : null,
     missing.length ? element("span", {}, `Es fehlt die Spur von: ${missing.join(", ")}.`) : null,
   );
+}
+
+/* Number of people per track before transcribing: empty = find out, 1 = nobody to tell apart. */
+function peopleFields(a) {
+  const known = a.people || {};
+  const input = (track, label) => {
+    const field = element("input", { type: "number", min: "1", max: "30", placeholder: "automatisch",
+      inputmode: "numeric", "aria-label": label });
+    field.value = known[track] ? String(known[track]) : "";
+    return field;
+  };
+  const me = input("me", "Personen auf deiner Spur");
+  const others = input("others", "Personen auf der Spur der anderen");
+  const box = element("div", { class: "people-fields" },
+    element("label", {}, element("span", {}, `Personen am Mikrofon (${state.settings.name || "Ich"})`), me,
+      element("small", {}, "z.B. 2 bei einer Besprechung vor Ort")),
+    element("label", {}, element("span", {}, `Personen über «${state.settings.others || "Gegenüber"}»`), others,
+      element("small", {}, "die anderen im Teams-Call")),
+  );
+  return { box, values: () => ({ me: me.value.trim(), others: others.value.trim() }) };
 }
 
 function folderButton(id) {
@@ -953,13 +991,14 @@ async function renderTranscript(a) {
   if (!t.segments.length) {
     body.append(element("p", { class: "empty" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
   }
-  renderSegments(body, a.id, t.segments, t.speakers, meName, true);
+  renderSegments(body, a.id, t.segments, t.speakers, meName, true, !!a.audio);
   $("content").replaceChildren(...[header, speakersPanel(a, t), body].filter(Boolean));
 }
 
 /* Paragraphs, with short interjections («ja», «genau») in a narrow column next to the
-   paragraph they were said during. editable = false while a transcription still runs. */
-function renderSegments(body, id, segments, speakerMap, meName, editable) {
+   paragraph they were said during. editable = false while a transcription still runs;
+   playable: a ▶ per paragraph plays that passage (both tracks), as long as the audio exists. */
+function renderSegments(body, id, segments, speakerMap, meName, editable, playable = false) {
   const speakers = Object.entries(speakerMap || {});
   const trackOf = (s) => s.track || (s.speaker === meName ? "me" : "others");
   const columns = new Map();   // paragraph index → its aside column
@@ -989,7 +1028,11 @@ function renderSegments(body, id, segments, speakerMap, meName, editable) {
     const asides = element("div", { class: "asides" });
     columns.set(index, asides);
     const paragraph = element("div", { class: `paragraph ${track}` },
-      element("div", {}, who, element("time", {}, timeText(s.start))),
+      element("div", {}, who, element("time", {}, timeText(s.start),
+        playable ? element("button", { type: "button", class: "play-passage", title: "Diese Stelle anhören",
+          "aria-label": `Absatz ab ${timeText(s.start)} anhören`,
+          onclick: (event) => playAudio(`passage:${index}`, () => call("audio_clip", id, s.start, s.end), event.currentTarget) }, "▶")
+          : null)),
       element("div", {}, text),
       asides,
     );
@@ -1091,7 +1134,7 @@ function speakerCountRows(a, t, talk) {
     const input = element("input", { type: "number", min: "1", max: "30", value: String(Math.max(current, 1)),
       "aria-label": `Anzahl Personen auf der Spur ${name}`, inputmode: "numeric" });
     const note = element("small", {}, a.audio
-      ? "Erkennt die Personen dieser Spur neu, ohne neu zu transkribieren. Korrekturen und vergebene Namen bleiben erhalten. Kann einige Minuten dauern."
+      ? "Erkennt die Personen dieser Spur neu, ohne neu zu transkribieren. Korrekturen und vergebene Namen bleiben erhalten. Läuft im Hintergrund und kann einige Minuten dauern."
       : "Das Audio dieser Aufnahme wurde gelöscht – neu zuordnen ist nicht mehr möglich.");
     const button = element("button", { type: "button", class: "action" }, "Neu zuordnen");
     button.disabled = input.disabled = !a.audio;
@@ -1101,8 +1144,9 @@ function speakerCountRows(a, t, talk) {
       button.disabled = input.disabled = true;
       button.textContent = "Wird neu zugeordnet …";
       try {
-        await call("reassign_speakers", a.id, track, count);
-        await renderContent(true);
+        await call("reassign_speakers", a.id, track, count);   // runs in the background with progress
+        state.listSignature = "";
+        await loadList();
       } catch (e) {
         showMessage(e.message);
         button.disabled = input.disabled = false;
@@ -1114,18 +1158,24 @@ function speakerCountRows(a, t, talk) {
   });
 }
 
-async function playSample(id, speakerId, button) {
+function playSample(id, speakerId, button) {
+  return playAudio(`speaker:${speakerId}`, () => call("speaker_sample", id, speakerId), button);
+}
+
+/* One player for speaker samples and passages: a second click on the same button stops it. */
+async function playAudio(key, fetch, button) {
   const player = state.player || (state.player = new Audio());
-  if (state.playing === speakerId && !player.paused) {
+  if (state.playing === key && !player.paused) {
     player.pause();
     button.textContent = "▶";
     return;
   }
-  document.querySelectorAll(".play-button").forEach((b) => { b.textContent = "▶"; });
+  player.pause();
+  document.querySelectorAll(".play-button, .play-passage").forEach((b) => { b.textContent = "▶"; });
   try {
-    const sample = await call("speaker_sample", id, speakerId);
-    player.src = sample.url;
-    state.playing = speakerId;
+    const clip = await fetch();
+    player.src = clip.url;
+    state.playing = key;
     button.textContent = "■";
     player.onended = () => { button.textContent = "▶"; };
     await player.play();
@@ -1503,7 +1553,9 @@ function showProgress(z) {
   const percent = Math.round(z.job.progress * 100);
   const paused = !!z.pause;
   box.classList.toggle("paused", paused);
-  box.querySelector("h2").textContent = paused ? "Transkription pausiert" : "Transkript wird erstellt";
+  const speakers = z.job.kind === "speakers";
+  box.querySelector("h2").textContent = speakers ? (paused ? "Neu zuordnen pausiert" : "Sprecher werden neu zugeordnet")
+    : paused ? "Transkription pausiert" : "Transkript wird erstellt";
   $("progress-bar").style.width = `${percent}%`;
   $("progress-text").textContent = z.pause === "recording"
     ? "Pausiert, solange eine Aufnahme läuft – so bleibt die CPU frei für den Call."
@@ -1863,6 +1915,7 @@ async function openSettings(tab) {
   form.elements.model_auto_update.checked = e.model_auto_update === "on";
   form.elements.diarize_others.checked = e.diarize_others !== "off";
   form.elements.diarize_me.checked = e.diarize_me === "on";
+  form.elements.auto_transcribe.checked = e.auto_transcribe === "on";
   $("audio-hint").textContent = AUDIO_HINT;
   call("audio_usage").then((sp) => {
     $("audio-hint").textContent = `${AUDIO_HINT} Belegt: ${sp.audio_mb.toLocaleString("de-CH")} MB.`;
@@ -2194,6 +2247,7 @@ function collectSettings() {
   data.model_auto_update = form.elements.model_auto_update.checked ? "on" : "off";
   data.diarize_others = form.elements.diarize_others.checked ? "on" : "off";
   data.diarize_me = form.elements.diarize_me.checked ? "on" : "off";
+  data.auto_transcribe = form.elements.auto_transcribe.checked ? "on" : "off";
   const choice = chosenModel();
   data.model = choice === CUSTOM ? (form.elements.model_custom ? form.elements.model_custom.value.trim() : "") : choice;
   return data;

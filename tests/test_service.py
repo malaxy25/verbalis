@@ -96,7 +96,7 @@ def devices(microphone, speakers):
 
 
 def make_service(**kwargs):
-    s = Settings(name="Andrea", model="test-model")
+    s = Settings(name="Andrea", model="test-model", auto_transcribe=kwargs.pop("auto_transcribe", "on"))
     kwargs.setdefault("transcriber_factory", FakeTranscriber)
     return Service(settings=s, recorder_factory=FakeRecorder, select_devices=devices,
                    list_devices=lambda: {}, **kwargs)
@@ -519,3 +519,30 @@ def test_level_preview_with_broken_device_does_not_flood_the_log(caplog):
         assert s.preview_levels("Mic", "") == {"me": -90.0, "others": -90.0}
     assert len(calls) == 1
     s.stop_preview()
+
+
+def test_transcription_waits_for_the_user_by_default():
+    """0.7.18: after a meeting the number of people is entered first – transcribing starts by hand."""
+    assert Settings().auto_transcribe == "off"
+    s = make_service(auto_transcribe="off")
+    rid = s.start_recording(consent=True)
+    s.stop_recording()
+    time.sleep(0.3)
+    assert s.recordings()[0]["status"] == "none"
+
+    s.transcribe(rid, {"me": "2", "others": ""})
+    assert wait_until(lambda: s.recordings()[0]["status"] == "done")
+    assert s.recordings()[0]["people"] == {"me": 2, "others": None}
+    with pytest.raises(ValueError, match="Anzahl"):
+        s.transcribe(rid, {"me": "0"})
+
+
+def test_audio_clip_mixes_both_tracks():
+    s = make_service()
+    rid = finished_recording(s)
+    clip = s.audio_clip(rid, 0.2, 0.4)
+    assert clip["url"].startswith("data:audio/wav;base64,") and clip["start"] == 0.0
+    import base64
+    import io
+    data, rate = sf.read(io.BytesIO(base64.b64decode(clip["url"].split(",", 1)[1])))
+    assert rate == 16000 and abs(len(data) / rate - 0.9) < 0.05    # from 0.3 s before to 0.5 s after

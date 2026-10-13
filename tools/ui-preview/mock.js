@@ -21,14 +21,14 @@ for (let n = 3; n <= 7; n++) {   // short extra speakers – diarization of real
 const recs = [
   { id: "2026-10-08_093012", start: "2026-10-08T09:30:12+02:00", duration_s: 1834, status: "running", error: null, audio: true, audio_mb: 60, audio_delete: null },
   { id: "2026-10-07_204727", start: "2026-10-07T20:47:27+02:00", duration_s: 66.1, status: "done", error: null, audio: true, audio_mb: 2.4, audio_delete: "2026-10-10T20:47+02:00" },
-  { id: "2026-10-07_143000", start: "2026-10-07T14:30:00+02:00", duration_s: 412, status: "none", error: null, audio: false, audio_mb: 0, audio_delete: null },
+  { id: "2026-10-07_143000", start: "2026-10-07T14:30:00+02:00", duration_s: 412, status: "none", error: null, audio: true, audio_mb: 14, audio_delete: null, people: {} },
   { id: "2026-10-06_101500", start: "2026-10-06T10:15:00+02:00", duration_s: 2710, status: "error", error: "Modell konnte nicht geladen werden.", audio: true, audio_mb: 80, audio_delete: null },
 ];
 const ok = (d) => Promise.resolve({ ok: true, data: d });
 let t0 = 754;
 window.pywebview = { api: {
   version: () => ok("0.7.0"),
-  settings: () => ok({ diarize_others: "on", diarize_me: "off", model_auto_update: "off", storage_warning: window.__scenario === "dev" ? "Der Aufnahmeordner liegt in einem synchronisierten Ordner (Verbalis in «onedrive - tocco ag»). Aufnahmen würden so in die Cloud kopiert – für vertrauliche Gespräche einen lokalen Ordner wählen." : null, update_check: "on", name: "Andrea", others: "Gegenüber", model: "gcoli/whisper-large-v3-turbo-swiss-german-mit", quality: "accurate", keywords: "tocco, Höngg", recordings_dir: "", microphone: "", speakers: "", audio_days: "3", audio_max_mb: "", recordings_path: "C:\\Users\\AndreaFrehner\\.verbalis\\recordings" }),
+  settings: () => ok({ diarize_others: "on", diarize_me: "off", auto_transcribe: "off", model_auto_update: "off", storage_warning: window.__scenario === "dev" ? "Der Aufnahmeordner liegt in einem synchronisierten Ordner (Verbalis in «onedrive - tocco ag»). Aufnahmen würden so in die Cloud kopiert – für vertrauliche Gespräche einen lokalen Ordner wählen." : null, update_check: "on", name: "Andrea", others: "Gegenüber", model: "gcoli/whisper-large-v3-turbo-swiss-german-mit", quality: "accurate", keywords: "tocco, Höngg", recordings_dir: "", microphone: "", speakers: "", audio_days: "3", audio_max_mb: "", recordings_path: "C:\\Users\\AndreaFrehner\\.verbalis\\recordings" }),
   devices: () => window.__scenario === "nomic" ? ok({ platform: "win32", virtual_device: true, microphones: [], speakers: ["Lautsprecher (Realtek(R) Audio)"], default_microphone: "", default_speakers: "Lautsprecher (Realtek(R) Audio)", problems: ["Es wurde kein Mikrofon gefunden. Headset oder Mikrofon anschliessen – und unter Windows in den Einstellungen → Datenschutz und Sicherheit → Mikrofon den Zugriff für Desktop-Apps erlauben. Danach «Geräte neu laden»."] }) : ok({ platform: "win32", virtual_device: true, problems: [], microphones: ["Microphone Array (Intel® Smart Sound Technology)", "Jabra Evolve2 65"], speakers: ["Speakers (Realtek(R) Audio)", "Jabra Evolve2 65"], default_microphone: "Microphone Array (Intel® Smart Sound Technology)", default_speakers: "Speakers (Realtek(R) Audio)" }),
   models: () => ok([
     { id: "gcoli/whisper-large-v3-turbo-swiss-german-mit", name: "Schweizerdeutsch turbo (gcoli)", size_gb: 1.6, description: "Schweizerdeutsch-Fine-Tune von large-v3-turbo: bestes Ergebnis in echten Teams-Anrufen, etwa doppelt so schnell wie Flix, MIT-Lizenz auch für Trainingsdaten", status: "auf diesem PC", local: true, label: "gcoli – auf diesem PC", page: "https://huggingface.co/gcoli/whisper-large-v3-turbo-swiss-german-mit", revision: "7d1c0aa", loaded: "2026-10-12T09:10+02:00", source: "Hugging Face" },
@@ -57,6 +57,7 @@ window.pywebview = { api: {
   remove_correction: () => ok([{ target: "tocco", variants: ["Tokko"] }]),
   audio_usage: () => ok({ audio_mb: 412.3 }),
   delete_audio: () => ok(null),
+  audio_clip: (id, start, end) => { window.__clip = [start, end]; return ok({ url: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=", start }); },
   partial_transcript: () => ok({ until: 240, tracks: { me: "Andrea", others: "Gegenüber" }, segments: segments.filter((g) => g.start < 30).map((g) => ({ ...g, speaker: g.track === "me" ? "Andrea" : "Gegenüber", speaker_id: null })) }),
   reassign_speakers: (id, track, count) => new Promise((res) => setTimeout(() => {
     window.__reassigned = [track, count];
@@ -66,7 +67,7 @@ window.pywebview = { api: {
   }, 600)),
   keep_audio: (id, keep) => { const r = recs.find((x) => x.id === id); if (r) { r.keep_audio = keep; r.audio_delete = keep ? null : "2026-10-10T20:47+02:00"; } window.__kept = [id, keep]; return ok(null); },
   preview_levels: (mic, spk) => { window.__previewing = true; return ok({ me: -22 - Math.random() * 10, others: -35 - Math.random() * 15 }); },
-  stop_preview: () => { window.__previewing = false; return ok(null); }, transcribe: () => ok(null), open_folder: () => ok(null),
+  stop_preview: () => { window.__previewing = false; return ok(null); }, transcribe: (id, people) => { window.__transcribed = [id, people]; return ok(null); }, open_folder: () => ok(null),
   start_recording: () => ok("x"), stop_recording: () => ok("x"), save_settings: (d) => { window.__saved = d; return ok(d); },
   pause: () => ok(null), resume: () => ok(null),
   pause_recording: () => { window.__recPaused = true; return ok(null); },

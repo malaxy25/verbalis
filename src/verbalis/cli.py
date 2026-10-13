@@ -409,8 +409,13 @@ def cmd_selftest(_args) -> int:
         noise = np.random.default_rng(0).normal(0, 0.05, 16_000 * 5).astype(np.float32)
         get_speech_timestamps(noise, VadOptions())
         if os.environ.get("VERBALIS_SELFTEST_DIARIZATION") == "1":
+            import soundfile as sf
+
             diarization.ensure_models()
             diarization.find_turns(noise)
+            with tempfile.TemporaryDirectory() as tmp:   # also in its own process, as the app runs it
+                sf.write(Path(tmp) / "others.wav", noise, 16_000)
+                diarization.turns_for_file(Path(tmp) / "others.wav")
 
     check("Sprechererkennung (sherpa-onnx)", speaker_diarization)
 

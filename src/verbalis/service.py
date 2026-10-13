@@ -46,11 +46,16 @@ STOP_FREE_MB = 150             # stop and save the recording below this
 DISK_CHECK_EVERY_S = 5
 
 
-class ShuttingDown(Exception):
-    """Raised in the worker when the app closes while it waits (e.g. during a pause)."""
+class ShuttingDown(BaseException):
+    """Raised in the worker when the app closes while it waits (e.g. during a pause).
+
+    BaseException, so that «never lose the transcript» handlers (except Exception) don't
+    swallow it and save half a result.
+    """
 CLEANUP = ":cleanup"          # queue task (not a valid recording ID)
 CLEANUP_EVERY_S = 3600        # additionally every hour while the app stays open
 SOUND_DB = -55.0              # louder than this counts as "something is coming through"
+MAX_CLIP_S = 120.0            # longest passage played at once
 MAX_PEOPLE = 30               # «Anzahl Personen» when re-assigning speakers
 PREVIEW_IDLE_S = 3.0          # level meters before a recording: close the devices when the UI stops asking
 MB = 1024 * 1024              # as shown in Windows Explorer
@@ -100,7 +105,7 @@ class Service:
         self._recording_error: str | None = None
         self._others_last_sound = 0.0   # when the others track last had sound (monotonic)
 
-        self._queue: queue.Queue[str | None] = queue.Queue()
+        self._queue: queue.Queue[str | tuple | None] = queue.Queue()   # recording ids, CLEANUP, («speakers», …)
         self._queued: list[str] = []
         self._job: dict | None = None
         self._errors: dict[str, str] = {}
@@ -417,9 +422,9 @@ class Service:
                 return None
             self._rec, self._rec_info = None, {}
         state = self._finish(rec, info, reason)
-        if state in (pipeline.COMPLETE, pipeline.INCOMPLETE) and rec.active_seconds() >= 1 \
-                and pipeline.has_audio(info["folder"]):
-            self.transcribe(info["id"])
+        if self._s.auto_transcribe == "on" and state in (pipeline.COMPLETE, pipeline.INCOMPLETE) \
+                and rec.active_seconds() >= 1 and pipeline.has_audio(info["folder"]):
+            self.transcribe(info["id"])   # otherwise the user enters the number of people first and starts it
         return info["id"]
 
     def _finish(self, rec, info: dict, reason: str | None = None) -> str:
@@ -516,9 +521,24 @@ class Service:
         """What is already finished of a running transcription (read-only in the app)."""
         return pipeline.partial_transcript(self._path(recording_id))
 
-    def transcribe(self, recording_id: str) -> None:
-        if not pipeline.has_audio(self._path(recording_id)):
+    def transcribe(self, recording_id: str, people: dict | None = None) -> None:
+        """Queue a transcription. people: track → number of people on it (None/empty = find out);
+        remembered in meta.json, so a later «Neu transkribieren» uses it too."""
+        folder = self._path(recording_id)
+        if not pipeline.has_audio(folder):
             raise RuntimeError("Das Audio dieser Aufnahme wurde gelöscht – neu transkribieren ist nicht mehr möglich.")
+        if people is not None:
+            clean = {}
+            for track in pipeline.TRACKS:
+                value = people.get(track)
+                if value in (None, ""):
+                    clean[track] = None
+                    continue
+                number = int(value)
+                if not 1 <= number <= MAX_PEOPLE:
+                    raise ValueError(f"Bitte bei der Anzahl Personen eine Zahl zwischen 1 und {MAX_PEOPLE} eingeben.")
+                clean[track] = number
+            pipeline.update_meta(folder, people=clean)
         with self._lock:
             if recording_id in self._queued or (self._job and self._job["id"] == recording_id):
                 return
@@ -674,6 +694,12 @@ class Service:
             if recording_id == CLEANUP:
                 self._cleanup_safely()
                 continue
+            if isinstance(recording_id, tuple):   # ("speakers", id, track, count)
+                try:
+                    self._run_reassign(*recording_id[1:])
+                except ShuttingDown:
+                    return
+                continue
             try:
                 self._wait_while_paused()
             except ShuttingDown:
@@ -722,9 +748,13 @@ class Service:
                     self._wait_while_paused()
 
                 diarize = {"others": s.diarize_others == "on", "me": s.diarize_me == "on"}
+                people = pipeline.read_meta(self._path(recording_id)).get("people") or {}
+                for track, number in people.items():   # a given number decides: 1 = nobody to tell apart
+                    if number:
+                        diarize[track] = number > 1
                 _, compute, duration = pipeline.create_transcript(
                     self._path(recording_id), tr, s.model, names, progress, paused_time, corrections,
-                    diarize=diarize, phase=phase)
+                    diarize=diarize, phase=phase, people={t: n for t, n in people.items() if n and n > 1})
                 if duration > 0 and compute > 0:
                     self._remember_factor(key, compute / duration)
             except ShuttingDown:
@@ -942,31 +972,66 @@ class Service:
         self._write_transcript(folder, data)
         return self.speakers(recording_id)
 
-    def reassign_speakers(self, recording_id: str, track: str, count: int) -> list[dict]:
+    def reassign_speakers(self, recording_id: str, track: str, count: int) -> None:
         """Diarize one track again with a known number of people – without transcribing again.
 
+        Runs in the background like a transcription (with progress, waits while recording).
         Paragraphs keep their text (also corrections); names given before go to the new
         speaker whose voice overlaps most with them.
         """
-        from . import diarization
-        from .transcription.faster import load_audio
-
         count = int(count)
         if not 1 <= count <= MAX_PEOPLE:
             raise ValueError(f"Bitte eine Anzahl zwischen 1 und {MAX_PEOPLE} angeben.")
-        if self._rec is not None:
-            raise RuntimeError("Während einer Aufnahme nicht möglich – das braucht viel Rechenleistung.")
-        if recording_id in self._protected():
-            raise RuntimeError("Diese Aufnahme wird gerade transkribiert.")
         folder, data = self._transcript_data(recording_id)
-        base = (data.get("tracks") or {}).get(track)
-        if not base:
+        if not (data.get("tracks") or {}).get(track):
             raise ValueError("Diese Spur gibt es in diesem Transkript nicht.")
+        if pipeline.audio_file(folder, track) is None:
+            raise RuntimeError("Das Audio dieser Spur wurde gelöscht – neu zuordnen ist nicht mehr möglich.")
+        with self._lock:
+            if recording_id in self._queued or (self._job and self._job["id"] == recording_id):
+                raise RuntimeError("Diese Aufnahme wird gerade bearbeitet – bitte warten, bis das fertig ist.")
+            self._queued.append(recording_id)
+        self._queue.put(("speakers", recording_id, track, count))
+
+    def _run_reassign(self, recording_id: str, track: str, count: int) -> None:
+        """Worker thread: the background part of reassign_speakers."""
+        self._wait_while_paused()
+        with self._lock:
+            if recording_id in self._queued:
+                self._queued.remove(recording_id)
+            self._job = {"id": recording_id, "kind": "speakers", "phase": "Sprecher werden neu zugeordnet",
+                         "progress": 0.0, "start": time.monotonic(), "paused_s": 0.0, "paused_since": None,
+                         "duration_s": None, "factor": None}
+
+        def progress(fraction: float) -> None:
+            with self._lock:
+                if self._job:
+                    self._job["progress"] = min(fraction, 0.99)
+                    self._job["phase"] = f"Sprecher werden neu zugeordnet: {fraction:.0%}"
+            self._wait_while_paused()
+
+        try:
+            self._reassign(recording_id, track, count, progress)
+        except ShuttingDown:
+            raise
+        except Exception as e:
+            log.exception("Re-assigning speakers of %s failed", recording_id)
+            self._notice = f"Neu zuordnen hat nicht geklappt; die bisherige Zuordnung bleibt. ({e})"
+        finally:
+            with self._lock:
+                self._job = None
+
+    def _reassign(self, recording_id: str, track: str, count: int, progress=None) -> None:
+        from . import diarization
+
+        folder = self._path(recording_id)
         path = pipeline.audio_file(folder, track)
         if path is None:
-            raise RuntimeError("Das Audio dieser Spur wurde gelöscht – neu zuordnen ist nicht mehr möglich.")
+            raise RuntimeError("Das Audio dieser Spur wurde gelöscht.")
         diarization.ensure_models()
-        turns = diarization.find_turns(load_audio(path), num_speakers=count)
+        turns = diarization.turns_for_file(path, progress=progress, num_speakers=count)
+        folder, data = self._transcript_data(recording_id)   # read now: the newest state of the transcript
+        base = data["tracks"][track]
         old = [seg for seg in data["segments"] if seg.get("track") == track]
         new = diarization.assign([segment_from_dict(seg) for seg in old], turns, track, base)
         names = diarization.reassign_names(old, new, base)
@@ -979,7 +1044,6 @@ class Service:
         data["segments"] = _join_neighbours(data["segments"])
         self._write_transcript(folder, data)
         log.info("Speakers of %s/%s re-assigned to %d people", recording_id, track, count)
-        return self.speakers(recording_id)
 
     def set_paragraph_speaker(self, recording_id: str, index: int, speaker_id: str) -> None:
         """A paragraph was assigned to the wrong person."""
@@ -994,9 +1058,6 @@ class Service:
 
     def speaker_sample(self, recording_id: str, speaker_id: str, seconds: float = 8.0) -> dict:
         """A few seconds of this speaker as a WAV data URL, to hear who it is."""
-        import base64
-        import io
-
         import soundfile as sf
 
         folder, data = self._transcript_data(recording_id)
@@ -1012,10 +1073,25 @@ class Service:
             f.seek(min(int(start * f.samplerate), max(f.frames - 1, 0)))
             clip = f.read(int(min(seconds, longest["end"] - start) * f.samplerate), dtype="float32")
             rate = f.samplerate
-        buffer = io.BytesIO()
-        sf.write(buffer, clip, rate, format="WAV", subtype="PCM_16")
-        return {"url": "data:audio/wav;base64," + base64.b64encode(buffer.getvalue()).decode("ascii"),
-                "start": round(start, 1)}
+        return {"url": _wav_url(clip, rate), "start": round(start, 1)}
+
+    def audio_clip(self, recording_id: str, start: float, end: float) -> dict:
+        """A passage of the conversation – both tracks mixed – as a WAV data URL, to listen to it."""
+        import numpy as np
+
+        from .transcription.faster import WHISPER_SAMPLERATE, load_piece
+
+        folder = self._path(recording_id)
+        start = max(float(start) - 0.3, 0.0)
+        end = min(float(end) + 0.5, start + MAX_CLIP_S)
+        pieces = [load_piece(path, start, end) for t in pipeline.TRACKS
+                  if (path := pipeline.audio_file(folder, t)) is not None]
+        if not pieces:
+            raise ValueError("Das Audio dieser Aufnahme wurde schon gelöscht – abspielen ist nicht mehr möglich.")
+        mix = np.zeros(max(len(p) for p in pieces), dtype=np.float32)
+        for p in pieces:
+            mix[:len(p)] += p
+        return {"url": _wav_url(np.clip(mix, -1.0, 1.0), WHISPER_SAMPLERATE), "start": round(start, 1)}
 
     def remember_corrections(self, recording_id: str, rules: list[dict]) -> dict:
         """Save the chosen suggestions and apply them to the whole transcript right away."""
@@ -1202,6 +1278,7 @@ class Service:
                     "audio_mb": round(audio / MB, 1),
                     "audio_delete": self._deletion_date(folder) if audio else None,
                     "keep_audio": bool(meta.get("keep_audio")),
+                    "people": meta.get("people") or {},
                 })
         return result
 
@@ -1254,7 +1331,8 @@ class Service:
             job = None
             if self._job:
                 rest = self._remaining(self._job)
-                job = {"id": self._job["id"], "phase": self._job["phase"], "progress": self._job["progress"],
+                job = {"id": self._job["id"], "kind": self._job.get("kind", "transcription"),
+                       "phase": self._job["phase"], "progress": self._job["progress"],
                        "remaining_s": round(rest) if rest is not None else None}
             queued = list(self._queued)
             pause = self._pause_reason()
@@ -1306,3 +1384,14 @@ def _join_neighbours(segments: list[dict], max_pause: float = 2.0) -> list[dict]
             joined.append(dict(seg))
     return joined
 
+
+def _wav_url(samples, rate: int) -> str:
+    """Audio as a WAV data URL the window can play."""
+    import base64
+    import io
+
+    import soundfile as sf
+
+    buffer = io.BytesIO()
+    sf.write(buffer, samples, rate, format="WAV", subtype="PCM_16")
+    return "data:audio/wav;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")

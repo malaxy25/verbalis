@@ -120,17 +120,24 @@ def _config(folder: Path, threshold: float, num_speakers: int | None):
 
 
 def find_turns(audio, folder: Path | None = None, threshold: float = THRESHOLD, num_speakers: int | None = None,
-               refine_turns: bool = True) -> list[tuple[float, float, int]]:
+               refine_turns: bool = True, progress=None) -> list[tuple[float, float, int]]:
     """(start, end, speaker index) for 16 kHz mono float32 audio.
 
     num_speakers: the known number of people on this track (then nothing is refined).
+    progress(fraction) is called while sherpa-onnx works.
     """
     import sherpa_onnx
 
     folder = folder or models_dir()
     diarizer = sherpa_onnx.OfflineSpeakerDiarization(_config(folder, threshold, num_speakers))
     started = time.monotonic()
-    result = diarizer.process(audio).sort_by_start_time()
+
+    def report(done, total):
+        if progress:
+            progress(done / total if total else 0.0)
+        return 0   # non-zero would abort
+
+    result = diarizer.process(audio, callback=report).sort_by_start_time()
     turns = [(r.start, r.end, r.speaker) for r in result]
     found = len({t[2] for t in turns})
     if refine_turns and not num_speakers and found > 1:
@@ -138,6 +145,59 @@ def find_turns(audio, folder: Path | None = None, threshold: float = THRESHOLD, 
     log.info("Diarization: %d turns, %d speakers (%d before refining), %.1f s for %.0f s audio",
              len(turns), len({t[2] for t in turns}), found, time.monotonic() - started, len(audio) / SAMPLERATE)
     return turns
+
+
+# sherpa-onnx keeps Python's global lock while it computes: in the app's process every other thread –
+# also the one answering the window – stood still for minutes («the app freezes»). So the app runs it
+# in a separate process. Tests switch this off: they replace find_turns with a fake.
+SEPARATE_PROCESS = True
+
+
+def turns_for_file(path: Path, until_s: float | None = None, progress=None, **options) -> list[tuple[float, float, int]]:
+    """find_turns for an audio file, in a separate process. progress(fraction) is called in this process."""
+    if not SEPARATE_PROCESS:
+        from .transcription.faster import load_audio
+        return find_turns(load_audio(Path(path), until_s), progress=progress, **options)
+    import multiprocessing
+    import queue
+
+    context = multiprocessing.get_context("spawn")
+    messages = context.Queue()
+    process = context.Process(target=_turns_worker, args=(str(path), until_s, options, messages),
+                              name="verbalis-diarization", daemon=True)
+    process.start()
+    try:
+        while True:
+            try:
+                kind, value = messages.get(timeout=0.5)
+            except queue.Empty:
+                if process.is_alive():
+                    continue
+                try:
+                    kind, value = messages.get(timeout=1)
+                except queue.Empty:
+                    raise RuntimeError("Die Sprechererkennung wurde unerwartet beendet.") from None
+            if kind == "progress":
+                if progress:
+                    progress(value)
+            elif kind == "result":
+                return [(float(s), float(e), int(sp)) for s, e, sp in value]
+            else:
+                raise RuntimeError(value)
+    finally:
+        if process.is_alive():
+            process.terminate()
+        process.join(5)
+
+
+def _turns_worker(path: str, until_s, options: dict, messages) -> None:
+    """Runs in the separate process."""
+    try:
+        from .transcription.faster import load_audio
+        audio = load_audio(Path(path), until_s)
+        messages.put(("result", find_turns(audio, progress=lambda f: messages.put(("progress", f)), **options)))
+    except Exception as e:
+        messages.put(("error", str(e) or repr(e)))
 
 
 def embedder(audio, folder: Path | None = None):

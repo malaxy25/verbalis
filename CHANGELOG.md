@@ -18,6 +18,14 @@
   names go to the matching new speaker.
 - New command `verbalis speakers-test <folder> [--thresholds …]`: how many speakers each threshold finds and
   their talk time – only numbers, no content – to tune the threshold on real calls
+- **Transcribing starts by hand** after a recording (new setting «Sofort automatisch transkribieren», off
+  by default): first enter how many people spoke on each track («Personen am Mikrofon», «Personen über
+  Gegenüber»; empty = find out, 1 = nobody to tell apart), then «Transkribieren». The numbers are kept for
+  «Neu transkribieren».
+- **The app no longer freezes** while speakers are told apart: sherpa-onnx blocked all of Verbalis while it
+  computed, so the diarization now runs in a separate process. «Neu zuordnen» runs in the background with
+  a progress bar and waits while a recording runs.
+- **▶ next to every paragraph** plays that passage (both tracks together), as long as the audio exists
 
 ## 0.7.17 – 2026-10-13
 - **Default model gcoli** (`gcoli/whisper-large-v3-turbo-swiss-german-mit`) for new installations: on a

@@ -28,6 +28,8 @@ class Settings:
     model_auto_update: str = "off"    # "on" = take newer model files automatically before transcribing
     diarize_others: str = "on"        # tell the others apart (Gegenüber 1, 2, …)
     diarize_me: str = "off"           # tell speakers apart on the own microphone (meetings in a room)
+    auto_transcribe: str = "off"      # "on" = transcribe right after recording; "off" = start it by hand
+                                      # (after entering the number of people)
     last_seen_version: str = ""       # version whose «what's new» was shown last
 
     @property
@@ -76,6 +78,8 @@ class Settings:
             s.diarize_others = "on"
         if s.diarize_me not in ("on", "off"):
             s.diarize_me = "off"
+        if s.auto_transcribe not in ("on", "off"):
+            s.auto_transcribe = "off"
         for name, default in (("audio_days", "3"), ("audio_max_mb", "")):
             value = getattr(s, name)
             if value and not (value.isdigit() and int(value) < 100_000):

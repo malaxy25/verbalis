@@ -329,7 +329,8 @@ def _prompt(segments: list[dict]) -> str | None:
 def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float | None = None,
                progress: Progress | None = None, paused_time: Callable[[], float] | None = None,
                diarize: dict[str, bool] | None = None, phase: Callable[[str], None] | None = None,
-               problems: list[str] | None = None, partial: Path | None = None, model: str = ""):
+               problems: list[str] | None = None, partial: Path | None = None, model: str = "",
+               people: dict[str, int | None] | None = None):
     """Transcribe both tracks step by step. Returns (paragraphs, compute_s, recording_s).
 
     Each track is cut into pieces of about two minutes in speech pauses; the pieces
@@ -339,12 +340,13 @@ def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float 
     app closed) continues from there. Diarization and merging run at the end over
     everything.
 
-    names: track → display name. paused_time returns the seconds spent paused
+    names: track → display name. people: track → known number of people (diarization).
+    paused_time returns the seconds spent paused
     so far; they don't count as compute time. progress(display name, fraction of
     the whole transcription).
     """
     from .transcription.base import Segment
-    from .transcription.faster import load_audio, load_piece
+    from .transcription.faster import load_piece
 
     paused_time = paused_time or (lambda: 0.0)
     if not has_audio(folder):
@@ -392,7 +394,8 @@ def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float 
                            for d in ts["segments"]])
         if (diarize or {}).get(track) and units:
             t, p = time.monotonic(), paused_time()
-            units = _diarize(units, load_audio(paths[track], until_s), track, names[track], phase, problems)
+            units = _diarize(units, paths[track], until_s, track, names[track], phase, problems,
+                             (people or {}).get(track))
             state["compute_s"] += (time.monotonic() - t) - (paused_time() - p)
         result[names[track]] = units
     recording = max((ts["duration"] for ts in tracks.values()), default=0.0)
@@ -416,18 +419,25 @@ def partial_transcript(folder: Path) -> dict | None:
     return {"until": until, "tracks": names, "segments": [segment_dict(p) for p in paragraphs]}
 
 
-def _diarize(segments, audio, track, display_name, phase, problems):
-    """Tell the speakers of one track apart. Never loses the transcript: on errors it stays as it is."""
+def _diarize(segments, path, until_s, track, display_name, phase, problems, people=None):
+    """Tell the speakers of one track apart. Never loses the transcript: on errors it stays as it is.
+
+    people: the known number of people on this track (None = find out).
+    """
     from . import diarization
+
+    def progress(fraction):
+        if phase:
+            phase(f"Sprecher in «{display_name}» werden erkannt: {fraction:.0%}")
 
     try:
         if not diarization.models_ready():
             if phase:
                 phase("Modelle für die Sprechererkennung werden geladen (ca. 46 MB)")
             diarization.ensure_models()
-        if phase:
-            phase(f"Sprecher in «{display_name}» werden erkannt")
-        return diarization.assign(segments, diarization.find_turns(audio), track, display_name)
+        progress(0.0)
+        turns = diarization.turns_for_file(path, until_s, progress=progress, num_speakers=people)
+        return diarization.assign(segments, turns, track, display_name)
     except Exception as e:
         log.exception("Diarization of %s failed", track)
         if problems is not None:
@@ -458,12 +468,14 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
                       progress: Progress | None = None,
                       paused_time: Callable[[], float] | None = None,
                       corrections: "CorrectionList | None" = None, diarize: dict[str, bool] | None = None,
-                      phase: Callable[[str], None] | None = None) -> tuple[Path, float, float]:
+                      phase: Callable[[str], None] | None = None,
+                      people: dict[str, int] | None = None) -> tuple[Path, float, float]:
     """Returns (path, compute_s, recording_s). diarize: track → tell speakers apart."""
     problems: list[str] = []
     paragraphs, compute, recording = transcribe(folder, transcriber, names, progress=progress,
                                                 paused_time=paused_time, diarize=diarize, phase=phase,
-                                                problems=problems, partial=folder / PARTIAL, model=model)
+                                                problems=problems, partial=folder / PARTIAL, model=model,
+                                                people=people)
     h = header(folder, model, compute, recording)
     if missing := missing_tracks(folder):
         h["Hinweis"] = "Unvollständig – keine Aufnahme von: " + ", ".join(names.get(t, t) for t in missing)

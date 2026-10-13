@@ -81,7 +81,11 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   `speakers` map; names are changed there. Threshold 0.7 grouped three synthetic voices correctly, but
   real calls gave 60+ speakers; since 0.7.18 `refine` gives short-only speakers to the most similar voice
   and merges small ones; «Neu zuordnen» re-runs it with a fixed number of people. Tune with
-  `verbalis speakers-test` (prints numbers only).
+  `verbalis speakers-test` (prints numbers only). sherpa-onnx holds the GIL while computing, so the app
+  runs it in a separate process (`diarization.turns_for_file`, spawn; `freeze_support()` in the packaged
+  entry scripts; tests set `SEPARATE_PROCESS = False` because they fake `find_turns`).
+- **Transcription starts by hand** by default since 0.7.18 (`auto_transcribe` setting): the number of
+  people per track is entered first and stored in `meta.json` (`people`), used as `num_speakers`.
 - **Step-by-step transcription** (0.7.18, `pipeline.transcribe`): ~2-min pieces cut in speech pauses,
   tracks alternately, progress in `transcript.partial.json` after each piece; the service resumes it at
   start. Diarization and corrections run at the end. Finished parts are read-only while it runs.

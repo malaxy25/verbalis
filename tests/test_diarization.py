@@ -271,10 +271,12 @@ def test_reassign_with_known_number_of_people_keeps_given_names(no_real_diarizat
         return real(audio, folder, **kwargs)
     d.find_turns = counting
     try:
-        speakers = s.reassign_speakers(rid, "others", 2)
+        s.reassign_speakers(rid, "others", 2)            # runs in the background, like a transcription
+        assert wait_until(lambda: "num_speakers" in asked and s.recordings()[0]["status"] == "done")
     finally:
         d.find_turns = real
-    assert asked["num_speakers"] == 2
+    assert asked["num_speakers"] == 2 and callable(asked["progress"])
+    speakers = s.speakers(rid)
     names = sorted(sp["name"] for sp in speakers if sp["track"] == "others")
     assert names == ["Gegenüber 2", "Hans Muster"]                    # the given name survived
     assert {sp["track"] for sp in speakers} == {"others"}
@@ -290,3 +292,12 @@ def test_speakers_test_prints_only_numbers(tmp_path, monkeypatch, capsys, no_rea
     assert cli.main(["speakers-test", str(folder), "--thresholds", "0.5", "0.9"]) == 0
     out = capsys.readouterr().out
     assert "Schwelle 0.50:   3 Sprecher roh,   1 bereinigt" in out and "Schwelle 0.90" in out
+
+
+def test_diarization_runs_in_its_own_process_and_reports_errors(tmp_path, monkeypatch):
+    """0.7.18 bug: sherpa-onnx blocks Python while it computes – the app froze during «Neu zuordnen».
+    It now runs in a separate process; errors there come back readable."""
+    monkeypatch.setattr(diarization, "SEPARATE_PROCESS", True)
+    with pytest.raises(RuntimeError) as error:
+        diarization.turns_for_file(tmp_path / "fehlt.flac")
+    assert "fehlt.flac" in str(error.value)
