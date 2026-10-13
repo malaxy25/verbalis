@@ -1275,6 +1275,11 @@ class Service:
         import tempfile
 
         bundle = updates.app_bundle() if sys.platform == "darwin" else None
+        if bundle is not None and updates.translocated(bundle):
+            raise RuntimeError("Verbalis wurde direkt aus «Downloads» gestartet – dort kann es sich nicht selbst "
+                               "aktualisieren (macOS führt es dann aus einer schreibgeschützten Kopie aus). "
+                               "Bitte Verbalis beenden, im Finder in den Ordner «Programme» ziehen, von dort "
+                               "starten und das Update nochmals wählen.")
         if bundle is not None and not updates.can_write(bundle.parent):
             raise RuntimeError(f"Verbalis darf «{bundle.parent}» nicht ändern. Das Update bitte von der "
                                "Release-Seite laden oder Verbalis in einen Ordner mit Schreibrechten verschieben.")

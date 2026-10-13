@@ -207,3 +207,12 @@ def test_mac_app_finds_certificates(monkeypatch):
     monkeypatch.setenv("SSL_CERT_FILE", "/company/ca.pem")
     verbalis._certificates_on_macos("darwin")
     assert os.environ["SSL_CERT_FILE"] == "/company/ca.pem"  # a certificate file set by IT wins
+
+
+def test_app_started_from_downloads_is_recognised():
+    """0.7.21 on macOS: «Verbalis darf /private/var/folders/… nicht ändern» – the app had been started
+    from «Downloads», so macOS ran a read-only copy. The message now says to move it to «Programme»."""
+    from pathlib import PurePosixPath
+    copy = PurePosixPath("/private/var/folders/od/k2wb/T/AppTranslocation/D4/d/Verbalis.app")
+    assert updates.translocated(copy)
+    assert not updates.translocated(PurePosixPath("/Applications/Verbalis.app"))

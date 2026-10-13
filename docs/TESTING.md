@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-201 tests in 22 files.
+202 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -352,7 +352,7 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Short answer after a question stays a paragraph**
 - **Aside in markdown and json**
 
-### `test_updates.py` (16)
+### `test_updates.py` (17)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -372,6 +372,7 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Download checks sha256 and size**
 - **Check reads the github digest and name**
 - **Mac app finds certificates** – 0.7.19 bug on macOS: the update check failed with «CERTIFICATE_VERIFY_FAILED» – the Python
+- **App started from downloads is recognised** – 0.7.21 on macOS: «Verbalis darf /private/var/folders/… nicht ändern» – the app had been started
 
 ### `test_wasapi_fix.py` (5)
 

@@ -6,6 +6,9 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## 0.7.22 – planned and decided with Andrea (build once item 3 is measured)
 
+Already done (in the repo, not released yet): clear message when the Mac app was started from «Downloads»
+(App Translocation) and tries to update itself – move it to «Programme». Add to the CHANGELOG with 0.7.22.
+
 1. **Maximum recording time**: setting «Aufnahme automatisch beenden nach», default **2 hours** (decided),
    empty = no limit. Notice 5 minutes before («Aufnahme endet in 5 Min.», button «+30 Min.»; Windows
    notification when in the background). Ends cleanly as a complete recording; meta.json says why.

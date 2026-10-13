@@ -135,6 +135,12 @@ def app_bundle(executable: str | None = None) -> Path | None:
     return None
 
 
+def translocated(bundle: Path) -> bool:
+    """macOS runs an app started straight from «Downloads» from a read-only random copy
+    (/private/var/folders/…/AppTranslocation/…) – it can't replace itself there."""
+    return "AppTranslocation" in bundle.parts or str(bundle).startswith(("/private/var/folders/", "/var/folders/"))
+
+
 def unpack_mac_update(zip_path: Path, workdir: Path, extract: Callable | None = None) -> Path:
     """Unpack the downloaded zip and return the new Verbalis.app inside it.
 
