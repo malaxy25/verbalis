@@ -70,6 +70,19 @@ def _db(rms: float) -> float:
     return round(max(20 * math.log10(rms), -90.0), 1) if rms > 1e-9 else -90.0
 
 
+def copy_to_clipboard(text: str, run: Callable = subprocess.run) -> bool:
+    """Copy text with the system's own tool. True if done here; False = let the window do it.
+
+    On macOS the window (WebKit) only allows the clipboard right after a click – Verbalis
+    first asks Python for the text, and by then WebKit has refused («Kopieren» did nothing).
+    """
+    if sys.platform != "darwin":
+        return False
+    result = run(["/usr/bin/pbcopy"], input=text.encode("utf-8"), env={**os.environ, "LANG": "en_US.UTF-8"},
+                 timeout=5, check=False)
+    return result.returncode == 0
+
+
 def open_in_file_manager(path: Path) -> None:
     if sys.platform == "win32":
         os.startfile(path)  # type: ignore[attr-defined]
@@ -428,11 +441,12 @@ class Service:
             started = time.monotonic()
             try:
                 request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Verbalis"})
-                with urllib.request.urlopen(request, timeout=10) as response:
+                with urllib.request.urlopen(request, timeout=8) as response:
                     ok, detail = True, f"HTTP {response.status}"
             except Exception as e:
                 ok, detail = False, str(e) or type(e).__name__
             results.append({"name": name, "ok": ok, "detail": detail, "seconds": round(time.monotonic() - started, 1)})
+            log.info("Network check %s: %s (%s)", name, "ok" if ok else "failed", detail)
         self._network = results
         return results
 

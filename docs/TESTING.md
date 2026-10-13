@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-211 tests in 22 files.
+212 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -289,7 +289,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (33)
+### `test_service.py` (34)
 
 App flow without a window: recording → queue → transcript.
 
@@ -326,6 +326,7 @@ App flow without a window: recording → queue → transcript.
 - **Delete waits for a file that is open for a moment** – 0.7.21 CI failure on Windows: deleting failed with «being used by another process» when the
 - **Track without any audio is reported while recording** – 0.7.21 on macOS: the recording ran without sound and nothing said which device delivered nothing.
 - **Diagnosis runs the steps of a recording start** – Diagnose tab: each device alone, both together, closing and reopening at once – with a report to copy.
+- **Copy on macos goes through pbcopy** – 0.7.23.dev1 on macOS: «Diagnose kopieren» did nothing – WebKit refuses the clipboard after an await.
 
 ### `test_spelling.py` (5)
 

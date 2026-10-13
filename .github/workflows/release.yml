@@ -160,6 +160,44 @@ jobs:
           test -x dist/Verbalis.app/Contents/MacOS/Verbalis
           test -x dist/Verbalis.app/Contents/MacOS/verbalis-cli
 
+      # macOS remembers the microphone and audio permissions per code signature. With an ad-hoc
+      # signature every build is a «new app» and updates silently lost the permissions (no sound).
+      # Signing every build with the same own certificate keeps them. Not notarized: Gatekeeper
+      # still warns on the very first start (that needs a paid Apple developer account).
+      - name: Sign with the Verbalis certificate
+        env:
+          CERT: ${{ secrets.MACOS_SIGNING_CERT }}
+          PASSWORD: ${{ secrets.MACOS_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CERT" ]; then
+            echo "::warning::Secret MACOS_SIGNING_CERT missing – the app keeps its ad-hoc signature"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/verbalis-signing.keychain-db"
+          keychain_password=$(uuidgen)
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/verbalis-signing.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/verbalis-signing.p12" -k "$keychain" -P "$PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-certificate -c "Verbalis Code Signing" -Z "$keychain" | awk '/SHA-1/ {print $3; exit}')
+          test -n "$identity"
+          # the helper first (PyInstaller puts it into Contents/Frameworks), then the whole bundle
+          # (--deep signs the bundled libraries too)
+          helper=$(find dist/Verbalis.app -name verbalis-audiotap -type f | head -1)
+          test -n "$helper"
+          echo "System audio helper: $helper"
+          codesign --force --sign "$identity" --keychain "$keychain" --identifier ch.frehner.verbalis.audiotap "$helper"
+          codesign --force --deep --sign "$identity" --keychain "$keychain" --identifier ch.frehner.verbalis \
+            dist/Verbalis.app
+          codesign --verify --deep --verbose=2 dist/Verbalis.app
+          codesign --display --requirements - dist/Verbalis.app
+          rm -f "$RUNNER_TEMP/verbalis-signing.p12"
+          security delete-keychain "$keychain"
+
       - name: Self-test of the app bundle
         env:
           VERBALIS_HOME: ${{ runner.temp }}/verbalis-home
@@ -221,7 +259,9 @@ jobs:
                         "installiert man genauso – Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten."]
           if os.environ["MAC_RESULT"] == "success":
               notes += ["", f"**Mac (experimentell, Apple Silicon):** `Verbalis-{version}-macos-arm64.zip` entpacken und "
-                            "Verbalis in «Programme» ziehen. Beim ersten Öffnen blockiert macOS die nicht signierte App: "
+                            "Verbalis in «Programme» ziehen (ohne Administratorkonto: in den persönlichen Ordner "
+                            "«Programme» im Benutzerordner, dort aktualisiert es sich selbst). "
+                            "Beim ersten Öffnen blockiert macOS die nicht notarisierte App: "
                             "Systemeinstellungen → Datenschutz & Sicherheit → «Trotzdem öffnen». Ab macOS 14.2 nimmt "
                             "Verbalis den Ton der anderen selbst auf (Berechtigung «Audioaufnahme» erlauben); "
                             "nur ältere Macs brauchen BlackHole, siehe README."]

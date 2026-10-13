@@ -185,6 +185,11 @@ class Api:
     def whats_new_seen(self):
         return self._call(self._s.whats_new_seen)
 
+    def copy_text(self, text):
+        from .service import copy_to_clipboard
+
+        return self._call(copy_to_clipboard, str(text or ""))
+
     def diagnose_info(self):
         return self._call(self._s.diagnose_info)
 

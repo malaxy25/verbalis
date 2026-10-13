@@ -90,6 +90,7 @@ window.pywebview = { api: {
     { title: "Nur Ton der anderen", running: false, results: [r("Systemton (alle Programme)", true)] },
     { title: "Beide zusammen", running: !done, results: done ? [r("MacBook Air-Mikrofon", false), r("Systemton (alle Programme)", false)] : [] }] }); },
   diagnose_report: () => ok("Verbalis-Diagnose …"),
+  copy_text: (text) => { window.__copied = text; return ok(false); },
   open_data_folder: () => ok(null),
   open_update_download: () => { window.__downloadOpened = true; return ok(null); },
   update_info: () => ok({ current: "0.7.4", latest: "0.7.5", available: true, can_install: window.__scenario !== "dev" && window.__scenario !== "macmanual",

@@ -1614,6 +1614,8 @@ function showSuggestions(id, paragraph, suggestions) {
 }
 
 async function copyText(text) {
+  // macOS: WebKit refuses the clipboard once Python was asked for the text – Python copies instead
+  try { if (await call("copy_text", text)) return; } catch (_) { /* the window's own ways below */ }
   try { await navigator.clipboard.writeText(text); return; } catch (_) { /* fallback below */ }
   const field = element("textarea", { style: "position:fixed;opacity:0" });
   field.value = text;
@@ -1959,12 +1961,18 @@ async function runAudioTest() {
 
 async function checkNetwork() {
   const list = $("diag-network");
-  list.replaceChildren(element("li", {}, "Wird geprüft …"));
+  const button = $("btn-diag-network");
+  button.disabled = true;
+  list.replaceChildren(element("li", { class: "diag-result" }, "Internetverbindung wird geprüft (bis 25 Sekunden) …"));
   try {
     const results = await call("check_network");
     list.replaceChildren(...results.map((r) => element("li", { class: `diag-result ${r.ok ? "good" : "bad"}` },
       `${r.name}: ${r.ok ? "erreichbar" : "nicht erreichbar"} – ${r.detail} (${r.seconds} s)`)));
-  } catch (e) { list.replaceChildren(element("li", {}, e.message)); }
+  } catch (e) {
+    list.replaceChildren(element("li", { class: "diag-result bad" }, `Prüfung nicht möglich: ${e.message}`));
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function copyDiagnosis() {

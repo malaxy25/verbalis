@@ -599,3 +599,21 @@ def test_diagnosis_runs_the_steps_of_a_recording_start(monkeypatch):
     assert "Verbalis:" in report and "Nur Mikrofon" in report and "Mic: OK – erste Daten nach 0.2 s" in report
     assert s.preview_levels("Mic", "") is not None             # level meters work again afterwards
     s.stop_preview()
+
+
+def test_copy_on_macos_goes_through_pbcopy(monkeypatch):
+    """0.7.23.dev1 on macOS: «Diagnose kopieren» did nothing – WebKit refuses the clipboard after an await."""
+    import sys
+
+    from verbalis import service as service_module
+    calls = []
+
+    def fake_run(command, input, env, timeout, check):
+        calls.append((command, input.decode("utf-8"), env["LANG"]))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert service_module.copy_to_clipboard("Grüezi – Diagnose", run=fake_run) is True
+    assert calls == [(["/usr/bin/pbcopy"], "Grüezi – Diagnose", "en_US.UTF-8")]
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert service_module.copy_to_clipboard("x", run=fake_run) is False   # Windows: the window copies
