@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.18 – 2026-10-13
+- **Step-by-step transcription:** long calls are transcribed in pieces of about two minutes, cut in speech
+  pauses, both tracks alternately. What is finished shows below the progress bar while it runs (read-only,
+  only the time range done on both tracks). After each piece the progress is saved: if Verbalis crashes or
+  is closed, the transcription continues at the next start where it stopped instead of from the beginning.
+  The end of the previous piece is given to the model as context, so names stay consistent across the cuts.
+- **Reading flow:** paragraphs are split at sentence ends (word timestamps), so a question appears where it
+  was asked, not after the whole answer. Short interjections («ja», «genau», «mhm») said while someone else
+  is talking are shown small in a grey column next to that paragraph (below it in narrow windows); a short
+  «Ja.» as a real answer stays a normal paragraph. In the Markdown file they are written in italics.
+- **Fewer wrong speakers:** a speaker who only ever says something short (under 1.5 s) is given to the most
+  similar voice, and speakers with little talk time are merged into a similar voice. A real call with 4
+  people had shown more than 60 speakers.
+- **«Anzahl Personen auf dieser Spur» + «Neu zuordnen»** in the speaker box: tells the speakers of a track
+  apart again with a known number of people – without transcribing again; corrections stay and given
+  names go to the matching new speaker.
+- New command `verbalis speakers-test <folder> [--thresholds …]`: how many speakers each threshold finds and
+  their talk time – only numbers, no content – to tune the threshold on real calls
+
 ## 0.7.17 – 2026-10-13
 - **Default model gcoli** (`gcoli/whisper-large-v3-turbo-swiss-german-mit`) for new installations: on a
   corrected real Teams call it made the fewest errors (me 14.1 %, others 10.4 %) and was twice as fast as

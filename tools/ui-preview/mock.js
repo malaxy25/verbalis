@@ -9,6 +9,10 @@ const segments = [
 ].map(([s, t, x], i) => s === "Andrea" ? { speaker: s, track: "me", start: t, end: t + 6, text: x }
   : { speaker: i === 1 || i === 4 ? "Gegenüber 1" : "Gegenüber 2", speaker_id: i === 1 || i === 4 ? "others-1" : "others-2",
       track: "others", start: t, end: t + 6, text: x });
+// interjections while someone else speaks (reading flow)
+segments.push({ speaker: "Andrea", track: "me", start: 11, end: 11.4, text: "mhm", aside: true },
+              { speaker: "Andrea", track: "me", start: 27, end: 27.5, text: "Ja, genau.", aside: true });
+segments.sort((x, y) => x.start - y.start);
 const speakerMap = { "others-1": { name: "Gegenüber 1", track: "others" }, "others-2": { name: "Gegenüber 2", track: "others" } };
 for (let n = 3; n <= 7; n++) {   // short extra speakers – diarization of real calls finds many
   speakerMap[`others-${n}`] = { name: `Gegenüber ${n}`, track: "others" };
@@ -53,6 +57,13 @@ window.pywebview = { api: {
   remove_correction: () => ok([{ target: "tocco", variants: ["Tokko"] }]),
   audio_usage: () => ok({ audio_mb: 412.3 }),
   delete_audio: () => ok(null),
+  partial_transcript: () => ok({ until: 240, tracks: { me: "Andrea", others: "Gegenüber" }, segments: segments.filter((g) => g.start < 30).map((g) => ({ ...g, speaker: g.track === "me" ? "Andrea" : "Gegenüber", speaker_id: null })) }),
+  reassign_speakers: (id, track, count) => new Promise((res) => setTimeout(() => {
+    window.__reassigned = [track, count];
+    for (const k of Object.keys(speakerMap)) if (+k.split("-")[1] > count) delete speakerMap[k];
+    segments.forEach((g) => { if (g.speaker_id && !speakerMap[g.speaker_id]) { g.speaker_id = "others-1"; g.speaker = speakerMap["others-1"].name; } });
+    res({ ok: true, data: [] });
+  }, 600)),
   keep_audio: (id, keep) => { const r = recs.find((x) => x.id === id); if (r) { r.keep_audio = keep; r.audio_delete = keep ? null : "2026-10-10T20:47+02:00"; } window.__kept = [id, keep]; return ok(null); },
   preview_levels: (mic, spk) => { window.__previewing = true; return ok({ me: -22 - Math.random() * 10, others: -35 - Math.random() * 15 }); },
   stop_preview: () => { window.__previewing = false; return ok(null); }, transcribe: () => ok(null), open_folder: () => ok(null),

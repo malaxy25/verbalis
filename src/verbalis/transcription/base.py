@@ -21,6 +21,8 @@ class Segment:
     speaker: str | None = None   # display name, e.g. "Andrea"
     track: str | None = None     # "me" or "others"
     speaker_id: str | None = None   # e.g. "others-2" when speakers were told apart within a track
+    words: list | None = None    # [(start, end, word), …] – only while transcribing, not saved
+    aside: bool = False          # short interjection («ja», «genau») while someone else speaks
 
 
 class Transcriber(Protocol):

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import replace
 import os
 import platform
 import time
@@ -13,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from . import __version__
-from .transcript import merge, save
+from .transcript import merge, save, segment_dict, sentences
 
 if TYPE_CHECKING:
     from .corrections import CorrectionList
@@ -23,7 +22,7 @@ log = logging.getLogger(__name__)
 TRACKS = ("me", "others")
 AUDIO_EXTENSIONS = (".flac", ".wav")
 ARCHIVE_SAMPLERATE = 16_000  # what the models use anyway
-Progress = Callable[[str, float], None]  # (display name, fraction 0..1)
+Progress = Callable[[str, float], None]  # (display name of the current track, fraction of all 0..1)
 
 
 # ---------------------------------------------------------------- audio files
@@ -243,41 +242,178 @@ def recording_start(folder: Path) -> datetime | None:
 
 # ---------------------------------------------------------------- transcription
 
+PARTIAL = "transcript.partial.json"   # finished pieces while a transcription runs (resume after a crash)
+PIECE_S = 120.0          # transcribe in pieces of about this length …
+CUT_WINDOW_S = 20.0      # … cut at the quietest moment within ± this of the target
+FRAME_S = 0.05           # loudness is measured per 50 ms
+PAUSE_FRAMES = 10        # a pause is the quietest 0.5 s
+PROMPT_CHARS = 200       # end of the previous piece, given to the model as context
+
+
+def audio_levels(path: Path, until_s: float | None = None) -> tuple[list[float], float]:
+    """Loudness (mean square) per FRAME_S, read in blocks so long calls need little memory; and the duration."""
+    import soundfile as sf
+
+    energies: list[float] = []
+    with sf.SoundFile(str(path)) as f:
+        sr = f.samplerate
+        frame = max(int(sr * FRAME_S), 1)
+        limit = min(int(until_s * sr), f.frames) if until_s else f.frames
+        read = 0
+        for block in f.blocks(blocksize=frame * 200, dtype="float32", always_2d=True):
+            block = block[:max(limit - read, 0)]
+            read += len(block)
+            mono = block.mean(axis=1)
+            n = len(mono) // frame
+            if n:
+                energies.extend((mono[:n * frame].reshape(n, frame) ** 2).mean(axis=1).tolist())
+            if read >= limit:
+                break
+    return energies, limit / sr
+
+
+def cut_points(energies: list[float], duration: float, piece_s: float = PIECE_S,
+               window_s: float = CUT_WINDOW_S) -> list[float]:
+    """Where to cut a track into pieces: about every piece_s, in a speech pause (the quietest half second)."""
+    import numpy as np
+
+    if duration <= piece_s + window_s:
+        return []
+    e = np.asarray(energies, dtype=np.float64)
+    smooth = np.convolve(e, np.ones(PAUSE_FRAMES) / PAUSE_FRAMES, mode="same") if len(e) else e
+    cuts: list[float] = []
+    position = 0.0
+    while duration - position > piece_s + window_s:
+        lo = int((position + piece_s - window_s) / FRAME_S)
+        hi = int((position + piece_s + window_s) / FRAME_S)
+        window = smooth[lo:hi]
+        cut = (lo + int(np.argmin(window))) * FRAME_S + FRAME_S / 2 if len(window) else position + piece_s
+        cuts.append(round(cut, 2))
+        position = cut
+    return cuts
+
+
+def _edges(track_state: dict) -> list[float]:
+    return [0.0, *track_state["cuts"], track_state["duration"]]
+
+
+def _done_until(track_state: dict) -> float:
+    return _edges(track_state)[track_state["done"]]
+
+
+def _finished(track_state: dict) -> bool:
+    return track_state["done"] >= len(track_state["cuts"]) + 1
+
+
+def _load_partial(path: Path | None, model: str, names: dict[str, str], until_s: float | None) -> dict | None:
+    """The saved progress – only if it belongs to the same model, names and length; otherwise start over."""
+    if path is None or not path.exists():
+        return None
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        log.warning("Partial transcript %s unreadable – starting over", path)
+        return None
+    if (state.get("version") != 1 or state.get("model") != model or state.get("names") != names
+            or state.get("until_s") != until_s):
+        log.info("Partial transcript %s was made with other settings – starting over", path)
+        return None
+    return state
+
+
+def _prompt(segments: list[dict]) -> str | None:
+    text = " ".join(s["text"] for s in segments[-5:])
+    return text[-PROMPT_CHARS:].lstrip() or None
+
+
 def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float | None = None,
                progress: Progress | None = None, paused_time: Callable[[], float] | None = None,
                diarize: dict[str, bool] | None = None, phase: Callable[[str], None] | None = None,
-               problems: list[str] | None = None):
-    """Transcribe both tracks. Returns (paragraphs, compute_s, recording_s).
+               problems: list[str] | None = None, partial: Path | None = None, model: str = ""):
+    """Transcribe both tracks step by step. Returns (paragraphs, compute_s, recording_s).
+
+    Each track is cut into pieces of about two minutes in speech pauses; the pieces
+    of both tracks are done alternately (always the track that is further behind),
+    so what is finished reads like a conversation. With `partial`, the finished
+    pieces are saved after each one and a transcription that was cut off (crash,
+    app closed) continues from there. Diarization and merging run at the end over
+    everything.
 
     names: track → display name. paused_time returns the seconds spent paused
-    so far; they don't count as compute time.
+    so far; they don't count as compute time. progress(display name, fraction of
+    the whole transcription).
     """
-    from .transcription.faster import WHISPER_SAMPLERATE, load_audio
+    from .transcription.base import Segment
+    from .transcription.faster import load_audio, load_piece
 
     paused_time = paused_time or (lambda: 0.0)
-    tracks = {}
-    compute = recording = 0.0
     if not has_audio(folder):
         raise FileNotFoundError("Die Audiodateien dieser Aufnahme fehlen – wurden sie gelöscht?")
-    for track, display_name in names.items():
-        path = audio_file(folder, track)
-        if path is None:
-            continue   # a rescued single track: transcribe what is there, the header says what is missing
-        audio = load_audio(path, until_s)
-        recording = max(recording, len(audio) / WHISPER_SAMPLERATE)
+    # a rescued single track: transcribe what is there, the header says what is missing
+    paths = {t: path for t in names if (path := audio_file(folder, t)) is not None}
 
-        def report(position, total, n=display_name):
+    state = _load_partial(partial, model, names, until_s)
+    if state is None:
+        state = {"version": 1, "model": model, "names": names, "until_s": until_s, "compute_s": 0.0, "tracks": {}}
+        for track, path in paths.items():
+            energies, duration = audio_levels(path, until_s)
+            state["tracks"][track] = {"duration": duration, "cuts": cut_points(energies, duration),
+                                      "done": 0, "segments": []}
+    else:
+        log.info("Continuing the transcription of %s where it stopped", folder.name)
+    tracks = state["tracks"]
+    total = sum(ts["duration"] for ts in tracks.values()) or 1.0
+
+    while open_tracks := [t for t, ts in tracks.items() if not _finished(ts)]:
+        track = min(open_tracks, key=lambda t: _done_until(tracks[t]))   # the track that is further behind
+        ts = tracks[track]
+        start, end = _edges(ts)[ts["done"]], _edges(ts)[ts["done"] + 1]
+        done_before = sum(_done_until(x) for x in tracks.values())
+
+        def report(position, _length, n=names[track], base=done_before, piece=end - start):
             if progress:
-                progress(n, min(position / total, 1.0) if total else 1.0)
+                progress(n, min((base + min(position, piece)) / total, 1.0))
 
         t, p = time.monotonic(), paused_time()
-        segments = [replace(s, track=track) for s in transcriber.transcribe(audio, progress=report)]
-        if (diarize or {}).get(track) and segments:
-            segments = _diarize(segments, audio, track, display_name, phase, problems)
-        tracks[display_name] = segments
-        compute += (time.monotonic() - t) - (paused_time() - p)
-        report(1, 1)
-    return merge(tracks), compute, recording
+        transcriber.prompt = _prompt(ts["segments"])
+        for s in transcriber.transcribe(load_piece(paths[track], start, end), progress=report):
+            ts["segments"].append({
+                "start": round(s.start + start, 3), "end": round(s.end + start, 3), "text": s.text,
+                "words": [[round(w[0] + start, 3), round(w[1] + start, 3), w[2]] for w in s.words] if s.words else None})
+        ts["done"] += 1
+        state["compute_s"] += (time.monotonic() - t) - (paused_time() - p)
+        if partial is not None:
+            write_json_atomic(partial, state)
+        report(end - start, end - start)
+
+    result = {}
+    for track, ts in tracks.items():
+        units = sentences([Segment(d["start"], d["end"], d["text"], track=track, words=d.get("words"))
+                           for d in ts["segments"]])
+        if (diarize or {}).get(track) and units:
+            t, p = time.monotonic(), paused_time()
+            units = _diarize(units, load_audio(paths[track], until_s), track, names[track], phase, problems)
+            state["compute_s"] += (time.monotonic() - t) - (paused_time() - p)
+        result[names[track]] = units
+    recording = max((ts["duration"] for ts in tracks.values()), default=0.0)
+    return merge(result), state["compute_s"], recording
+
+
+def partial_transcript(folder: Path) -> dict | None:
+    """What is finished of a running transcription: the time range done on *both* tracks, as paragraphs."""
+    from .transcription.base import Segment
+
+    try:
+        state = json.loads((folder / PARTIAL).read_text(encoding="utf-8"))
+        tracks, names = state["tracks"], state["names"]
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, KeyError):
+        return None
+    open_until = [_done_until(ts) for ts in tracks.values() if not _finished(ts)]
+    until = min(open_until) if open_until else max((ts["duration"] for ts in tracks.values()), default=0.0)
+    paragraphs = merge({names.get(track, track): [
+        Segment(d["start"], d["end"], d["text"], track=track, words=d.get("words"))
+        for d in ts["segments"] if d["start"] < until] for track, ts in tracks.items()})
+    return {"until": until, "tracks": names, "segments": [segment_dict(p) for p in paragraphs]}
 
 
 def _diarize(segments, audio, track, display_name, phase, problems):
@@ -327,7 +463,7 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
     problems: list[str] = []
     paragraphs, compute, recording = transcribe(folder, transcriber, names, progress=progress,
                                                 paused_time=paused_time, diarize=diarize, phase=phase,
-                                                problems=problems)
+                                                problems=problems, partial=folder / PARTIAL, model=model)
     h = header(folder, model, compute, recording)
     if missing := missing_tracks(folder):
         h["Hinweis"] = "Unvollständig – keine Aufnahme von: " + ", ".join(names.get(t, t) for t in missing)
@@ -340,4 +476,5 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
         h["Sprecher"] = " ".join(problems)
     path = save(folder, "transcript", paragraphs, f"Transkript {folder.name}", h, tracks=names)
     (folder / "transcript_original.json").unlink(missing_ok=True)  # older edits are obsolete
+    (folder / PARTIAL).unlink(missing_ok=True)                     # done: no need to resume
     return path, compute, recording

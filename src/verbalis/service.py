@@ -33,8 +33,7 @@ from . import __version__, pipeline, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
-from .transcript import to_markdown
-from .transcription.base import Segment
+from .transcript import is_default_name, segment_from_dict, to_markdown
 from .transcription.models import verbalis_home
 
 VALID_ID = re.compile(r"^[\w\-]+$")
@@ -52,6 +51,7 @@ class ShuttingDown(Exception):
 CLEANUP = ":cleanup"          # queue task (not a valid recording ID)
 CLEANUP_EVERY_S = 3600        # additionally every hour while the app stays open
 SOUND_DB = -55.0              # louder than this counts as "something is coming through"
+MAX_PEOPLE = 30               # «Anzahl Personen» when re-assigning speakers
 PREVIEW_IDLE_S = 3.0          # level meters before a recording: close the devices when the UI stops asking
 MB = 1024 * 1024              # as shown in Windows Explorer
 log = logging.getLogger(__name__)
@@ -124,6 +124,10 @@ class Service:
             self._recover_interrupted()   # before anything else touches the recordings
         except OSError:
             log.exception("Checking for interrupted recordings failed")
+        try:
+            self._resume_transcriptions()
+        except OSError:
+            log.exception("Checking for cut-off transcriptions failed")
         if cleanup_on_start:
             self._queue.put(CLEANUP)  # check old audio files
         if check_updates_on_start and self._s.update_check == "on":
@@ -495,7 +499,22 @@ class Service:
                                          "Das Audio bis dahin ist gesichert.")
             log.warning("Recording %s was interrupted – marked and repaired", folder.name)
 
+    def _resume_transcriptions(self) -> None:
+        """At start: transcriptions that were cut off (crash, app closed) continue where they stopped."""
+        base = self._s.recordings
+        if not base.exists():
+            return
+        for folder in sorted(base.iterdir()):
+            if (folder.is_dir() and VALID_ID.match(folder.name) and (folder / pipeline.PARTIAL).exists()
+                    and pipeline.has_audio(folder)):
+                log.info("Transcription of %s was cut off – continuing", folder.name)
+                self.transcribe(folder.name)
+
     # ------------------------------------------------------------ transcription
+
+    def partial_transcript(self, recording_id: str) -> dict | None:
+        """What is already finished of a running transcription (read-only in the app)."""
+        return pipeline.partial_transcript(self._path(recording_id))
 
     def transcribe(self, recording_id: str) -> None:
         if not pipeline.has_audio(self._path(recording_id)):
@@ -681,17 +700,15 @@ class Service:
                 corrections = CorrectionList.load()
                 tr.keywords = self._keywords(s.keywords, corrections) or None
                 names = {"me": s.name, "others": s.others}
-                order = list(names.values())
                 with self._lock:
                     self._job["start"] = time.monotonic()
                     self._job["phase"] = "Transkription beginnt"
 
                 def progress(name: str, fraction: float):
-                    index = order.index(name) if name in order else 0
                     with self._lock:
                         if self._job:
                             self._job["phase"] = f"Spur «{name}» wird transkribiert"
-                            self._job["progress"] = (index + fraction) / len(order)
+                            self._job["progress"] = fraction
                     self._wait_while_paused()
 
                 def paused_time() -> float:
@@ -842,7 +859,7 @@ class Service:
     def _write_transcript(self, folder: Path, data: dict) -> None:
         data.pop("markdown", None)
         (folder / "transcript.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        paragraphs = [Segment(s["start"], s["end"], s["text"], s.get("speaker")) for s in data["segments"]]
+        paragraphs = [segment_from_dict(s) for s in data["segments"]]
         (folder / "transcript.md").write_text(
             to_markdown(paragraphs, data.get("title") or f"Transkript {folder.name}", data.get("header", {})),
             encoding="utf-8")
@@ -915,7 +932,7 @@ class Service:
         if source not in speakers or target not in speakers or source == target:
             raise ValueError("Diese Sprecher lassen sich nicht zusammenlegen.")
         base = (data.get("tracks") or {}).get(speakers[target].get("track"), "")
-        if _is_default_name(speakers[target]["name"], base) and not _is_default_name(speakers[source]["name"], base):
+        if is_default_name(speakers[target]["name"], base) and not is_default_name(speakers[source]["name"], base):
             speakers[target]["name"] = speakers[source]["name"]   # never lose a name the user gave
         for seg in data["segments"]:
             if seg.get("speaker_id") in (source, target):
@@ -923,6 +940,45 @@ class Service:
         del speakers[source]
         data["segments"] = _join_neighbours(data["segments"])
         self._write_transcript(folder, data)
+        return self.speakers(recording_id)
+
+    def reassign_speakers(self, recording_id: str, track: str, count: int) -> list[dict]:
+        """Diarize one track again with a known number of people – without transcribing again.
+
+        Paragraphs keep their text (also corrections); names given before go to the new
+        speaker whose voice overlaps most with them.
+        """
+        from . import diarization
+        from .transcription.faster import load_audio
+
+        count = int(count)
+        if not 1 <= count <= MAX_PEOPLE:
+            raise ValueError(f"Bitte eine Anzahl zwischen 1 und {MAX_PEOPLE} angeben.")
+        if self._rec is not None:
+            raise RuntimeError("Während einer Aufnahme nicht möglich – das braucht viel Rechenleistung.")
+        if recording_id in self._protected():
+            raise RuntimeError("Diese Aufnahme wird gerade transkribiert.")
+        folder, data = self._transcript_data(recording_id)
+        base = (data.get("tracks") or {}).get(track)
+        if not base:
+            raise ValueError("Diese Spur gibt es in diesem Transkript nicht.")
+        path = pipeline.audio_file(folder, track)
+        if path is None:
+            raise RuntimeError("Das Audio dieser Spur wurde gelöscht – neu zuordnen ist nicht mehr möglich.")
+        diarization.ensure_models()
+        turns = diarization.find_turns(load_audio(path), num_speakers=count)
+        old = [seg for seg in data["segments"] if seg.get("track") == track]
+        new = diarization.assign([segment_from_dict(seg) for seg in old], turns, track, base)
+        names = diarization.reassign_names(old, new, base)
+        speakers = {sid: info for sid, info in data.get("speakers", {}).items() if info.get("track") != track}
+        for seg, assigned in zip(old, new):
+            seg["speaker_id"] = assigned.speaker_id
+            seg["speaker"] = names.get(assigned.speaker_id, assigned.speaker)
+            speakers.setdefault(assigned.speaker_id, {"name": seg["speaker"], "track": track})
+        data["speakers"] = speakers
+        data["segments"] = _join_neighbours(data["segments"])
+        self._write_transcript(folder, data)
+        log.info("Speakers of %s/%s re-assigned to %d people", recording_id, track, count)
         return self.speakers(recording_id)
 
     def set_paragraph_speaker(self, recording_id: str, index: int, speaker_id: str) -> None:
@@ -1242,6 +1298,7 @@ def _join_neighbours(segments: list[dict], max_pause: float = 2.0) -> list[dict]
     for seg in segments:
         last = joined[-1] if joined else None
         if (last and seg.get("speaker_id") and last.get("speaker_id") == seg["speaker_id"]
+                and not seg.get("aside") and not last.get("aside")
                 and seg["start"] - last["end"] <= max_pause):
             last["end"] = max(last["end"], seg["end"])
             last["text"] = f"{last['text']} {seg['text']}"
@@ -1249,7 +1306,3 @@ def _join_neighbours(segments: list[dict], max_pause: float = 2.0) -> list[dict]
             joined.append(dict(seg))
     return joined
 
-
-def _is_default_name(name: str, track_name: str) -> bool:
-    """Is this the name diarization gave («Gegenüber 2»), not one the user typed?"""
-    return bool(track_name) and re.fullmatch(re.escape(track_name) + r"( \d+)?", name or "") is not None

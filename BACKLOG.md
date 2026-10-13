@@ -4,34 +4,6 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.18 – planned and decided with Andrea
-
-Left over from the 0.7.17 plan (gcoli default, speaker box, settings tabs, levels, messages, «Audio behalten»
-and model comparison were released in 0.7.17). Findings from the first real Teams calls (October 2026) and
-Andrea's decisions. UI texts German, code and docs English. Show Andrea screenshots of the reading flow
-before finishing.
-
-1. **Too many speakers.** A 40-min call with 4 people on the others track gave 60+ speakers
-   (threshold 0.7 was tuned on synthetic voices). Do all of:
-   - field «Anzahl Personen auf dieser Spur» in the speaker box + button «Neu zuordnen»: re-runs only
-     diarization with `num_clusters` = that number (no re-transcription), keeps given names where possible
-   - turns shorter than ~1.5 s don't create a speaker: assign them to the most similar existing speaker
-   - second pass: speakers with little talk time merged into the most similar one if close enough
-   - CLI `verbalis speakers-test <folder> [--thresholds …]`: prints only numbers (speakers per threshold,
-     talk time per speaker) – no content – to tune `THRESHOLD` on real calls
-2. **Reading flow** (screenshot approved): split long paragraphs at sentence boundaries where another
-   speaker talks in between (needs sentence timestamps – use word timestamps of faster-whisper), so a
-   question appears where it was asked. Short interjections («ja», «genau», «mhm»: ≤ ~3 words or ~1 s,
-   *while someone else is speaking*) get `aside: true` and are shown in a narrow grey column on the right
-   of the paragraph they were said during: «Andrea: ja 00:06». On narrow windows below the paragraph.
-   A short «Ja.» as a real answer stays a normal paragraph.
-3. **Step-by-step transcription**: save after every finished segment (partial file next to the
-   transcript), show finished parts while it runs, resume after a crash/close at the last saved point.
-   Work in ~2-minute pieces cut in a speech pause (VAD), alternating both tracks so the partial view reads
-   like a conversation (show only the time range done on *both* tracks). Pass the last sentences as
-   prompt across cuts. Diarization and the correction list run at the end over everything.
-   **Safe way decided:** finished parts are read-only while it runs; editing once it is done.
-
 ## Now
 
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**

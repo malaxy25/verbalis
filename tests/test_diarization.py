@@ -125,7 +125,7 @@ def test_switched_off_means_no_speakers(tmp_path, no_real_diarization):
 
 
 def test_failing_diarization_keeps_the_transcript(tmp_path, monkeypatch):
-    def broken(audio, folder=None):
+    def broken(audio, folder=None, **kwargs):
         raise RuntimeError("Modell defekt")
     monkeypatch.setattr(diarization, "find_turns", broken)
     folder = recording(tmp_path)
@@ -222,3 +222,71 @@ def test_merging_never_loses_a_given_name(no_real_diarization):
     s.rename_speakers(rid, {"others-3": "Eva Beispiel"})
     s.merge_speakers(rid, "others-3", first)                   # both named → the target's name wins
     assert {sp["id"]: sp["name"] for sp in s.speakers(rid)}[first] == "Hans Muster"
+
+
+# ---------------------------------------------------------------- fewer, more plausible speakers
+
+VOICES = {0: [1.0, 0.0, 0.0], 1: [0.0, 1.0, 0.0], 2: [0.9, 0.1, 0.0], 3: [0.0, 0.0, 1.0]}
+
+
+def fake_embed(turns):
+    """Voice print of whoever speaks in the given intervals (looked up in `turns`)."""
+    def embed(intervals):
+        speaker = next(sp for s, e, sp in turns if (s, e) == tuple(intervals[0]))
+        return VOICES[speaker]
+    return embed
+
+
+def test_speaker_with_only_short_turns_goes_to_the_most_similar_voice():
+    """0.7.18: a 40-min call with 4 people gave 60+ speakers – short turns created speakers of their own."""
+    turns = [(0, 30, 0), (30, 60, 1), (61, 62, 2), (70, 71.2, 2)]     # speaker 2: only short turns, voice like 0
+    refined = diarization.refine(turns, fake_embed(turns), small_s=0)
+    assert [sp for _, _, sp in refined] == [0, 1, 0, 0]
+
+
+def test_small_speaker_merged_only_when_the_voice_is_close():
+    turns = [(0, 60, 0), (60, 120, 1), (121, 126, 2), (130, 135, 3)]  # 2 sounds like 0, 3 like nobody
+    refined = diarization.refine(turns, fake_embed(turns))
+    assert [sp for _, _, sp in refined] == [0, 1, 0, 3]
+
+
+def test_reassign_with_known_number_of_people_keeps_given_names(no_real_diarization):
+    s, rid = service_with_speakers(no_real_diarization)
+    folder, data = s._transcript_data(rid)
+    others = next(seg for seg in data["segments"] if seg["track"] == "others")
+    for i, (start, end) in enumerate([(0.0, 0.4), (0.5, 0.9)]):
+        data["segments"].append({**others, "start": start + 2, "end": end + 2, "text": f"Teil {i}",
+                                 "speaker_id": f"others-{i + 5}", "speaker": "Hans Muster" if i == 0 else "Gegenüber 6"})
+    data["speakers"].update({"others-5": {"name": "Hans Muster", "track": "others"},
+                             "others-6": {"name": "Gegenüber 6", "track": "others"}})
+    s._write_transcript(folder, data)
+
+    asked = {}
+    no_real_diarization.value = [(0.0, 2.45, 0), (2.45, 5.0, 1)]
+    from verbalis import diarization as d
+    real = d.find_turns
+
+    def counting(audio, folder=None, **kwargs):
+        asked.update(kwargs)
+        return real(audio, folder, **kwargs)
+    d.find_turns = counting
+    try:
+        speakers = s.reassign_speakers(rid, "others", 2)
+    finally:
+        d.find_turns = real
+    assert asked["num_speakers"] == 2
+    names = sorted(sp["name"] for sp in speakers if sp["track"] == "others")
+    assert names == ["Gegenüber 2", "Hans Muster"]                    # the given name survived
+    assert {sp["track"] for sp in speakers} == {"others"}
+    with pytest.raises(ValueError, match="Anzahl"):
+        s.reassign_speakers(rid, "others", 0)
+
+
+def test_speakers_test_prints_only_numbers(tmp_path, monkeypatch, capsys, no_real_diarization):
+    from verbalis import cli
+    folder = recording(tmp_path)
+    no_real_diarization.value = [(0.0, 2.0, 0), (2.0, 4.0, 1), (4.0, 4.5, 2)]
+    monkeypatch.setattr(diarization, "embedder", lambda audio, folder=None: lambda intervals: [1.0, 0.0])
+    assert cli.main(["speakers-test", str(folder), "--thresholds", "0.5", "0.9"]) == 0
+    out = capsys.readouterr().out
+    assert "Schwelle 0.50:   3 Sprecher roh,   1 bereinigt" in out and "Schwelle 0.90" in out

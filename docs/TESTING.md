@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-171 tests in 19 files.
+184 tests in 20 files.
 
 ### `test_app.py` (7)
 
@@ -133,7 +133,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Missing default device does not break the list** – Regression 0.7.11: on a PC without a default microphone both device lists stayed empty.
 - **No microphone at all explains what to do**
 
-### `test_diarization.py` (12)
+### `test_diarization.py` (16)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -149,6 +149,10 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Speaker sample is playable wav**
 - **Reference and compare use the track not the name**
 - **Merging never loses a given name** – 0.7.17: merging «Hans Muster» into the unnamed «Gegenüber 1» kept «Gegenüber 1» – the name was lost.
+- **Speaker with only short turns goes to the most similar voice** – 0.7.18: a 40-min call with 4 people gave 60+ speakers – short turns created speakers of their own.
+- **Small speaker merged only when the voice is close**
+- **Reassign with known number of people keeps given names**
+- **Speakers test prints only numbers**
 
 ### `test_evaluation.py` (6)
 
@@ -300,13 +304,27 @@ Spell checking with a tiny test dictionary (no download).
 - **Missing dictionary without download**
 - **Outdated revision triggers new download**
 
-### `test_transcript.py` (3)
+### `test_stepwise.py` (5)
+
+Step-by-step transcription: pieces cut in speech pauses, both tracks alternately, resume after a crash.
+
+- **Cuts land in speech pauses**
+- **Both tracks alternate and progress is saved**
+- **Cut off transcription continues where it stopped** – 0.7.18: a crash or closing the app used to lose the whole transcription – now only the current piece.
+- **Finished transcript removes the partial file**
+- **Service resumes cut off transcriptions at start**
+
+### `test_transcript.py` (7)
 
 Merging both tracks into paragraphs and the Markdown output.
 
 - **Tracks are interleaved by time and paragraphs formed**
 - **Long pause starts new paragraph**
 - **Markdown format**
+- **Question appears where it was asked** – 0.7.18 reading flow: a long answer used to swallow a question asked in the middle – it came afterwards.
+- **Interjection while someone speaks is an aside**
+- **Short answer after a question stays a paragraph**
+- **Aside in markdown and json**
 
 ### `test_updates.py` (15)
 

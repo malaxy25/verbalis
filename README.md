@@ -149,6 +149,7 @@ verbalis devices                               # list microphones and speakers
 verbalis record --speakers jabra --duration 30 # record (asks for consent)
 verbalis transcribe ~/.verbalis/recordings/2026-10-07_143000 --name Andrea
 verbalis transcribe … --model large-v3 --keywords "tocco, Höngg" --beam 1
+verbalis speakers-test <folder> --thresholds 0.6 0.7 0.8   # speakers per threshold, numbers only
 ```
 
 `--beam 1` is about twice as fast but slightly less accurate.

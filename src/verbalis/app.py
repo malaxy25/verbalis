@@ -127,6 +127,12 @@ class Api:
     def merge_speakers(self, recording_id, source, target):
         return self._call(self._s.merge_speakers, recording_id, source, target)
 
+    def reassign_speakers(self, recording_id, track, count):
+        return self._call(self._s.reassign_speakers, recording_id, track, count)
+
+    def partial_transcript(self, recording_id):
+        return self._call(self._s.partial_transcript, recording_id)
+
     def set_paragraph_speaker(self, recording_id, index, speaker_id):
         return self._call(self._s.set_paragraph_speaker, recording_id, index, speaker_id)
 

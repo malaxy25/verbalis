@@ -44,5 +44,5 @@ def no_real_diarization(monkeypatch):
                                "real_models_ready": staticmethod(diarization.models_ready)})()
     monkeypatch.setattr(diarization, "models_ready", lambda folder=None: True)
     monkeypatch.setattr(diarization, "ensure_models", lambda *a, **k: None)
-    monkeypatch.setattr(diarization, "find_turns", lambda audio, folder=None: list(turns.value))
+    monkeypatch.setattr(diarization, "find_turns", lambda audio, folder=None, **kwargs: list(turns.value))
     return turns

@@ -7,6 +7,14 @@ Uses sherpa-onnx (Apache 2.0) with two small ONNX models, downloaded once into
 In a test with three synthetic voices this embedding model grouped all turns correctly
 at threshold 0.7; the English VoxCeleb model mixed up two similar voices.
 
+Real calls gave far too many speakers (60+ for 4 people), mostly from short turns
+and short coughs/interjections. After clustering, `refine` therefore
+- gives turns of speakers who only ever say something short (< MIN_TURN_S) to the
+  most similar established speaker, and
+- merges speakers with little talk time into the most similar one when close enough.
+With a known number of people (`num_speakers`) the clustering is told that number and
+nothing is refined.
+
 The voice prints only exist while a recording is processed – nothing is stored, so
 no voice database is built (recognising people across calls would be a separate,
 opt-in feature).
@@ -16,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import os
 import tarfile
 import time
@@ -23,6 +32,7 @@ import urllib.request
 from dataclasses import replace
 from pathlib import Path
 
+from .transcript import is_default_name
 from .transcription.base import Segment
 from .transcription.models import verbalis_home
 
@@ -40,6 +50,10 @@ EMBEDDING = {
     "file": "embedding.onnx",
 }
 THRESHOLD = 0.7          # cosine distance for clustering; higher = fewer speakers
+MIN_TURN_S = 1.5         # a speaker with only shorter turns is no speaker of its own
+SMALL_SPEAKER_S = 20.0   # speakers with less talk time are merged into a similar one …
+MERGE_DISTANCE = 0.8     # … if their voice prints are at most this far apart (cosine distance)
+PROFILE_S = 30.0         # seconds of audio per voice print
 SAMPLERATE = 16_000
 
 
@@ -91,27 +105,131 @@ def _threads() -> int:
     return max(1, min(4, (os.cpu_count() or 2) - 1))
 
 
-def find_turns(audio, folder: Path | None = None) -> list[tuple[float, float, int]]:
-    """(start, end, speaker index) for 16 kHz mono float32 audio."""
+def _config(folder: Path, threshold: float, num_speakers: int | None):
     import sherpa_onnx
 
-    folder = folder or models_dir()
     threads = _threads()
-    config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
+    return sherpa_onnx.OfflineSpeakerDiarizationConfig(
         segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
             pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
                 model=str(folder / SEGMENTATION["file"])), num_threads=threads),
         embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(folder / EMBEDDING["file"]),
                                                                num_threads=threads),
-        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=-1, threshold=THRESHOLD),
+        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=num_speakers or -1, threshold=threshold),
         min_duration_on=0.3, min_duration_off=0.5)
-    diarizer = sherpa_onnx.OfflineSpeakerDiarization(config)
+
+
+def find_turns(audio, folder: Path | None = None, threshold: float = THRESHOLD, num_speakers: int | None = None,
+               refine_turns: bool = True) -> list[tuple[float, float, int]]:
+    """(start, end, speaker index) for 16 kHz mono float32 audio.
+
+    num_speakers: the known number of people on this track (then nothing is refined).
+    """
+    import sherpa_onnx
+
+    folder = folder or models_dir()
+    diarizer = sherpa_onnx.OfflineSpeakerDiarization(_config(folder, threshold, num_speakers))
     started = time.monotonic()
     result = diarizer.process(audio).sort_by_start_time()
     turns = [(r.start, r.end, r.speaker) for r in result]
-    log.info("Diarization: %d turns, %d speakers, %.1f s for %.0f s audio (%d threads)",
-             len(turns), len({t[2] for t in turns}), time.monotonic() - started, len(audio) / SAMPLERATE, threads)
+    found = len({t[2] for t in turns})
+    if refine_turns and not num_speakers and found > 1:
+        turns = refine(turns, embedder(audio, folder))
+    log.info("Diarization: %d turns, %d speakers (%d before refining), %.1f s for %.0f s audio",
+             len(turns), len({t[2] for t in turns}), found, time.monotonic() - started, len(audio) / SAMPLERATE)
     return turns
+
+
+def embedder(audio, folder: Path | None = None):
+    """A function (intervals) → voice print, for the given audio."""
+    import numpy as np
+    import sherpa_onnx
+
+    folder = folder or models_dir()
+    extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
+        sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(folder / EMBEDDING["file"]), num_threads=_threads()))
+
+    def embed(intervals: list[tuple[float, float]]) -> list[float]:
+        pieces, total = [], 0.0
+        for start, end in intervals:
+            take = min(end - start, PROFILE_S - total)
+            if take <= 0:
+                break
+            pieces.append(audio[int(start * SAMPLERATE):int((start + take) * SAMPLERATE)])
+            total += take
+        samples = np.concatenate(pieces) if pieces else np.zeros(SAMPLERATE // 2, dtype=np.float32)
+        stream = extractor.create_stream()
+        stream.accept_waveform(sample_rate=SAMPLERATE, waveform=samples.astype(np.float32, copy=False))
+        stream.input_finished()
+        return list(extractor.compute(stream))
+
+    return embed
+
+
+def distance(a, b) -> float:
+    """Cosine distance of two voice prints (0 = same direction, 2 = opposite)."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
+    return 1.0 - dot / norm if norm else 2.0
+
+
+def refine(turns: list[tuple[float, float, int]], embed, min_turn_s: float = MIN_TURN_S,
+           small_s: float = SMALL_SPEAKER_S, merge_distance: float = MERGE_DISTANCE) -> list[tuple[float, float, int]]:
+    """Fewer, more plausible speakers (see module docstring). embed(intervals) → voice print."""
+    def by_speaker(ts):
+        groups: dict[int, list[tuple[float, float]]] = {}
+        for start, end, speaker in ts:
+            groups.setdefault(speaker, []).append((start, end))
+        return groups
+
+    groups = by_speaker(turns)
+    established = {sp for sp, spans in groups.items() if any(e - s >= min_turn_s for s, e in spans)}
+    if not established:
+        return turns
+    # voice prints from the longest turns
+    profiles = {sp: embed(sorted(groups[sp], key=lambda t: t[0] - t[1])) for sp in established}
+    relabel: dict[int, int] = {}
+    for sp in groups:
+        if sp not in established:   # only short turns: belongs to the most similar real speaker
+            print_ = embed(groups[sp])
+            relabel[sp] = min(established, key=lambda other: distance(print_, profiles[other]))
+    turns = [(s, e, relabel.get(sp, sp)) for s, e, sp in turns]
+
+    # second pass: little talk time and a similar voice → the same person
+    talk = {sp: sum(e - s for s, e in spans) for sp, spans in by_speaker(turns).items()}
+    for sp in sorted(talk, key=talk.get):
+        if talk[sp] >= small_s or len(talk) <= 1:
+            continue
+        others = [o for o in talk if o != sp]
+        nearest = min(others, key=lambda o: distance(profiles[sp], profiles[o]))
+        if distance(profiles[sp], profiles[nearest]) <= merge_distance:
+            turns = [(s, e, nearest if x == sp else x) for s, e, x in turns]
+            talk[nearest] += talk.pop(sp)
+    return turns
+
+
+def reassign_names(old: list[dict], new: list, base_name: str) -> dict[str, str]:
+    """After diarizing again: new speaker id → name the user had given, where the voices overlap most.
+
+    old: segments as stored before (with speaker_id and speaker); new: the same segments re-assigned.
+    """
+    overlap: dict[tuple[str, str], float] = {}
+    named = {}
+    for before, after in zip(old, new):
+        sid = before.get("speaker_id")
+        if not sid or is_default_name(before.get("speaker") or "", base_name):
+            continue
+        named[sid] = before["speaker"]
+        key = (sid, after.speaker_id)
+        overlap[key] = overlap.get(key, 0.0) + before["end"] - before["start"]
+    result: dict[str, str] = {}
+    used: set[str] = set()
+    for (sid, new_id), _ in sorted(overlap.items(), key=lambda kv: -kv[1]):
+        if new_id in result or sid in used:
+            continue
+        result[new_id] = named[sid]
+        used.add(sid)
+    return result
 
 
 def assign(segments: list[Segment], turns: list[tuple[float, float, int]], track: str,

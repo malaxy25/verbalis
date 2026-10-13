@@ -78,7 +78,16 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
 - **Speaker diarization** (`diarization.py`): sherpa-onnx with pyannote segmentation 3.0 (MIT) and
   3D-Speaker ERes2Net (Apache) – chosen because it needs no torch and no Hugging Face token. Models
   downloaded once with fixed SHA-256. Segments carry `track` and `speaker_id`; `transcript.json` has a
-  `speakers` map; names are changed there. Threshold 0.7 grouped three synthetic voices correctly.
+  `speakers` map; names are changed there. Threshold 0.7 grouped three synthetic voices correctly, but
+  real calls gave 60+ speakers; since 0.7.18 `refine` gives short-only speakers to the most similar voice
+  and merges small ones; «Neu zuordnen» re-runs it with a fixed number of people. Tune with
+  `verbalis speakers-test` (prints numbers only).
+- **Step-by-step transcription** (0.7.18, `pipeline.transcribe`): ~2-min pieces cut in speech pauses,
+  tracks alternately, progress in `transcript.partial.json` after each piece; the service resumes it at
+  start. Diarization and corrections run at the end. Finished parts are read-only while it runs.
+- **Reading flow** (`transcript.merge`): sentences from word timestamps form the paragraphs; short
+  interjections during someone else's speech get `aside: true` (shown next to the paragraph). Word
+  timestamps are only kept in the partial file, not in `transcript.json`.
   sherpa-onnx bundles its own onnxruntime next to faster-whisper's – the release self-test runs both
   in one process with the real models on Windows and macOS.
 - **Not signed** yet (Windows SmartScreen / macOS Gatekeeper warn on first install).

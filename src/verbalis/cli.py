@@ -144,6 +144,43 @@ def _transcribe_folder(folder: Path, transcriber, names: dict[str, str], until_s
     return transcribe(folder, transcriber, names, until_s, progress)
 
 
+def cmd_speakers_test(args) -> int:
+    """How many speakers diarization finds per threshold – only numbers, no content (to tune THRESHOLD)."""
+    from . import diarization
+    from .pipeline import audio_file
+    from .transcription.faster import WHISPER_SAMPLERATE, load_audio
+
+    folder = Path(args.folder)
+    path = audio_file(folder, args.track)
+    if path is None:
+        print(f"In {folder} gibt es keine Audiodatei für die Spur «{args.track}».")
+        return 1
+    audio = load_audio(path, args.until)
+    diarization.ensure_models()
+    print(f"Spur «{args.track}»: {len(audio) / WHISPER_SAMPLERATE / 60:.1f} min Audio. "
+          "Es werden nur Zahlen ausgegeben, kein Inhalt.\n")
+    embed = None
+    for threshold in args.thresholds:
+        raw = diarization.find_turns(audio, threshold=threshold, refine_turns=False)
+        refined = raw
+        if len({t[2] for t in raw}) > 1:
+            embed = embed or diarization.embedder(audio)
+            refined = diarization.refine(raw, embed)
+        talk: dict[int, float] = {}
+        for start, end, speaker in refined:
+            talk[speaker] = talk.get(speaker, 0.0) + end - start
+        times = sorted(talk.values(), reverse=True)
+        shown = ", ".join(_minutes(t) for t in times[:12]) + (" …" if len(times) > 12 else "")
+        print(f"Schwelle {threshold:.2f}: {len({t[2] for t in raw}):3d} Sprecher roh, {len(times):3d} bereinigt"
+              f" – Redezeit: {shown}")
+    print(f"\nAktuell eingestellt: Schwelle {diarization.THRESHOLD:.2f}. Höher = weniger Sprecher.")
+    return 0
+
+
+def _minutes(seconds: float) -> str:
+    return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
+
+
 def cmd_transcribe(args) -> int:
     from .corrections import CorrectionList
     from .pipeline import apply_corrections, header
@@ -432,6 +469,14 @@ def main(argv: list[str] | None = None) -> int:
                                         "Transkript der Aufnahme), eine transcript.json oder ein Text wie "
                                         "testdata/reference_standard_german.txt")
     p.set_defaults(func=cmd_compare, until=180)  # default: first 3 minutes, 0 = everything
+
+    p = sub.add_parser("speakers-test", help="Sprechererkennung mit verschiedenen Schwellen testen (nur Zahlen)")
+    p.add_argument("folder", help="Aufnahmeordner")
+    p.add_argument("--track", default="others", choices=["me", "others"], help="Spur (Standard: others)")
+    p.add_argument("--thresholds", nargs="+", type=float, default=[0.6, 0.7, 0.8, 0.9],
+                   help="Schwellen zum Vergleichen (Standard: 0.6 0.7 0.8 0.9)")
+    p.add_argument("--until", type=float, help="Nur die ersten N Sekunden")
+    p.set_defaults(func=cmd_speakers_test)
 
     sub.add_parser("models", help="Empfohlene und konvertierte Modelle anzeigen").set_defaults(func=cmd_models)
 

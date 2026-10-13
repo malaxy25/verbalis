@@ -382,6 +382,31 @@
     padding: 2px 8px; margin-left: -8px; border-radius: 6px; cursor: text;
   }
   .paragraph .text:hover { background: var(--surface-2); }
+  .paragraph .text.readonly { cursor: default; }
+  .paragraph .text.readonly:hover { background: none; }
+  /* interjections: a narrow grey column next to the paragraph they were said during */
+  .transcript { max-width: 66em; }
+  .paragraph { grid-template-columns: 9em minmax(0, 1fr) 12em; }
+  .asides { display: grid; gap: 4px; align-content: start; padding-top: 4px; }
+  .aside { font-size: 13px; color: var(--muted); line-height: 1.4; }
+  .aside .aside-who { font-weight: 600; }
+  .aside.others .aside-who { color: var(--limmat); }
+  .aside .aside-text { cursor: text; border-radius: 4px; }
+  .aside .aside-text:hover { background: var(--surface-2); }
+  .aside .aside-text[contenteditable] { background: var(--surface); outline: 2px solid var(--limmat); color: var(--ink); }
+  .aside time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .lone-aside { border-top: 0; padding: 0 0 6px; }
+  @media (max-width: 1100px) {   /* narrow window: asides below the paragraph */
+    .paragraph { grid-template-columns: 9em minmax(0, 1fr); }
+    .asides { grid-column: 2; }
+    .asides:empty { display: none; }
+  }
+  .partial { margin-top: 28px; }
+  .partial h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .partial .hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .speaker-count { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding-top: 6px; border-top: 1px solid var(--line); }
+  .speaker-count input { width: 4em; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); text-align: right; }
+  .speaker-count small { color: var(--muted); font-size: 13px; flex-basis: 100%; }
   .paragraph .text[contenteditable] { background: var(--surface); outline: 2px solid var(--limmat); outline-offset: 0; cursor: auto; }
   .paragraph .edit-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 2px; }
   .paragraph .edit-bar small { color: var(--muted); }
@@ -439,6 +464,7 @@
     body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     .history { border-right: 0; border-bottom: 1px solid var(--line); max-height: 30vh; }
     .paragraph { grid-template-columns: 1fr; }
+    .asides { grid-column: 1; }
   }
 </style>
 </head>
@@ -837,7 +863,8 @@ async function renderContent(force = false) {
         element("p", { class: "remaining", id: "progress-remaining" }, ""),
         element("div", { class: "actions" },
           element("button", { type: "button", class: "action", id: "btn-pause", onclick: togglePause }, "Pausieren")),
-      ));
+      ), element("section", { class: "partial", id: "partial", "aria-label": "Bisher transkribiert", hidden: "" }));
+      state.partialShown = 0;
       if (state.lastState) showProgress(state.lastState);
       return;
     case "error":
@@ -926,24 +953,67 @@ async function renderTranscript(a) {
   if (!t.segments.length) {
     body.append(element("p", { class: "empty" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
   }
-  const speakers = Object.entries(t.speakers || {});
-  t.segments.forEach((s, index) => {
-    const track = s.track || (s.speaker === meName ? "me" : "others");
-    const text = element("p", { class: "text", title: "Zum Korrigieren klicken" }, s.text);
+  renderSegments(body, a.id, t.segments, t.speakers, meName, true);
+  $("content").replaceChildren(...[header, speakersPanel(a, t), body].filter(Boolean));
+}
+
+/* Paragraphs, with short interjections («ja», «genau») in a narrow column next to the
+   paragraph they were said during. editable = false while a transcription still runs. */
+function renderSegments(body, id, segments, speakerMap, meName, editable) {
+  const speakers = Object.entries(speakerMap || {});
+  const trackOf = (s) => s.track || (s.speaker === meName ? "me" : "others");
+  const columns = new Map();   // paragraph index → its aside column
+  segments.forEach((s, index) => {
+    const track = trackOf(s);
+    if (s.aside) {
+      const host = asideHost(segments, index);
+      const text = element("span", { class: "aside-text" }, s.text);
+      const item = element("div", { class: `aside ${track}` },
+        element("span", { class: "aside-who", "data-speaker-id": s.speaker_id || "" }, s.speaker || ""), ": ", text,
+        " ", element("time", {}, timeText(s.start)));
+      if (editable) {
+        text.title = "Zum Korrigieren klicken";
+        text.addEventListener("click", () => editParagraph(id, index, item, text));
+      }
+      if (host !== null && columns.has(host)) columns.get(host).append(item);
+      else body.append(element("div", { class: "paragraph lone-aside" }, element("div"), element("div"), element("div", { class: "asides" }, item)));
+      return;
+    }
+    const text = element("p", { class: "text" }, s.text);
     const sameTrack = speakers.filter(([, info]) => info.track === track);
-    const who = s.speaker_id && sameTrack.length > 1
+    const who = editable && s.speaker_id && sameTrack.length > 1
       ? element("button", { type: "button", class: "who who-button", title: "Einer anderen Person zuweisen",
           "data-speaker-id": s.speaker_id,
-          onclick: (event) => chooseSpeaker(a.id, index, s, sameTrack, event.currentTarget) }, s.speaker || "")
+          onclick: (event) => chooseSpeaker(id, index, s, sameTrack, event.currentTarget) }, s.speaker || "")
       : element("div", { class: "who", "data-speaker-id": s.speaker_id || "" }, s.speaker || "");
+    const asides = element("div", { class: "asides" });
+    columns.set(index, asides);
     const paragraph = element("div", { class: `paragraph ${track}` },
       element("div", {}, who, element("time", {}, timeText(s.start))),
       element("div", {}, text),
+      asides,
     );
-    text.addEventListener("click", () => editParagraph(a.id, index, paragraph, text));
+    if (editable) {
+      text.title = "Zum Korrigieren klicken";
+      text.addEventListener("click", () => editParagraph(id, index, paragraph.children[1], text));
+    } else {
+      text.classList.add("readonly");
+    }
     body.append(paragraph);
   });
-  $("content").replaceChildren(...[header, speakersPanel(a, t), body].filter(Boolean));
+}
+
+/* The paragraph of another person that was going on when the interjection was said. */
+function asideHost(segments, index) {
+  const a = segments[index];
+  let host = null;
+  segments.forEach((p, j) => {
+    if (!p.aside && p.speaker !== a.speaker && p.start <= a.start && a.start <= p.end + 0.5) host = j;
+  });
+  if (host === null) {
+    for (let j = index - 1; j >= 0; j--) if (!segments[j].aside) { host = j; break; }
+  }
+  return host;
 }
 
 /* ---------- Speakers ---------- */
@@ -1007,7 +1077,41 @@ function speakersPanel(a, t) {
       : "Namen eintragen – sie werden gespeichert, sobald du das Feld verlässt. Hörproben gibt es keine mehr, das Audio wurde gelöscht. ")
       + "Wurde eine Person doppelt erkannt: «Gleiche Person wie …» wählen. Einzelne Absätze lassen sich über den Namen im Text umhängen."),
     element("div", { class: "speaker-list" }, ...rows),
+    ...speakerCountRows(a, t, talk),
   );
+}
+
+/* «Anzahl Personen auf dieser Spur» + «Neu zuordnen»: diarize this track again with a known number of
+   people – without transcribing again. Corrections stay, given names go to the most similar new speaker. */
+function speakerCountRows(a, t, talk) {
+  const tracks = [...new Set(Object.values(t.speakers || {}).map((info) => info.track))];
+  return tracks.map((track) => {
+    const current = Object.entries(t.speakers).filter(([id, info]) => info.track === track && talk[id]).length;
+    const name = (t.tracks || {})[track] || track;
+    const input = element("input", { type: "number", min: "1", max: "30", value: String(Math.max(current, 1)),
+      "aria-label": `Anzahl Personen auf der Spur ${name}`, inputmode: "numeric" });
+    const note = element("small", {}, a.audio
+      ? "Erkennt die Personen dieser Spur neu, ohne neu zu transkribieren. Korrekturen und vergebene Namen bleiben erhalten. Kann einige Minuten dauern."
+      : "Das Audio dieser Aufnahme wurde gelöscht – neu zuordnen ist nicht mehr möglich.");
+    const button = element("button", { type: "button", class: "action" }, "Neu zuordnen");
+    button.disabled = input.disabled = !a.audio;
+    button.addEventListener("click", async () => {
+      const count = parseInt(input.value, 10);
+      if (!(count >= 1 && count <= 30)) { note.textContent = "Bitte eine Zahl zwischen 1 und 30 eingeben."; return; }
+      button.disabled = input.disabled = true;
+      button.textContent = "Wird neu zugeordnet …";
+      try {
+        await call("reassign_speakers", a.id, track, count);
+        await renderContent(true);
+      } catch (e) {
+        showMessage(e.message);
+        button.disabled = input.disabled = false;
+        button.textContent = "Neu zuordnen";
+      }
+    });
+    return element("div", { class: "speaker-count" },
+      element("label", {}, `Anzahl Personen auf dieser Spur (${name}) `, input), button, note);
+  });
 }
 
 async function playSample(id, speakerId, button) {
@@ -1408,6 +1512,29 @@ function showProgress(z) {
   const button = $("btn-pause");
   button.textContent = z.pause === "manual" ? "Fortsetzen" : "Pausieren";
   button.disabled = z.pause === "recording";
+  if (Date.now() - (state.partialShown || 0) > PARTIAL_EVERY_MS) showPartial(z.job.id);
+}
+
+/* What is finished already, read-only (editing once the transcription is done). */
+const PARTIAL_EVERY_MS = 4000;
+
+async function showPartial(id) {
+  state.partialShown = Date.now();
+  let partial;
+  try { partial = await call("partial_transcript", id); } catch (_) { return; }
+  const box = $("partial");
+  if (!box || state.selected !== id || !partial || !partial.segments.length) return;
+  const key = `${partial.until}:${partial.segments.length}`;
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  const body = element("div", { class: "transcript" });
+  renderSegments(body, id, partial.segments, {}, (partial.tracks || {}).me, false);
+  box.replaceChildren(
+    element("h3", {}, `Bisher transkribiert: bis ${timeText(partial.until)}`),
+    element("p", { class: "hint" }, "Korrigieren und Sprecher benennen geht, sobald das Transkript fertig ist. "
+      + "Die Sprechererkennung läuft am Schluss über die ganze Aufnahme."),
+    body);
+  box.hidden = false;
 }
 
 async function togglePause() {

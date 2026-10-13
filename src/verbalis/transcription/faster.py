@@ -7,6 +7,9 @@ Important settings:
 - condition_on_previous_text=False: prevents an error from propagating through
   the rest of the recording (repetition loops).
 - hotwords: names/terms the model should prefer.
+- word_timestamps: needed to split paragraphs at sentence boundaries (reading flow).
+- prompt: the last sentences of the previous piece when a track is transcribed in
+  pieces, so names and spelling stay consistent across the cuts.
 """
 
 from __future__ import annotations
@@ -30,13 +33,29 @@ def load_audio(path: Path, until_s: float | None = None) -> np.ndarray:
     PyAV versions are incompatible with it. soundfile reads our files directly.
     """
     import soundfile as sf
-    from scipy.signal import resample_poly
 
     data, sr = sf.read(str(path), dtype="float32", always_2d=True)
     mono = data.mean(axis=1)
     if until_s:  # None or 0 = whole recording
         mono = mono[: int(until_s * sr)]
-    if sr != WHISPER_SAMPLERATE:
+    return _to_whisper_rate(mono, sr)
+
+
+def load_piece(path: Path, start_s: float, end_s: float) -> np.ndarray:
+    """Only the part start_s…end_s of a file, mono at 16 kHz – long calls are transcribed in pieces."""
+    import soundfile as sf
+
+    with sf.SoundFile(str(path)) as f:
+        sr = f.samplerate
+        f.seek(min(int(start_s * sr), f.frames))
+        data = f.read(max(int((end_s - start_s) * sr), 0), dtype="float32", always_2d=True)
+    return _to_whisper_rate(data.mean(axis=1), sr)
+
+
+def _to_whisper_rate(mono: np.ndarray, sr: int) -> np.ndarray:
+    from scipy.signal import resample_poly
+
+    if sr != WHISPER_SAMPLERATE and len(mono):
         divisor = gcd(sr, WHISPER_SAMPLERATE)
         mono = resample_poly(mono, WHISPER_SAMPLERATE // divisor, sr // divisor)
     return mono.astype(np.float32, copy=False)
@@ -56,6 +75,7 @@ class FasterWhisperTranscriber:
         self.name = model
         self.beam_size = beam_size
         self.keywords = keywords or None
+        self.prompt: str | None = None
         compute_type = compute_type or ("int8" if device == "cpu" else "float16")
         try:
             self._model = WhisperModel(resolve(model), device=device, compute_type=compute_type)
@@ -87,12 +107,15 @@ class FasterWhisperTranscriber:
             vad_parameters={"min_silence_duration_ms": 500},
             condition_on_previous_text=False,
             hotwords=self.keywords,
+            initial_prompt=self.prompt or None,
+            word_timestamps=True,
         )
         result = []
         for s in segments:  # generator: the actual work happens here
             text = s.text.strip()
             if text:
-                result.append(Segment(start=s.start, end=s.end, text=text))
+                words = [(w.start, w.end, w.word) for w in (s.words or [])]
+                result.append(Segment(start=s.start, end=s.end, text=text, words=words or None))
             if progress:
                 progress(s.end, duration)
         return result
