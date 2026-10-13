@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-209 tests in 22 files.
+211 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -244,7 +244,7 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Subfolder model** – gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root.
 - **Default model is gcoli for new installations only** – 0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model.
 
-### `test_recorder.py` (10)
+### `test_recorder.py` (11)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -258,6 +258,7 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Macos records without a block size** – 0.7.20 bug on macOS: «blocksize must be between 15.0 and 512» – every recording failed at once.
 - **Reader gives exact blocks and never waits forever** – 0.7.22 on macOS: devices that delivered nothing made the recording hang («stop_timeout»).
 - **Silent device ends the track instead of hanging**
+- **Measure tells a working from a silent device** – Diagnosis: which device delivers, how loud, and whether it can be closed.
 
 ### `test_release_workflow.py` (6)
 
@@ -288,7 +289,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (32)
+### `test_service.py` (33)
 
 App flow without a window: recording → queue → transcript.
 
@@ -324,6 +325,7 @@ App flow without a window: recording → queue → transcript.
 - **Audio clip mixes both tracks**
 - **Delete waits for a file that is open for a moment** – 0.7.21 CI failure on Windows: deleting failed with «being used by another process» when the
 - **Track without any audio is reported while recording** – 0.7.21 on macOS: the recording ran without sound and nothing said which device delivered nothing.
+- **Diagnosis runs the steps of a recording start** – Diagnose tab: each device alone, both together, closing and reopening at once – with a report to copy.
 
 ### `test_spelling.py` (5)
 

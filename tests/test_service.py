@@ -577,3 +577,25 @@ def test_track_without_any_audio_is_reported_while_recording():
     assert "Mikrofon «Mic»" in message and "keine Audiodaten" in message
     assert "Ton der anderen" not in message                 # that track delivers
     s.stop_recording()
+
+
+def test_diagnosis_runs_the_steps_of_a_recording_start(monkeypatch):
+    """Diagnose tab: each device alone, both together, closing and reopening at once – with a report to copy."""
+    from verbalis.audio import recorder
+    seen = []
+
+    def fake_measure(devices, seconds):
+        seen.append([name for name, _ in devices])
+        return [{"device": d.name, "first_data_s": 0.2, "received_s": seconds, "peak_db": -30.0, "hangs": False,
+                 "close_s": 0.1, "error": None} for _, d in devices]
+
+    monkeypatch.setattr(recorder, "measure", fake_measure)
+    s = make_service()
+    s.start_diagnosis("Mic", "")
+    assert wait_until(lambda: not s.diagnosis()["running"])
+    assert seen == [["Mikrofon"], ["Ton der anderen"], ["Mikrofon", "Ton der anderen"],
+                    ["Mikrofon", "Ton der anderen"], ["Mikrofon", "Ton der anderen"]]
+    report = s.diagnose_report()
+    assert "Verbalis:" in report and "Nur Mikrofon" in report and "Mic: OK – erste Daten nach 0.2 s" in report
+    assert s.preview_levels("Mic", "") is not None             # level meters work again afterwards
+    s.stop_preview()

@@ -332,3 +332,44 @@ class TwoTrackRecorder:
 
     def status(self) -> list[TrackStatus]:
         return [t.status for t in self.tracks]
+
+
+def measure(devices: list[tuple[str, Any]], seconds: float, clock: Callable[[], float] = time.monotonic,
+            meter: Callable = MeterTrack) -> list[dict]:
+    """Open the devices together, read for `seconds`, close them – and report what happened.
+
+    Per device: first_data_s (None = nothing arrived), received_s, peak_db, open (still alive
+    after closing = hangs), close_s, error. Nothing is written anywhere.
+    """
+    import math
+
+    stops = [threading.Event() for _ in devices]
+    tracks = [meter(name, device, stop) for (name, device), stop in zip(devices, stops)]
+    started = clock()
+    for track in tracks:
+        track.start()
+    first: list[float | None] = [None] * len(tracks)
+    peak = [0.0] * len(tracks)
+    while clock() - started < seconds:
+        time.sleep(0.05)
+        for i, track in enumerate(tracks):
+            if first[i] is None and track.status.written_frames:
+                first[i] = clock() - started
+            peak[i] = max(peak[i], track.status.level_rms)
+        if all(not t.is_alive() for t in tracks):
+            break
+    for stop in stops:
+        stop.set()
+    closing = clock()
+    for track in tracks:
+        track.join(max(4.0 - (clock() - closing), 0.1))
+    close_s = clock() - closing
+    return [{
+        "device": getattr(device, "name", "?"),
+        "first_data_s": None if first[i] is None else round(first[i], 2),
+        "received_s": round(tracks[i].status.written_frames / tracks[i].samplerate, 1),
+        "peak_db": max(round(20 * math.log10(peak[i]), 0), -90.0) if peak[i] > 1e-9 else -90.0,
+        "hangs": tracks[i].is_alive(),
+        "close_s": round(close_s, 2),
+        "error": str(tracks[i].status.error) if tracks[i].status.error else None,
+    } for i, (_, device) in enumerate(devices)]

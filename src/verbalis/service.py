@@ -107,6 +107,8 @@ class Service:
         self._call: dict | None = None    # a call app uses the microphone: {"apps", "dismissed", "planned"}
         self._ui_focused = 0.0            # when the window last said it is in front (monotonic)
         self.call_notifier = None         # set by the app: shows a Windows notification (show/hide)
+        self._diagnosis: dict | None = None   # the audio test in steps: {"running", "steps": [...]}
+        self._network: list[dict] | None = None
 
         self._rec = None
         self._rec_info: dict = {}
@@ -382,6 +384,122 @@ class Service:
 
     # ------------------------------------------------------------ levels before recording
 
+    # ------------------------------------------------------------ diagnostics
+
+    def diagnose_info(self) -> dict:
+        """What helps to find a problem: versions, system, paths, devices, models."""
+        import platform as platform_module
+
+        from .audio import mac_tap
+        from .transcription.models import converted_models, verbalis_home
+
+        free = self._free_mb(force=True)
+        info = {
+            "Verbalis": __version__ + ("" if updates.is_installed() else " (aus dem Quellcode)"),
+            "System": f"{platform_module.system()} {platform_module.release()} ({platform_module.machine()})",
+            "Python": platform_module.python_version(),
+            "Daten": str(verbalis_home()),
+            "Aufnahmen": str(self._s.recordings),
+            "Freier Speicher": f"{free / 1000:.1f} GB" if free is not None else "unbekannt",
+            "Modell": self._s.model,
+            "Eigene Modelle": ", ".join(converted_models()) or "keine",
+        }
+        if sys.platform == "darwin":
+            info["macOS"] = ".".join(map(str, mac_tap.macos_version())) or "unbekannt"
+            info["Systemton-Hilfsprogramm"] = str(mac_tap.helper_path() or "fehlt")
+            bundle = updates.app_bundle()
+            info["App-Ort"] = str(bundle) if bundle else "kein App-Paket"
+        try:
+            found = self._list_devices() or {}
+            info["Mikrofone"] = ", ".join(found.get("microphones", [])) or "keine"
+            info["Ausgabe / Ton der anderen"] = ", ".join(found.get("speakers", [])) or "keine"
+        except Exception as e:
+            info["Geräte"] = f"Fehler: {e}"
+        return info
+
+    def check_network(self) -> list[dict]:
+        """Can Verbalis reach GitHub (updates) and Hugging Face (models)? HTTPS with certificates."""
+        import urllib.request
+
+        results = []
+        for name, url in (("GitHub (Updates)", updates.LATEST_API),
+                          ("Hugging Face (Modelle)", "https://huggingface.co/api/models/openai/whisper-large-v3"),
+                          ("Modelle für die Sprechererkennung", "https://github.com/k2-fsa/sherpa-onnx/releases")):
+            started = time.monotonic()
+            try:
+                request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Verbalis"})
+                with urllib.request.urlopen(request, timeout=10) as response:
+                    ok, detail = True, f"HTTP {response.status}"
+            except Exception as e:
+                ok, detail = False, str(e) or type(e).__name__
+            results.append({"name": name, "ok": ok, "detail": detail, "seconds": round(time.monotonic() - started, 1)})
+        self._network = results
+        return results
+
+    def start_diagnosis(self, microphone: str = "", speakers: str = "") -> None:
+        """The audio test in steps, in the background: each device alone, both together, and closing and
+        reopening right away – as when a recording starts after the level meters."""
+        with self._lock:
+            if self._rec is not None:
+                raise RuntimeError("Während einer Aufnahme nicht möglich.")
+            if self._diagnosis and self._diagnosis["running"]:
+                return
+            self._close_monitor()
+            self._diagnosis = {"running": True, "steps": [], "error": None}
+        threading.Thread(target=self._run_diagnosis, args=(microphone or "", speakers or ""),
+                         name="diagnosis", daemon=True).start()
+
+    def _run_diagnosis(self, microphone: str, speakers: str) -> None:
+        from .audio.recorder import measure
+
+        def step(title: str, devices: list, seconds: float) -> None:
+            with self._lock:
+                self._diagnosis["steps"].append({"title": title, "running": True, "results": []})
+            results = measure(devices, seconds)
+            with self._lock:
+                self._diagnosis["steps"][-1].update(running=False, results=results)
+            log.info("Diagnosis «%s»: %s", title, results)
+
+        try:
+            chosen = self._select_devices(microphone or None, speakers or None)
+            mic, others = ("Mikrofon", chosen.microphone), ("Ton der anderen", chosen.loopback)
+            step("Nur Mikrofon", [mic], 3)
+            step("Nur Ton der anderen", [others], 3)
+            step("Beide zusammen", [mic, others], 3)
+            step("Wie beim Aufnahmestart: beide öffnen …", [mic, others], 2)
+            step("… schliessen und sofort neu öffnen", [mic, others], 3)
+        except Exception as e:
+            log.exception("Diagnosis failed")
+            with self._lock:
+                self._diagnosis["error"] = str(e) or type(e).__name__
+        finally:
+            with self._lock:
+                self._diagnosis["running"] = False
+
+    def diagnosis(self) -> dict | None:
+        with self._lock:
+            return json.loads(json.dumps(self._diagnosis)) if self._diagnosis else None
+
+    def diagnose_report(self) -> str:
+        """Everything as text to copy into an e-mail. Contains device names, no conversation content."""
+        lines = [f"Verbalis-Diagnose {datetime.now().astimezone():%Y-%m-%d %H:%M}", ""]
+        lines += [f"{k}: {v}" for k, v in self.diagnose_info().items()]
+        if self._network:
+            lines += ["", "Netzwerk:"] + [f"  {r['name']}: {'OK' if r['ok'] else 'FEHLER'} – {r['detail']} "
+                                          f"({r['seconds']} s)" for r in self._network]
+        diagnosis = self.diagnosis()
+        if diagnosis:
+            lines += ["", "Audiotest:"]
+            for s in diagnosis["steps"]:
+                lines.append(f"  {s['title']}")
+                for r in s["results"]:
+                    lines.append("    " + _result_text(r))
+            if diagnosis.get("error"):
+                lines.append(f"  Fehler: {diagnosis['error']}")
+        return "\n".join(lines) + "\n"
+
+    # ------------------------------------------------------------ levels before recording
+
     def preview_levels(self, microphone: str = "", speakers: str = "") -> dict | None:
         """Levels of the chosen devices without recording, while the user chooses them.
 
@@ -390,7 +508,7 @@ class Service:
         shows the microphone icon while they are open). None while recording.
         """
         with self._lock:
-            if self._rec is not None:
+            if self._rec is not None or (self._diagnosis and self._diagnosis["running"]):
                 return None
             key = (microphone or "", speakers or "")
             if self._monitor is not None and self._monitor_key != key:
@@ -1665,3 +1783,15 @@ def _remove_folder(folder: Path, attempts: int = 10, wait_s: float = 0.2) -> Non
                 raise RuntimeError("Die Aufnahme lässt sich gerade nicht löschen, weil eine Datei darin noch "
                                    "geöffnet ist. Bitte in einem Moment nochmals versuchen.") from None
             time.sleep(wait_s)
+
+
+def _result_text(r: dict) -> str:
+    """One device of the audio test, in words (German)."""
+    if r.get("error"):
+        state = f"FEHLER: {r['error']}"
+    elif r.get("first_data_s") is None:
+        state = "KEINE DATEN"
+    else:
+        state = f"OK – erste Daten nach {r['first_data_s']} s, {r['received_s']} s erhalten, Pegel {r['peak_db']:.0f} dB"
+    hang = f"; hängt beim Schliessen ({r['close_s']} s gewartet)" if r.get("hangs") else ""
+    return f"{r['device']}: {state}{hang}"

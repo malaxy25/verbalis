@@ -348,6 +348,17 @@
   .log-list summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   .log-list pre { margin: 6px 0 0; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .log-empty { color: var(--muted); padding: 12px; }
+  .diag-lead { margin: 0; color: var(--muted); }
+  .diag-steps, .diag-network { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .diag-steps:empty, .diag-network:empty { display: none; }
+  .diag-steps li { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); display: grid; gap: 3px; }
+  .diag-steps li.running strong { color: var(--limmat); }
+  .diag-result { font-family: var(--font-mono); font-size: 13px; overflow-wrap: anywhere; }
+  .diag-result.good { color: var(--ink); }
+  .diag-result.bad { color: var(--red); }
+  .diag-info { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
+  .diag-info dt { color: var(--muted); }
+  .diag-info dd { margin: 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
   .log-result { color: var(--muted); font-size: 13px; margin: 0; min-height: 1.2em; }
 
   /* Content */
@@ -619,6 +630,7 @@
       <button type="button" role="tab" id="tab-retention" data-tab="retention" aria-controls="panel-retention">Aufbewahrung</button>
       <button type="button" role="tab" id="tab-updates" data-tab="updates" aria-controls="panel-updates">Updates</button>
       <button type="button" role="tab" id="tab-log" data-tab="log" aria-controls="panel-log">Log</button>
+      <button type="button" role="tab" id="tab-diagnose" data-tab="diagnose" aria-controls="panel-diagnose">Diagnose</button>
     </div>
   </div>
   <form method="dialog" id="form-settings">
@@ -720,6 +732,21 @@
         </div>
         <ol class="log-list" id="log-list"></ol>
         <p class="log-result" id="log-result">Das Log enthält keine Gesprächsinhalte. Der Export ist für Fehlermeldungen gedacht und lässt Namen und Pfade weg.</p>
+      </section>
+      <section class="tab-panel log-body" id="panel-diagnose" role="tabpanel" aria-labelledby="tab-diagnose" hidden>
+        <p class="diag-lead">Hilft, Probleme mit Audiogeräten, Berechtigungen oder der Internetverbindung zu finden.
+          Dabei wird nichts aufgenommen oder gespeichert.</p>
+        <div class="log-toolbar">
+          <button type="button" class="action primary" id="btn-diag-audio">Audiotest starten</button>
+          <button type="button" class="action" id="btn-diag-network">Internet prüfen</button>
+          <button type="button" class="action" id="btn-diag-copy">Diagnose kopieren</button>
+          <button type="button" class="action" id="btn-diag-folder">Datenordner öffnen</button>
+        </div>
+        <ol class="diag-steps" id="diag-steps"></ol>
+        <ul class="diag-network" id="diag-network"></ul>
+        <dl class="diag-info" id="diag-info"></dl>
+        <p class="log-result" id="diag-result">Der Audiotest liest die gewählten Geräte etwa 15 Sekunden lang – Schritt für
+          Schritt wie bei einer Aufnahme. «Diagnose kopieren» enthält Gerätenamen, aber keine Gesprächsinhalte.</p>
       </section>
     </div>
     <div class="dialog-buttons settings-foot">
@@ -1871,7 +1898,7 @@ async function reloadDevices() {
 
 /* ---------- Log ---------- */
 
-const TABS = ["general", "transcription", "speakers", "retention", "updates", "log"];
+const TABS = ["general", "transcription", "speakers", "retention", "updates", "log", "diagnose"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -1882,6 +1909,69 @@ function showTab(name) {
   }
   $("form-settings").querySelector(".settings-body").scrollTop = 0;
   if (name === "log") loadLog();
+  if (name === "diagnose") loadDiagnose();
+}
+
+/* ---------- Diagnose ---------- */
+
+async function loadDiagnose() {
+  const list = $("diag-info");
+  let info;
+  try { info = await call("diagnose_info"); } catch (e) { list.replaceChildren(element("dd", {}, e.message)); return; }
+  list.replaceChildren(...Object.entries(info).flatMap(([k, v]) => [element("dt", {}, k), element("dd", {}, v)]));
+}
+
+function diagResultText(r) {
+  if (r.error) return `FEHLER: ${r.error}`;
+  if (r.first_data_s == null) return "KEINE DATEN – das Gerät liefert nichts";
+  return `OK – erste Daten nach ${r.first_data_s} s, ${r.received_s} s erhalten, Pegel ${Math.round(r.peak_db)} dB`;
+}
+
+function renderDiagnosis(d) {
+  const steps = $("diag-steps");
+  steps.replaceChildren(...(d.steps || []).map((s) => element("li", { class: s.running ? "running" : "" },
+    element("strong", {}, s.title + (s.running ? " … läuft" : "")),
+    ...s.results.map((r) => element("div", { class: `diag-result ${r.error || r.first_data_s == null || r.hangs ? "bad" : "good"}` },
+      `${r.device}: ${diagResultText(r)}` + (r.hangs ? ` – hängt beim Schliessen (${r.close_s} s gewartet)` : ""))))));
+  if (d.error) steps.append(element("li", {}, element("div", { class: "diag-result bad" }, `Fehler: ${d.error}`)));
+}
+
+async function runAudioTest() {
+  const button = $("btn-diag-audio");
+  button.disabled = true;
+  button.textContent = "Audiotest läuft …";
+  try {
+    await call("start_diagnosis", $("sel-microphone").value, $("sel-speakers").value);
+    let d;
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      d = await call("diagnosis");
+      if (d) renderDiagnosis(d);
+    } while (d && d.running);
+    $("diag-result").textContent = "Fertig. Mit «Diagnose kopieren» lässt sich das Ergebnis in eine E-Mail einfügen.";
+  } catch (e) {
+    $("diag-result").textContent = e.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Audiotest starten";
+  }
+}
+
+async function checkNetwork() {
+  const list = $("diag-network");
+  list.replaceChildren(element("li", {}, "Wird geprüft …"));
+  try {
+    const results = await call("check_network");
+    list.replaceChildren(...results.map((r) => element("li", { class: `diag-result ${r.ok ? "good" : "bad"}` },
+      `${r.name}: ${r.ok ? "erreichbar" : "nicht erreichbar"} – ${r.detail} (${r.seconds} s)`)));
+  } catch (e) { list.replaceChildren(element("li", {}, e.message)); }
+}
+
+async function copyDiagnosis() {
+  try {
+    await copyText(await call("diagnose_report"));
+    $("diag-result").textContent = "Kopiert – in eine E-Mail einfügen.";
+  } catch (e) { $("diag-result").textContent = e.message; }
 }
 
 /* ---------- Closing the settings ---------- */
@@ -2542,6 +2632,10 @@ async function init() {
   $("btn-log-refresh").addEventListener("click", loadLog);
   $("chk-log-errors").addEventListener("change", loadLog);
   $("btn-log-export").addEventListener("click", exportLog);
+  $("btn-diag-audio").addEventListener("click", runAudioTest);
+  $("btn-diag-network").addEventListener("click", checkNetwork);
+  $("btn-diag-copy").addEventListener("click", copyDiagnosis);
+  $("btn-diag-folder").addEventListener("click", () => call("open_data_folder").catch((e) => showMessage(e.message)));
   $("btn-message-close").addEventListener("click", () => showMessage(""));
   $("btn-plan").addEventListener("click", planRecording);
   $("btn-call-dismiss").addEventListener("click", () => { $("call-notice").hidden = true; call("dismiss_call").catch(() => {}); });

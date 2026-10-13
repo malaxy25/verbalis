@@ -185,6 +185,27 @@ class Api:
     def whats_new_seen(self):
         return self._call(self._s.whats_new_seen)
 
+    def diagnose_info(self):
+        return self._call(self._s.diagnose_info)
+
+    def check_network(self):
+        return self._call(self._s.check_network)
+
+    def start_diagnosis(self, microphone="", speakers=""):
+        return self._call(self._s.start_diagnosis, microphone or "", speakers or "")
+
+    def diagnosis(self):
+        return self._call(self._s.diagnosis)
+
+    def diagnose_report(self):
+        return self._call(self._s.diagnose_report)
+
+    def open_data_folder(self):
+        from .transcription.models import verbalis_home
+        from .service import open_in_file_manager
+
+        return self._call(open_in_file_manager, verbalis_home())
+
     def open_update_download(self):
         return self._call(self._s.open_update_download)
 

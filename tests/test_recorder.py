@@ -278,3 +278,22 @@ def test_silent_device_ends_the_track_instead_of_hanging(tmp_path, monkeypatch):
     track.join(3)
     assert not track.is_alive() and isinstance(track.status.error, recorder.NoAudioData)
     assert stop.is_set()                                      # the other track stops too
+
+
+def test_measure_tells_a_working_from_a_silent_device(monkeypatch):
+    """Diagnosis: which device delivers, how loud, and whether it can be closed."""
+    from verbalis.audio import recorder
+    monkeypatch.setattr(recorder, "READ_TIMEOUT_S", 0.3)
+
+    class Device:
+        def __init__(self, name, blocks):
+            self.name, self.blocks = name, blocks
+
+        @contextmanager
+        def recorder(self, samplerate, blocksize=None, channels=None):
+            yield CoreAudioLikeRecorder(self.blocks)
+
+    good, silent = recorder.measure([("me", Device("Mikro", [512] * 400)), ("others", Device("Systemton", []))], 1.0)
+    assert good["device"] == "Mikro" and good["first_data_s"] is not None and good["received_s"] > 0
+    assert -20 < good["peak_db"] < -5 and not good["hangs"] and good["error"] is None
+    assert silent["first_data_s"] is None and "keine Audiodaten" in silent["error"]
