@@ -216,3 +216,29 @@ def test_app_started_from_downloads_is_recognised():
     copy = PurePosixPath("/private/var/folders/od/k2wb/T/AppTranslocation/D4/d/Verbalis.app")
     assert updates.translocated(copy)
     assert not updates.translocated(PurePosixPath("/Applications/Verbalis.app"))
+
+
+def test_mac_app_in_a_locked_folder_offers_the_download(monkeypatch):
+    """0.7.22 on a Mac without admin rights: «Verbalis darf /Applications nicht ändern» – and no way on.
+    The update dialog now explains it and opens the download of the new version."""
+    import sys
+    from pathlib import PurePosixPath
+
+    from verbalis import service as service_module
+    from verbalis.service import Service
+    from verbalis.settings import Settings
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(updates, "app_bundle", lambda: PurePosixPath("/Applications/Verbalis.app"))
+    monkeypatch.setattr(updates, "can_write", lambda folder: False)
+    s = Service(settings=Settings(), list_devices=lambda: {}, cleanup_on_start=False)
+    url = "https://github.com/malaxy25/verbalis/releases/download/v9.9.9/Verbalis-9.9.9-macos-arm64.zip"
+    s._update = {"available": True, "can_install": True, "latest": "9.9.9", "installer_url": url}
+    info = s.update_info()
+    assert info["can_install"] is False and "Administratorkonto" in info["manual"]
+    opened = []
+    monkeypatch.setattr("webbrowser.open", opened.append)
+    s.open_update_download()
+    s._update["installer_url"] = "https://example.com/evil.zip"
+    s.open_update_download()
+    assert opened == [url, "https://github.com/malaxy25/verbalis/releases/latest"]
+    assert service_module.sys.platform == "darwin"

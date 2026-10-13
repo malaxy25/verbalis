@@ -1282,7 +1282,40 @@ class Service:
         return self._update
 
     def update_info(self) -> dict | None:
-        return self._update
+        """The update found – on a Mac where Verbalis can't replace itself, with `manual` explaining why
+        (the dialog then offers the download instead of installing)."""
+        if not self._update:
+            return None
+        info = dict(self._update)
+        if info.get("available") and info.get("can_install") and sys.platform == "darwin":
+            reason = self._mac_update_blocked()
+            if reason:
+                info["can_install"], info["manual"] = False, reason
+        return info
+
+    @staticmethod
+    def _mac_update_blocked() -> str | None:
+        bundle = updates.app_bundle()
+        if bundle is None:
+            return None
+        if updates.translocated(bundle):
+            return ("Verbalis wurde direkt aus «Downloads» gestartet und kann sich so nicht selbst ersetzen. "
+                    "Bitte das Update herunterladen, entpacken und Verbalis.app in den Ordner «Programme» ziehen.")
+        if not updates.can_write(bundle.parent):
+            return (f"Verbalis darf «{bundle.parent}» nicht ändern – dafür braucht es ein Administratorkonto. "
+                    "Bitte das Update herunterladen, entpacken und Verbalis.app dort ersetzen (der Finder fragt "
+                    "nach dem Admin-Passwort). Tipp: Im persönlichen Ordner «Programme» (im Benutzerordner) "
+                    "kann sich Verbalis künftig selbst aktualisieren.")
+        return None
+
+    def open_update_download(self) -> None:
+        """Open the download of the update in the browser (only a file of a Verbalis release on GitHub)."""
+        import webbrowser
+
+        url = (self._update or {}).get("installer_url") or ""
+        if not url.startswith("https://github.com/malaxy25/verbalis/releases/"):
+            url = "https://github.com/malaxy25/verbalis/releases/latest"
+        webbrowser.open(url)
 
     def install_update(self) -> dict:
         """Download the installer and start it. The app closes afterwards (see app.py)."""
@@ -1297,6 +1330,9 @@ class Service:
             raise RuntimeError("Bitte zuerst die Aufnahme beenden bzw. die Transkription abwarten.")
         import tempfile
 
+        blocked = self._mac_update_blocked() if sys.platform == "darwin" else None
+        if blocked:
+            raise RuntimeError(blocked)
         bundle = updates.app_bundle() if sys.platform == "darwin" else None
         if bundle is not None and updates.translocated(bundle):
             raise RuntimeError("Verbalis wurde direkt aus «Downloads» gestartet – dort kann es sich nicht selbst "

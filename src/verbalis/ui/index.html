@@ -2256,6 +2256,9 @@ async function openUpdate() {
       ? "Verbalis schliesst sich, wird ersetzt und startet neu."
       : "Verbalis schliesst sich danach, der Installer übernimmt.";
     $("update-line").textContent = `Download ca. ${info.installer_mb} MB. ${how} Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten.`;
+  } else if (info.manual) {      // Mac app that can't replace itself: offer the download
+    go.textContent = "Download öffnen";
+    $("update-line").textContent = info.manual;
   } else {
     go.textContent = "Release-Seite öffnen";
     $("update-line").textContent = "Diese Verbalis läuft aus dem Quellcode (Entwicklungsversion): bitte mit git aktualisieren.";
@@ -2266,7 +2269,11 @@ async function openUpdate() {
 async function startUpdate() {
   const info = state.update;
   if (!info) return;
-  if (!info.can_install) { call("open_project_page").catch(() => {}); $("dlg-update").close(); return; }
+  if (!info.can_install) {
+    call(info.manual ? "open_update_download" : "open_project_page").catch(() => {});
+    $("dlg-update").close();
+    return;
+  }
   const go = $("btn-update-go");
   go.disabled = true;
   $("btn-update-later").disabled = true;

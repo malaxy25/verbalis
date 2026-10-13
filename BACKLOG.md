@@ -23,6 +23,12 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
    …» / «Nicht geprüft – keine Internetverbindung», button «Jetzt prüfen»; the date is when the revision
    was published, not when it was downloaded; the short id small below.
 
+## Done for the next release (not released yet)
+
+- macOS: when the app can't replace itself (no admin account, or started from «Downloads»), the update
+  dialog explains it and offers «Download öffnen» (the release ZIP) instead of only an error. Add to the
+  CHANGELOG with the next version.
+
 ## Proposed (waiting for Andrea's OK)
 
 - **Diagnostics window** – opens with 5 clicks on the «Verbalis» title (the version link opens the browser) or

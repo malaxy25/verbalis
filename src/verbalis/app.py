@@ -185,6 +185,9 @@ class Api:
     def whats_new_seen(self):
         return self._call(self._s.whats_new_seen)
 
+    def open_update_download(self):
+        return self._call(self._s.open_update_download)
+
     def open_project_page(self):
         import webbrowser
 
