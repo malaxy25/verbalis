@@ -25,6 +25,10 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## Proposed (waiting for Andrea's OK)
 
+- **Diagnostics window** – opens with 5 clicks on the «Verbalis» title (the version link opens the browser) or
+  Ctrl/Cmd+Shift+D: system and app info, devices (macOS: helper present, macOS version), the audio test as a
+  button, network check (GitHub, Hugging Face: certificates), downloaded models; «Diagnose kopieren» (redacted
+  like the log export), «Datenordner öffnen», «Problem melden». **[ux]**
 - **DMG for the first Mac install** (drag to «Programme») and, when started from «Downloads», offer to move
   itself to «Programme» and restart. The ZIP stays for automatic updates. **[ux]**
 - **«Problem melden»** (Log tab, later also next to error messages): creates the log ZIP, opens a prepared
