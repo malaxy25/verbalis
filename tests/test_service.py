@@ -209,7 +209,8 @@ def test_automatic_pause_while_recording():
     time.sleep(1.1)
     s.start_recording(consent=True)          # new recording → transcription pauses
     assert wait_until(lambda: s.state()["pause"] == "recording")
-    time.sleep(0.2)
+    # the worker stops at its next progress step – up to one step (0.2 s) later; macOS CI needed more than 0.2 s
+    time.sleep(VerySlowTranscriber.delay * 3)
     level = s.state()["job"]["progress"]
     time.sleep(0.3)
     assert s.state()["job"]["progress"] == level
