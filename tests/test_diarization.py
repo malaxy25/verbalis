@@ -197,3 +197,28 @@ def test_reference_and_compare_use_the_track_not_the_name(tmp_path):
             {"start": 2, "end": 3, "text": "Merci", "speaker": "Gegenüber 2", "track": "others"}]}), encoding="utf-8")
     ref = load_reference("transcript", tmp_path)
     assert ref.tracks == {"me": "Hallo", "others": "Grüezi Merci"}
+
+
+def test_merging_never_loses_a_given_name(no_real_diarization):
+    """0.7.17: merging «Hans Muster» into the unnamed «Gegenüber 1» kept «Gegenüber 1» – the name was lost."""
+    s, rid = service_with_speakers(no_real_diarization)
+    folder, data = s._transcript_data(rid)
+    data["segments"].append({**data["segments"][-1], "start": 2.0, "end": 3.0, "text": "Noch etwas.",
+                             "speaker": "Gegenüber 2", "speaker_id": "others-2", "track": "others"})
+    data["segments"].append({**data["segments"][-1], "start": 4.0, "end": 5.0, "text": "Und das.",
+                             "speaker": "Gegenüber 3", "speaker_id": "others-3", "track": "others"})
+    data["speakers"].update({"others-2": {"name": "Gegenüber 2", "track": "others"},
+                             "others-3": {"name": "Gegenüber 3", "track": "others"}})
+    s._write_transcript(folder, data)
+    first = next(sp["id"] for sp in s.speakers(rid) if sp["track"] == "others")
+
+    s.rename_speakers(rid, {"others-2": "Hans Muster"})
+    s.merge_speakers(rid, "others-2", first)                   # target unnamed → takes the given name
+    names = {sp["id"]: sp["name"] for sp in s.speakers(rid)}
+    assert names[first] == "Hans Muster"
+    assert all(seg["speaker"] == "Hans Muster" for seg in s._transcript_data(rid)[1]["segments"]
+               if seg.get("speaker_id") == first)
+
+    s.rename_speakers(rid, {"others-3": "Eva Beispiel"})
+    s.merge_speakers(rid, "others-3", first)                   # both named → the target's name wins
+    assert {sp["id"]: sp["name"] for sp in s.speakers(rid)}[first] == "Hans Muster"

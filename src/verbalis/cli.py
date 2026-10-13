@@ -171,7 +171,7 @@ def cmd_transcribe(args) -> int:
 
 
 def cmd_compare(args) -> int:
-    from .evaluation import error_rate, load_reference
+    from .evaluation import combined, error_rate, load_reference
     from .pipeline import header
     from .transcript import save
     from .transcription.faster import FasterWhisperTranscriber
@@ -204,17 +204,27 @@ def cmd_compare(args) -> int:
         wer = "–"
         track_cells = ""
         if reference is not None:
-            rate = error_rate(reference.text, " ".join(p.text for p in paragraphs))
-            wer = f"{rate.wer:.1%}"
-            print(f"  Fehlerquote: {rate}")
             if per_track:
+                # overall rate from the tracks: the merged order of overlapping speech would count as errors
+                rates, lines = [], []
                 for track, display in names.items():
                     ref_text = reference.tracks.get(track, "")
                     hyp_text = " ".join(p.text for p in paragraphs
                                         if (p.track == track if p.track else p.speaker == display))
-                    cell = f"{error_rate(ref_text, hyp_text).wer:.1%}" if ref_text.strip() else "–"
+                    track_rate = error_rate(ref_text, hyp_text) if ref_text.strip() else None
+                    cell = f"{track_rate.wer:.1%}" if track_rate else "–"
+                    if track_rate:
+                        rates.append(track_rate)
                     track_cells += f" {cell} |"
-                    print(f"  {display}: {cell}")
+                    lines.append(f"  {display}: {cell}")
+                rate = combined(rates)
+            else:
+                rate = error_rate(reference.text, " ".join(p.text for p in paragraphs))
+                lines = []
+            wer = f"{rate.wer:.1%}"
+            print(f"  Fehlerquote: {rate}")
+            for line in lines:
+                print(line)
         rows.append(
             f"| {model} | {load_time:.0f} s | {compute:.0f} s | {compute / max(duration, 1e-9):.2f}× "
             f"| {wer} |{track_cells} [{filename}.md]({filename}.md), {words} Wörter |"

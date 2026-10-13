@@ -463,3 +463,59 @@ def test_recordings_in_a_synced_folder_are_flagged(tmp_path):
     s = make_service()
     s.save_settings({"recordings_dir": str(tmp_path / "OneDrive" / "Aufnahmen")})
     assert s.settings()["storage_warning"]
+
+
+class FakeMonitor:
+    opened = []
+
+    def __init__(self, microphone, loopback):
+        self.devices = (microphone.name, loopback.name)
+        self.closed = False
+        FakeMonitor.opened.append(self)
+
+    def start(self):
+        pass
+
+    def stop(self, timeout=2.0):
+        self.closed = True
+
+    def levels(self):
+        return {"me": 0.1, "others": 0.0}
+
+
+def test_levels_before_recording_open_and_close_the_devices(monkeypatch):
+    """0.7.17: level meters while choosing devices – without recording, closed again when not needed."""
+    import verbalis.service as service_module
+    monkeypatch.setattr(service_module, "PREVIEW_IDLE_S", 0.3)
+    FakeMonitor.opened = []
+    s = make_service(monitor_factory=FakeMonitor)
+    levels = s.preview_levels("Mic", "")
+    assert levels == {"me": -20.0, "others": -90.0}
+    s.preview_levels("Mic", "")
+    assert len(FakeMonitor.opened) == 1                       # kept open while the UI asks
+    assert not list((s._s.recordings).glob("*"))              # nothing is recorded
+
+    s.preview_levels("Other mic", "")                         # other device chosen → reopened
+    assert FakeMonitor.opened[0].closed and len(FakeMonitor.opened) == 2
+    assert wait_until(lambda: FakeMonitor.opened[1].closed, 3)  # UI stopped asking → closed
+
+    s.preview_levels("Mic", "")
+    s.start_recording(consent=True)                           # the recording gets the devices
+    assert FakeMonitor.opened[2].closed
+    assert s.preview_levels("Mic", "") is None
+    s.stop_recording()
+
+
+def test_level_preview_with_broken_device_does_not_flood_the_log(caplog):
+    calls = []
+
+    def broken(microphone, speakers):
+        calls.append(microphone)
+        raise RuntimeError("kein Mikrofon")
+
+    s = make_service(monitor_factory=FakeMonitor)
+    s._select_devices = broken
+    for _ in range(5):
+        assert s.preview_levels("Mic", "") == {"me": -90.0, "others": -90.0}
+    assert len(calls) == 1
+    s.stop_preview()

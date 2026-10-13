@@ -2,6 +2,7 @@
 
 import json
 import threading
+import time
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -129,3 +130,25 @@ def test_size_query_while_compressing(tmp_path):
         stop.set()
         t.join()
     assert errors == []
+
+
+def test_kept_audio_survives_retention_days_and_size_limit(home):
+    """0.7.17 bug: a test recording was deleted by the size limit – «Audio behalten» protects it."""
+    base = home / "recordings"
+    kept = _recording(base, 10, mb=4)
+    other = _recording(base, 1, mb=4)
+    s = _service(audio_days="3", audio_max_mb="5")
+    s.keep_audio(kept.name)
+    assert s.cleanup() == []                         # kept: neither too old nor over the limit
+    assert pipeline.has_audio(kept) and pipeline.has_audio(other)
+    entry = {r["id"]: r for r in s.recordings()}
+    assert entry[kept.name]["keep_audio"] is True and entry[kept.name]["audio_delete"] is None
+    assert entry[other.name]["keep_audio"] is False
+
+    s.keep_audio(kept.name, False)                   # no longer kept → the next cleanup runs right away
+    deadline = time.monotonic() + 5
+    while pipeline.has_audio(kept) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert not pipeline.has_audio(kept)
+    s.delete_audio(other.name)                       # by hand it can always be deleted
+    assert not pipeline.has_audio(other)

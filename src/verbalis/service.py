@@ -52,6 +52,7 @@ class ShuttingDown(Exception):
 CLEANUP = ":cleanup"          # queue task (not a valid recording ID)
 CLEANUP_EVERY_S = 3600        # additionally every hour while the app stays open
 SOUND_DB = -55.0              # louder than this counts as "something is coming through"
+PREVIEW_IDLE_S = 3.0          # level meters before a recording: close the devices when the UI stops asking
 MB = 1024 * 1024              # as shown in Windows Explorer
 log = logging.getLogger(__name__)
 
@@ -80,6 +81,7 @@ class Service:
         cleanup_on_start: bool = True,
         speller: Speller | None = None,
         check_updates_on_start: bool = False,
+        monitor_factory: Callable | None = None,
     ):
         self._lock = threading.RLock()
         self._s = settings or Settings.load()
@@ -87,6 +89,11 @@ class Service:
         self._transcriber_factory = transcriber_factory or self._default_transcriber
         self._select_devices = select_devices or self._default_select
         self._list_devices = list_devices or self._default_list
+        self._monitor_factory = monitor_factory or self._default_monitor
+        self._monitor = None              # level meters before a recording
+        self._monitor_key: tuple | None = None
+        self._monitor_asked = 0.0         # when the UI last asked for levels (monotonic)
+        self._monitor_failed: tuple | None = None   # (devices, when) – don't retry 4× a second
 
         self._rec = None
         self._rec_info: dict = {}
@@ -129,6 +136,12 @@ class Service:
         from .audio.recorder import TwoTrackRecorder
 
         return TwoTrackRecorder(microphone, loopback, folder)
+
+    @staticmethod
+    def _default_monitor(microphone, loopback):
+        from .audio.recorder import LevelMonitor
+
+        return LevelMonitor(microphone, loopback)
 
     @staticmethod
     def _default_transcriber(model: str):
@@ -287,6 +300,65 @@ class Service:
                             "Details auf der Modellseite in den Einstellungen.")
             log.info("Model %s updated %s → %s", model, before["revision"][:7], after["revision"][:7])
 
+    # ------------------------------------------------------------ levels before recording
+
+    def preview_levels(self, microphone: str = "", speakers: str = "") -> dict | None:
+        """Levels of the chosen devices without recording, while the user chooses them.
+
+        Opens the devices on the first call and keeps them open while the UI keeps
+        asking; a watchdog closes them PREVIEW_IDLE_S after the last call (Windows
+        shows the microphone icon while they are open). None while recording.
+        """
+        with self._lock:
+            if self._rec is not None:
+                return None
+            key = (microphone or "", speakers or "")
+            if self._monitor is not None and self._monitor_key != key:
+                self._close_monitor()
+            if self._monitor is None:
+                failed = self._monitor_failed
+                if failed and failed[0] == key and time.monotonic() - failed[1] < 10:
+                    return {"me": -90.0, "others": -90.0}
+                try:
+                    devices = self._select_devices(microphone or None, speakers or None)
+                    monitor = self._monitor_factory(devices.microphone, devices.loopback)
+                    monitor.start()
+                except Exception as e:   # the recording itself will report the problem readably
+                    log.warning("Level meters could not open the devices: %s", e)
+                    self._monitor_failed = (key, time.monotonic())
+                    return {"me": -90.0, "others": -90.0}
+                self._monitor, self._monitor_key, self._monitor_failed = monitor, key, None
+                threading.Thread(target=self._watch_monitor, args=(monitor,), name="level-monitor",
+                                 daemon=True).start()
+            self._monitor_asked = time.monotonic()
+            levels = self._monitor.levels()
+        return {track: _db(levels.get(track, 0.0)) for track in ("me", "others")}
+
+    def stop_preview(self) -> None:
+        with self._lock:
+            self._close_monitor()
+
+    def _close_monitor(self) -> None:
+        """Call with the lock held."""
+        monitor, self._monitor, self._monitor_key = self._monitor, None, None
+        if monitor is not None:
+            try:
+                monitor.stop()
+            except Exception:
+                log.exception("Closing the level meters failed")
+
+    def _watch_monitor(self, monitor) -> None:
+        while not self._stopping.wait(0.5):
+            with self._lock:
+                if self._monitor is not monitor:
+                    return
+                if time.monotonic() - self._monitor_asked > PREVIEW_IDLE_S:
+                    self._close_monitor()
+                    return
+        with self._lock:
+            if self._monitor is monitor:
+                self._close_monitor()
+
     # ------------------------------------------------------------ recording
 
     def start_recording(self, microphone: str = "", speakers: str = "", consent: bool = False) -> str:
@@ -300,6 +372,7 @@ class Service:
             if free is not None and free < MIN_FREE_TO_START_MB:
                 raise RuntimeError(f"Zu wenig Speicherplatz für eine Aufnahme (noch {free:.0f} MB frei). "
                                    "Bitte Platz schaffen, z.B. alte Audiodateien löschen.")
+            self._close_monitor()   # free the devices for the recording
             devices = self._select_devices(microphone or None, speakers or None)
             start = datetime.now().astimezone()
             folder = self._new_folder(start)
@@ -678,8 +751,10 @@ class Service:
         """Compress leftover WAVs, delete audio past the retention period or over the size limit.
 
         Never touched: the running recording, recordings queued or in progress,
-        and recordings without a transcript – their audio is all there is of
-        the conversation.
+        recordings without a transcript – their audio is all there is of the
+        conversation – and recordings whose audio the user chose to keep. Kept
+        audio doesn't count towards the size limit either; otherwise it would
+        push out the audio of all other recordings.
         """
         s, base = self._s, self._s.recordings
         if not base.exists():
@@ -691,7 +766,7 @@ class Service:
                 continue
             if self._pause_reason() is None:
                 self._compress_safely(folder)  # e.g. leftovers from the CLI or after a crash
-            if (folder / "transcript.json").exists() and pipeline.audio_bytes(folder):
+            if (folder / "transcript.json").exists() and pipeline.audio_bytes(folder)                     and not pipeline.read_meta(folder).get("keep_audio"):
                 start = pipeline.recording_start(folder) or datetime.fromtimestamp(folder.stat().st_mtime).astimezone()
                 candidates.append((start, folder))
         candidates.sort(key=lambda c: c[0])  # oldest first
@@ -706,7 +781,7 @@ class Service:
                     deleted.append(folder.name)
                     candidates.remove((start, folder))
         if s.max_mb is not None:
-            total = self._audio_total()
+            total = self._audio_total(include_kept=False)
             for start, folder in candidates:
                 if total <= s.max_mb * MB:
                     break
@@ -716,9 +791,12 @@ class Service:
             log.info("Audio deleted: %s", ", ".join(deleted))
         return deleted
 
-    def _audio_total(self) -> int:
+    def _audio_total(self, include_kept: bool = True) -> int:
         base = self._s.recordings
-        return sum(pipeline.audio_bytes(f) for f in base.iterdir() if f.is_dir()) if base.exists() else 0
+        if not base.exists():
+            return 0
+        return sum(pipeline.audio_bytes(f) for f in base.iterdir()
+                   if f.is_dir() and (include_kept or not pipeline.read_meta(f).get("keep_audio")))
 
     def audio_usage(self) -> dict:
         return {"audio_mb": round(self._audio_total() / MB, 1)}
@@ -729,10 +807,20 @@ class Service:
             raise RuntimeError("Diese Aufnahme wird gerade aufgenommen oder transkribiert.")
         pipeline.delete_audio(folder, "von Hand")
 
+    def keep_audio(self, recording_id: str, keep: bool = True) -> None:
+        """Protect the audio of one recording from automatic deletion (retention days and size limit)."""
+        folder = self._path(recording_id)
+        if not pipeline.is_recording_folder(folder):
+            raise ValueError("Diese Aufnahme gibt es nicht (mehr).")
+        pipeline.update_meta(folder, keep_audio=bool(keep))
+        log.info("Audio of %s %s", recording_id, "kept" if keep else "no longer kept")
+        if not keep:
+            self._queue.put(CLEANUP)
+
     def _deletion_date(self, folder: Path) -> str | None:
         """When the audio will probably be deleted (only with a retention period in days)."""
         days = self._s.days
-        if days is None or not (folder / "transcript.json").exists():
+        if days is None or not (folder / "transcript.json").exists() or pipeline.read_meta(folder).get("keep_audio"):
             return None
         if days == 0:
             return "now"
@@ -826,8 +914,11 @@ class Service:
         speakers = data.get("speakers", {})
         if source not in speakers or target not in speakers or source == target:
             raise ValueError("Diese Sprecher lassen sich nicht zusammenlegen.")
+        base = (data.get("tracks") or {}).get(speakers[target].get("track"), "")
+        if _is_default_name(speakers[target]["name"], base) and not _is_default_name(speakers[source]["name"], base):
+            speakers[target]["name"] = speakers[source]["name"]   # never lose a name the user gave
         for seg in data["segments"]:
-            if seg.get("speaker_id") == source:
+            if seg.get("speaker_id") in (source, target):
                 seg["speaker_id"], seg["speaker"] = target, speakers[target]["name"]
         del speakers[source]
         data["segments"] = _join_neighbours(data["segments"])
@@ -1054,6 +1145,7 @@ class Service:
                     "audio": bool(audio) or recording,
                     "audio_mb": round(audio / MB, 1),
                     "audio_delete": self._deletion_date(folder) if audio else None,
+                    "keep_audio": bool(meta.get("keep_audio")),
                 })
         return result
 
@@ -1156,3 +1248,8 @@ def _join_neighbours(segments: list[dict], max_pause: float = 2.0) -> list[dict]
         else:
             joined.append(dict(seg))
     return joined
+
+
+def _is_default_name(name: str, track_name: str) -> bool:
+    """Is this the name diarization gave («Gegenüber 2»), not one the user typed?"""
+    return bool(track_name) and re.fullmatch(re.escape(track_name) + r"( \d+)?", name or "") is not None

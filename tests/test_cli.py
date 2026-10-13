@@ -92,6 +92,7 @@ def test_compare_with_corrected_transcript_per_track(tmp_path, monkeypatch, caps
     cells = [c.strip() for c in row.split("|")]
     # own track perfect; others: 3 wrong + 1 extra word against 3 reference words = 133 %
     assert cells[6] == "0.0%" and cells[7] == "133.3%"
+    assert cells[5] == "57.1%"   # overall from the tracks: 4 errors / 7 reference words
     assert "nicht korrigiert" not in capsys.readouterr().out
 
 
@@ -102,3 +103,30 @@ def test_compare_warns_about_uncorrected_reference(tmp_path, monkeypatch, capsys
     (folder / "transcript.json").write_text(json.dumps({"tracks": {}, "segments": []}), encoding="utf-8")
     assert cli.main(["compare", str(folder), "--models", "large-v3", "--reference", "transcript"]) == 0
     assert "nicht korrigiert" in capsys.readouterr().out
+
+
+def test_compare_overall_wer_ignores_order_of_overlapping_speech(tmp_path, monkeypatch):
+    """0.7.17 bug: the overall WER compared the merged conversation, so overlapping speech in a
+    different paragraph order counted as errors and the total was higher than both tracks."""
+    import json
+
+    class PerTrack(FakeTranscriber):
+        def transcribe(self, audio, language="de", progress=None):
+            # louder track = others; both speak at the same time
+            return [Segment(0.0, 2.0, "eins zwei drei vier" if audio.max() > 0.4 else "guten tag")]
+
+    monkeypatch.setattr(faster, "FasterWhisperTranscriber", PerTrack)
+    sr = 48000
+    loud = np.zeros(sr * 4, dtype=np.float32)
+    loud[:sr * 2] = 0.3
+    sf.write(tmp_path / "me.wav", loud, sr)
+    sf.write(tmp_path / "others.wav", loud * 2, sr)
+    # the reference lists the others first, the transcription puts «me» first
+    reference = {"tracks": {"me": "Andrea", "others": "Gegenüber"}, "edited": True, "segments": [
+        {"start": 0.0, "end": 2.0, "text": "eins zwei drei vier", "track": "others", "speaker": "Gegenüber"},
+        {"start": 0.5, "end": 2.0, "text": "guten tag", "track": "me", "speaker": "Andrea"}]}
+    (tmp_path / "transcript.json").write_text(json.dumps(reference), encoding="utf-8")
+    assert cli.main(["compare", str(tmp_path), "--models", "large-v3", "--reference", "transcript"]) == 0
+    row = next(line for line in (tmp_path / "comparison.md").read_text(encoding="utf-8").splitlines()
+               if line.startswith("| large-v3 |"))
+    assert [c.strip() for c in row.split("|")][5:8] == ["0.0%", "0.0%", "0.0%"]

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.17 – 2026-10-13
+- **Default model gcoli** (`gcoli/whisper-large-v3-turbo-swiss-german-mit`) for new installations: on a
+  corrected real Teams call it made the fewest errors (me 14.1 %, others 10.4 %) and was twice as fast as
+  Flix (0.82× real time). Existing installations keep the model chosen in their settings.
+- **Settings with tabs:** «Allgemein», «Transkription», «Sprecher», «Aufbewahrung», «Updates», «Log»; uses
+  the width of the screen (two columns where it fits). Closes with Escape or a click outside – if something
+  was changed, it first asks «Änderungen speichern?»
+- «Protokoll» is now called **«Log»** (tab, «Log exportieren», export file `verbalis-log-….zip`)
+- **Level meters before recording:** both levels show while choosing devices, without recording. The
+  devices are only open while the window is in front and was used during the last minute.
+- **«Audio behalten»** per recording, in the new «⋯» menu (with «Ordner öffnen», «Audio löschen»,
+  «Aufnahme löschen»): protects its audio from deletion by retention days and the size limit; kept audio
+  doesn't count towards the limit. The audio line then says «wird behalten».
+- **Speaker box:** names save themselves when the field is left (no more «Namen speichern» button);
+  «Gleiche Person wie …» instead of «Zusammenlegen mit …», listing the names as typed; merging never loses a
+  given name (if both have one, the chosen person's name stays); list sorted by talk time and scrollable;
+  play buttons disabled with an explanation once the audio is deleted
+- The red message bar can be closed and disappears after 15 seconds (an «Audio … gelöscht» message stayed
+  forever)
+- Model comparison: the overall error rate is computed from the two tracks – the merged order of
+  overlapping speech made it higher than both tracks
+
 ## 0.7.16 – 2026-10-09
 - **Speakers on the Teams track:** Verbalis tells the other participants apart and labels them
   «Gegenüber 1», «Gegenüber 2», … Above the transcript a «Sprecher» box lets you play a short sample of each

@@ -1,6 +1,7 @@
 """Two-track recorder: padding dropouts with silence, pausing without padding."""
 
 import threading
+import time
 from contextlib import contextmanager
 
 import numpy as np
@@ -150,3 +151,37 @@ def test_device_that_cannot_record_explains_why(tmp_path):
     assert isinstance(track.status.error, RuntimeError)
     assert "anderes Gerät" in str(track.status.error) and "Headset (Freisprechen)" in str(track.status.error)
     assert device.asked == [None, 1]                     # microphone retried in mono
+
+
+def test_level_monitor_measures_without_writing(tmp_path, monkeypatch):
+    """0.7.17: levels before recording – the meter tracks read the devices but create no file."""
+    from verbalis.audio.recorder import LevelMonitor
+    monkeypatch.chdir(tmp_path)
+
+    class Endless:
+        name = "Mic"
+
+        @contextmanager
+        def recorder(self, samplerate, blocksize):
+            class Rec:
+                def record(self, numframes):
+                    time.sleep(0.01)
+                    return np.full((numframes, 1), 0.1, dtype=np.float32)
+            yield Rec()
+
+    class Broken:
+        name = "Kaputt"
+
+        def recorder(self, samplerate, blocksize):
+            raise OSError("Gerät belegt")
+
+    monitor = LevelMonitor(Endless(), Broken(), samplerate=SR)
+    monitor.start()
+    deadline = time.monotonic() + 3
+    while monitor.levels()["me"] == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    levels = monitor.levels()
+    assert abs(levels["me"] - 0.1) < 1e-3 and levels["others"] == 0.0   # one broken device doesn't stop the other
+    monitor.stop()
+    assert not any(t.is_alive() for t in monitor.tracks)
+    assert list(tmp_path.iterdir()) == []

@@ -58,6 +58,12 @@ class Api:
     def start_recording(self, microphone, speakers, consent):
         return self._call(self._s.start_recording, microphone, speakers, bool(consent))
 
+    def preview_levels(self, microphone, speakers):
+        return self._call(self._s.preview_levels, microphone or "", speakers or "")
+
+    def stop_preview(self):
+        return self._call(self._s.stop_preview)
+
     def stop_recording(self):
         return self._call(self._s.stop_recording)
 
@@ -168,6 +174,9 @@ class Api:
 
     def delete_audio(self, recording_id):
         return self._call(self._s.delete_audio, recording_id)
+
+    def keep_audio(self, recording_id, keep=True):
+        return self._call(self._s.keep_audio, recording_id, bool(keep))
 
     def open_folder(self, recording_id=""):
         return self._call(self._s.open_folder, recording_id)
@@ -387,5 +396,5 @@ def main() -> None:
         start()
     except Exception:
         log.exception("Start failed")
-        _notify(f"Verbalis konnte nicht gestartet werden.\n\nDetails stehen im Protokoll:\n{logs.log_path()}")
+        _notify(f"Verbalis konnte nicht gestartet werden.\n\nDetails stehen im Log:\n{logs.log_path()}")
     log.info("Verbalis closed")

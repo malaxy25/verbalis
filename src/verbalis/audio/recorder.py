@@ -162,6 +162,54 @@ class Track(threading.Thread):
                 s.level_rms = float(np.sqrt(np.mean(mono**2))) if len(mono) else 0.0
 
 
+class MeterTrack(Track):
+    """Reads a device only to show its level – writes nothing (levels before a recording)."""
+
+    def __init__(self, name: str, device: Any, stop: threading.Event, samplerate: int = SAMPLERATE):
+        super().__init__(name, device, Path(), stop, t0=0.0, samplerate=samplerate)
+
+    def _record(self) -> None:
+        block = int(self.samplerate * BLOCK_SECONDS)
+        with self._open_device(block) as rec:
+            while not self.stop_event.is_set():
+                data = rec.record(numframes=block)
+                mono = data.mean(axis=1) if data.ndim == 2 else data
+                self.status.level_rms = float(np.sqrt(np.mean(np.square(mono, dtype=np.float32)))) if len(mono) else 0.0
+
+
+@dataclass
+class LevelMonitor:
+    """Both devices open for the level meters while the user chooses devices.
+
+    A failing device only ends its own meter (the other keeps showing), unlike
+    a recording, where one failing track stops both.
+    """
+
+    microphone: Any
+    loopback: Any
+    samplerate: int = SAMPLERATE
+    tracks: list[MeterTrack] = field(default_factory=list)
+    stop_events: list[threading.Event] = field(default_factory=list)
+
+    def start(self) -> None:
+        self.stop_events = [threading.Event(), threading.Event()]
+        self.tracks = [MeterTrack("me", self.microphone, self.stop_events[0], self.samplerate),
+                       MeterTrack("others", self.loopback, self.stop_events[1], self.samplerate)]
+        for track in self.tracks:
+            track.start()
+
+    def stop(self, timeout: float = 2.0) -> None:
+        for event in self.stop_events:
+            event.set()
+        deadline = time.monotonic() + timeout
+        for track in self.tracks:
+            track.join(max(deadline - time.monotonic(), 0.1))
+
+    def levels(self) -> dict[str, float]:
+        """RMS per track; 0 for a track that isn't running."""
+        return {t.status.name: (t.status.level_rms if t.is_alive() else 0.0) for t in self.tracks}
+
+
 @dataclass
 class TwoTrackRecorder:
     """Starts and stops the microphone and loopback tracks together."""

@@ -66,6 +66,16 @@ def error_rate(reference: str, hypothesis: str) -> ErrorRate:
     return ErrorRate(wer=cost / max(n, 1), substituted=s, missing=mi, extra=e, reference_words=n)
 
 
+
+def combined(rates: list[ErrorRate]) -> ErrorRate:
+    """Overall error rate of several tracks: their errors and reference words added up.
+
+    Comparing the merged conversation instead would count overlapping speech as
+    errors whenever the paragraphs come out in a different order.
+    """
+    s, mi, e, n = (sum(getattr(r, f) for r in rates) for f in ("substituted", "missing", "extra", "reference_words"))
+    return ErrorRate(wer=(s + mi + e) / max(n, 1), substituted=s, missing=mi, extra=e, reference_words=n)
+
 @dataclass
 class Reference:
     """What a transcription is compared against."""

@@ -92,4 +92,4 @@ def export(target: Path, settings: dict, redact: list[str] | None = None) -> Pat
 
 
 def default_export_name() -> str:
-    return f"verbalis-protokoll-{datetime.now():%Y-%m-%d_%H%M}.zip"
+    return f"verbalis-log-{datetime.now():%Y-%m-%d_%H%M}.zip"

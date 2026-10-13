@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-164 tests in 19 files.
+171 tests in 19 files.
 
 ### `test_app.py` (7)
 
@@ -84,7 +84,7 @@ Window size and position, log output without console, file dialog filter.
 - **Zip filter is valid for pywebview** – Regression 0.7.3: «ZIP-Datei (*.zip)» was rejected by the save dialog.
 - **Taskbar identity only for development version on windows** – Regression: the development version showed the Python logo in the taskbar.
 
-### `test_audio.py` (8)
+### `test_audio.py` (9)
 
 Compressing and retaining the audio files.
 
@@ -96,8 +96,9 @@ Compressing and retaining the audio files.
 - **No retranscription without audio**
 - **Settings validate input**
 - **Size query while compressing** – Regression: GitHub Action on Windows – FileNotFoundError for gegenueber.wav.
+- **Kept audio survives retention days and size limit** – 0.7.17 bug: a test recording was deleted by the size limit – «Audio behalten» protects it.
 
-### `test_cli.py` (7)
+### `test_cli.py` (8)
 
 Run transcribe/compare with a simulated model.
 
@@ -108,6 +109,7 @@ Run transcribe/compare with a simulated model.
 - **Selftest passes**
 - **Compare with corrected transcript per track**
 - **Compare warns about uncorrected reference**
+- **Compare overall wer ignores order of overlapping speech** – 0.7.17 bug: the overall WER compared the merged conversation, so overlapping speech in a
 
 ### `test_corrections.py` (7)
 
@@ -131,7 +133,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Missing default device does not break the list** – Regression 0.7.11: on a PC without a default microphone both device lists stayed empty.
 - **No microphone at all explains what to do**
 
-### `test_diarization.py` (11)
+### `test_diarization.py` (12)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -146,6 +148,7 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Rename merge and reassign**
 - **Speaker sample is playable wav**
 - **Reference and compare use the track not the name**
+- **Merging never loses a given name** – 0.7.17: merging «Hans Muster» into the unnamed «Gegenüber 1» kept «Gegenüber 1» – the name was lost.
 
 ### `test_evaluation.py` (6)
 
@@ -189,7 +192,7 @@ Migration from «Mitschrift» (≤ 0.6) to Verbalis.
 - **Existing new files are not overwritten**
 - **Missing custom folder falls back to default**
 
-### `test_models.py` (18)
+### `test_models.py` (19)
 
 Model names, download sources and subfolders, cache detection, updates, conversion checks.
 
@@ -211,8 +214,9 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Upstream check script reads pins**
 - **Check update ignores documentation only changes**
 - **Subfolder model** – gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root.
+- **Default model is gcoli for new installations only** – 0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model.
 
-### `test_recorder.py` (6)
+### `test_recorder.py` (7)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -222,6 +226,7 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Pause writes nothing and pads no silence**
 - **Device with unreadable format records with fixed channels** – Regression 0.7.12: «AssertionError» from soundcard stopped the recording at once.
 - **Device that cannot record explains why**
+- **Level monitor measures without writing** – 0.7.17: levels before recording – the meter tracks read the devices but create no file.
 
 ### `test_release_workflow.py` (6)
 
@@ -252,7 +257,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (26)
+### `test_service.py` (28)
 
 App flow without a window: recording → queue → transcript.
 
@@ -282,6 +287,8 @@ App flow without a window: recording → queue → transcript.
 - **Model update on request and state**
 - **Model rollback from settings**
 - **Recordings in a synced folder are flagged**
+- **Levels before recording open and close the devices** – 0.7.17: level meters while choosing devices – without recording, closed again when not needed.
+- **Level preview with broken device does not flood the log**
 
 ### `test_spelling.py` (5)
 

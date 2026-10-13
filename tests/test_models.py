@@ -245,3 +245,14 @@ def test_subfolder_model(tmp_path, monkeypatch):
     monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot)
     models.download(gcoli)
     assert all(p.startswith("ct2/") for p in asked["patterns"])
+
+
+def test_default_model_is_gcoli_for_new_installations_only():
+    """0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model."""
+    from verbalis.settings import Settings
+    gcoli = "gcoli/whisper-large-v3-turbo-swiss-german-mit"
+    assert models.DEFAULT_MODEL == gcoli and models.RECOMMENDED[0][0] == gcoli
+    assert Settings.load().model == gcoli                      # no settings.json yet
+
+    Settings(model="Flix-AI/flix-swissgerman-full").save()
+    assert Settings.load().model == "Flix-AI/flix-swissgerman-full"

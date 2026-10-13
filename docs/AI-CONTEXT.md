@@ -48,7 +48,8 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
 
 - **Two tracks** instead of one mix: "me vs. others" is clear without diarization.
 - **faster-whisper (CTranslate2)** on CPU; models are downloaded, never bundled.
-  Default model Flix (Swiss German fine-tune); gcoli is the fast MIT-licensed alternative.
+  Default model gcoli (Swiss German fine-tune of large-v3-turbo, MIT) since 0.7.17 – best on a corrected
+  real Teams call and twice as fast as Flix; Flix stays available.
   Model choice should be based on `verbalis compare` against corrected real calls.
 - **Audio** is recorded as WAV (crash-safe), then compressed to 16 kHz FLAC and deleted
   after a retention period; recordings without transcript are never deleted automatically.

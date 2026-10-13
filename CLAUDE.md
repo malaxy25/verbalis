@@ -1,7 +1,7 @@
 # Verbalis – instructions for Claude Code
 
 Read first: `docs/AI-CONTEXT.md` (purpose, architecture, decisions and why), `docs/TESTING.md`
-(how tests work), and the section **«0.7.17 – planned and decided with Andrea»** at the top of
+(how tests work), and the section **«0.7.18 – planned and decided with Andrea»** at the top of
 `BACKLOG.md` – it is the agreed plan for the next version, including Andrea's decisions.
 
 ## Working with Andrea
@@ -9,7 +9,7 @@ Read first: `docs/AI-CONTEXT.md` (purpose, architecture, decisions and why), `do
 - Answer Andrea in **German** (Swiss spelling: «ss», never «ß»). He programs in Python, not in other
   languages; explain changes in plain words, not only in code.
 - Before larger UI changes: show a screenshot or describe the layout and wait for his OK.
-- **Push only when Andrea asks for it.** Commit with messages like `v0.7.17: …`.
+- **Push only when Andrea asks for it.** Commit with messages like `v0.7.18: …`.
 
 ## Environment (Windows, PowerShell)
 
@@ -47,4 +47,4 @@ Read first: `docs/AI-CONTEXT.md` (purpose, architecture, decisions and why), `do
 - Recordings: `~\.verbalis\recordings\<id>\` (`me.flac`, `others.flac`, `meta.json`, `transcript.json/.md`).
 - Model comparison: `verbalis compare <folder> --reference transcript --until 600 --name Andrea --models …`
 - Speaker diarization: `src/verbalis/diarization.py` (sherpa-onnx). Real calls give far too many speakers
-  with `THRESHOLD = 0.7` – see BACKLOG 0.7.17 item 2.
+  with `THRESHOLD = 0.7` – see BACKLOG 0.7.18 item 1.

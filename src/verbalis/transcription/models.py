@@ -18,11 +18,12 @@ from datetime import datetime
 from pathlib import Path
 
 # (model id, description shown in the UI – German)
+# gcoli first: on a real Teams call (Oct 2026) it had the lowest error rate and was twice as fast as Flix.
 RECOMMENDED: list[tuple[str, str]] = [
-    ("Flix-AI/flix-swissgerman-full", "Schweizerdeutsch-Fine-Tune (large-v3), bestes Ergebnis im Test"),
     ("gcoli/whisper-large-v3-turbo-swiss-german-mit",
-     "Schweizerdeutsch-Fine-Tune von large-v3-turbo: etwa dreimal so schnell wie large-v3, "
-     "MIT-Lizenz auch für Trainingsdaten"),
+     "Schweizerdeutsch-Fine-Tune von large-v3-turbo: bestes Ergebnis in echten Teams-Anrufen, "
+     "etwa doppelt so schnell wie Flix, MIT-Lizenz auch für Trainingsdaten"),
+    ("Flix-AI/flix-swissgerman-full", "Schweizerdeutsch-Fine-Tune (large-v3), langsamer"),
     ("large-v3", "Original von OpenAI, fast gleich gut, etwas schneller"),
     ("large-v3-turbo", "Deutlich schneller, aber schwächer bei Dialekt"),
 ]

@@ -112,7 +112,7 @@ the repo, so updates take effect immediately. Errors are logged to
 - **Updates:** Verbalis checks GitHub for a newer version at start (can be
   switched off). A notice bottom left opens the release notes and installs the
   update. After an update, «Neu in Verbalis» shows what changed.
-- **Log:** the «Protokoll» tab in the settings shows the log with a filter for warnings and errors.
+- **Log:** the «Log» tab in the settings shows the log with a filter for warnings and errors.
   «Exportieren …» saves a ZIP for bug reports – without names, paths or
   conversation content.
 
