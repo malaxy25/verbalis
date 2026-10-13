@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-199 tests in 22 files.
+201 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -133,7 +133,7 @@ Correction list: unique targets, variants, applying rules, suggestions from edit
 - **Suggestions from edit**
 - **No suggestions for rephrasing and insertions**
 
-### `test_details.py` (4)
+### `test_details.py` (5)
 
 Recording details (name, project, participants, notes) and planned recordings.
 
@@ -141,6 +141,7 @@ Recording details (name, project, participants, notes) and planned recordings.
 - **Details survive the end of the recording** – meta.json is rewritten when a recording ends – what was entered meanwhile must stay.
 - **Planned recording is recorded into with its details**
 - **Planned recording can be deleted**
+- **Details are saved while meta json is being read** – Windows: replacing meta.json failed while another thread had it open for a moment (WinError 5/32).
 
 ### `test_devices.py` (6)
 
@@ -283,7 +284,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (30)
+### `test_service.py` (31)
 
 App flow without a window: recording → queue → transcript.
 
@@ -317,6 +318,7 @@ App flow without a window: recording → queue → transcript.
 - **Level preview with broken device does not flood the log**
 - **Transcription waits for the user by default** – 0.7.18: after a meeting the number of people is entered first – transcribing starts by hand.
 - **Audio clip mixes both tracks**
+- **Delete waits for a file that is open for a moment** – 0.7.21 CI failure on Windows: deleting failed with «being used by another process» when the
 
 ### `test_spelling.py` (5)
 

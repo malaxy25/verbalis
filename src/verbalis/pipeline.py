@@ -54,7 +54,14 @@ def write_json_atomic(path: Path, data) -> None:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp, path)
+    for attempt in range(10):   # Windows: another thread may be reading the file this very moment
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.1)
 
 
 def repair_wav(path: Path) -> bool:

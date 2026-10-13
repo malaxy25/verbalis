@@ -60,3 +60,14 @@ def test_planned_recording_can_be_deleted():
     assert json.loads((s._path(pid) / "meta.json").read_text(encoding="utf-8"))["state"] == "planned"
     s.delete_recording(pid)
     assert not s._path(pid).exists()
+
+
+def test_details_are_saved_while_meta_json_is_being_read():
+    """Windows: replacing meta.json failed while another thread had it open for a moment (WinError 5/32)."""
+    import threading
+    s = make_service()
+    rid = finished_recording(s)
+    handle = (s._path(rid) / "meta.json").open("rb")
+    threading.Timer(0.3, handle.close).start()
+    s.update_details(rid, {"title": "Gespeichert trotz Lesen"})
+    assert s.recordings()[0]["title"] == "Gespeichert trotz Lesen"

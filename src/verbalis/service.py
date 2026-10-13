@@ -1448,8 +1448,7 @@ class Service:
         folder = self._path(recording_id)
         if recording_id in self._protected():
             raise RuntimeError("Diese Aufnahme wird gerade aufgenommen oder transkribiert.")
-        if folder.exists():
-            shutil.rmtree(folder)
+        _remove_folder(folder)
         with self._lock:
             self._errors.pop(recording_id, None)
         log.info("Recording deleted: %s", recording_id)
@@ -1584,3 +1583,20 @@ def _names(value) -> list[str]:
         if name and name.lower() not in (n.lower() for n in names):
             names.append(name)
     return names[:MAX_PEOPLE]
+
+
+def _remove_folder(folder: Path, attempts: int = 10, wait_s: float = 0.2) -> None:
+    """Delete a recording folder. On Windows a file that another thread or program has open for a
+    moment (the clean-up reading meta.json, a virus scanner, the search index) can't be deleted –
+    try again shortly instead of failing."""
+    for attempt in range(attempts):
+        if not folder.exists():
+            return
+        try:
+            shutil.rmtree(folder)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise RuntimeError("Die Aufnahme lässt sich gerade nicht löschen, weil eine Datei darin noch "
+                                   "geöffnet ist. Bitte in einem Moment nochmals versuchen.") from None
+            time.sleep(wait_s)

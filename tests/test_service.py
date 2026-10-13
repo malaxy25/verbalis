@@ -547,3 +547,14 @@ def test_audio_clip_mixes_both_tracks():
     import io
     data, rate = sf.read(io.BytesIO(base64.b64decode(clip["url"].split(",", 1)[1])))
     assert rate == 16000 and abs(len(data) / rate - 0.9) < 0.05    # from 0.3 s before to 0.5 s after
+
+
+def test_delete_waits_for_a_file_that_is_open_for_a_moment():
+    """0.7.21 CI failure on Windows: deleting failed with «being used by another process» when the
+    background clean-up read meta.json at the same moment (WinError 32)."""
+    s = make_service()
+    rid = finished_recording(s)
+    handle = (s._path(rid) / "meta.json").open("rb")        # like the clean-up reading it
+    threading.Timer(0.3, handle.close).start()
+    s.delete_recording(rid)
+    assert not s._path(rid).exists()
