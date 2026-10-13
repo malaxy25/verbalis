@@ -1,6 +1,9 @@
 # Verbalis
 
 [![Tests](https://github.com/malaxy25/verbalis/actions/workflows/tests.yml/badge.svg)](https://github.com/malaxy25/verbalis/actions/workflows/tests.yml)
+[![Build & Release](https://github.com/malaxy25/verbalis/actions/workflows/release.yml/badge.svg)](https://github.com/malaxy25/verbalis/actions/workflows/release.yml)
+[![Dependabot](https://github.com/malaxy25/verbalis/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/malaxy25/verbalis/actions/workflows/dependabot/dependabot-updates)
+[![Neueste Version](https://img.shields.io/github/v/release/malaxy25/verbalis?label=release)](https://github.com/malaxy25/verbalis/releases/latest)
 
 Verbalis records conversations – your own microphone **and** the system audio,
 i.e. everyone in a Teams call – and turns them into a transcript. It understands
