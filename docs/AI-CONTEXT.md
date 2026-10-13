@@ -84,8 +84,10 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
 
 ## How work is delivered (important pitfalls)
 
-New versions come as a ZIP from Claude and are extracted over the local repo
-(`C:\Users\AndreaFrehner\dev\verbalis`), then committed, tagged and pushed.
+Up to 0.7.16 new versions came as a ZIP from Claude (chat) and were extracted over the local
+repo. From 0.7.17 on, Andrea works with **Claude Code in VS Code** directly in the repo
+(`$HOME\dev\verbalis`); see `CLAUDE.md` for the rules. The ZIP pitfalls below still matter
+whenever files are copied in from outside.
 
 - **Always `git pull` first**, and build new versions on the current GitHub state –
   a ZIP doesn't know about merged Dependabot PRs and would revert them.

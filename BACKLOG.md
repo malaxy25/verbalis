@@ -4,9 +4,60 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
+## 0.7.17 – planned and decided with Andrea (build as ONE version)
+
+Findings from the first real Teams calls (October 2026) and Andrea's decisions. UI texts German,
+code and docs English. Show Andrea screenshots of the settings and the reading flow before finishing.
+
+1. **Default model: gcoli** (`gcoli/whisper-large-v3-turbo-swiss-german-mit`). Comparison on a real
+   Teams call (first 10 min, corrected transcript): gcoli WER me 14.1 % / others 10.4 %, 0.82× real
+   time; Flix 23.8 % / 17.2 %, 1.66×; large-v3 26.1 % / 17.3 %. Change `DEFAULT_MODEL` and the order of
+   `RECOMMENDED` (gcoli first). Only new installations get it; existing `settings.json` keeps its model.
+2. **Too many speakers.** A 40-min call with 4 people on the others track gave 60+ speakers
+   (threshold 0.7 was tuned on synthetic voices). Do all of:
+   - field «Anzahl Personen auf dieser Spur» in the speaker box + button «Neu zuordnen»: re-runs only
+     diarization with `num_clusters` = that number (no re-transcription), keeps given names where possible
+   - turns shorter than ~1.5 s don't create a speaker: assign them to the most similar existing speaker
+   - second pass: speakers with little talk time merged into the most similar one if close enough
+   - CLI `verbalis speakers-test <folder> [--thresholds …]`: prints only numbers (speakers per threshold,
+     talk time per speaker) – no content – to tune `THRESHOLD` on real calls
+3. **Speaker box**: names save themselves when the field is left (no «Namen speichern» button); the
+   merge dropdown shows the current (typed) names; merging never loses a given name (target's name wins
+   if both have one); label «Gleiche Person wie …» instead of «Zusammenlegen mit …»; list scrollable and
+   sorted by talk time; play buttons disabled with an explanation when the audio was deleted.
+4. **Reading flow** (screenshot approved): split long paragraphs at sentence boundaries where another
+   speaker talks in between (needs sentence timestamps – use word timestamps of faster-whisper), so a
+   question appears where it was asked. Short interjections («ja», «genau», «mhm»: ≤ ~3 words or ~1 s,
+   *while someone else is speaking*) get `aside: true` and are shown in a narrow grey column on the right
+   of the paragraph they were said during: «Andrea: ja 00:06». On narrow windows below the paragraph.
+   A short «Ja.» as a real answer stays a normal paragraph.
+5. **Step-by-step transcription**: save after every finished segment (partial file next to the
+   transcript), show finished parts while it runs, resume after a crash/close at the last saved point.
+   Work in ~2-minute pieces cut in a speech pause (VAD), alternating both tracks so the partial view reads
+   like a conversation (show only the time range done on *both* tracks). Pass the last sentences as
+   prompt across cuts. Diarization and the correction list run at the end over everything.
+   **Safe way decided:** finished parts are read-only while it runs; editing once it is done.
+6. **Settings window**: tabs at the top («Allgemein», «Transkription», «Sprecher», «Aufbewahrung»,
+   «Updates», «Log» – adjust if a better grouping appears); uses the screen width (e.g. two columns on
+   wide screens); closes with a click outside or Escape – **asks «Änderungen speichern?» if something
+   changed**, closes directly otherwise. Rename «Protokoll» to **«Log»** everywhere (tab, «Log exportieren»,
+   export file `verbalis-log-….zip`).
+7. **Levels before recording**: show both level meters while choosing devices, without recording. Only
+   while the window is in the foreground and no recording runs; close the devices again after a while
+   without activity (Windows shows the microphone icon while it is open).
+8. **Messages**: the red message bar can be closed and disappears after a while (the «Audio … gelöscht»
+   message stayed forever).
+9. **«Audio behalten»** per recording: protects its audio from deletion by retention days and the size
+   limit (a test recording was deleted by the size limit). Not prominent: in a «⋯» menu together with
+   «Ordner öffnen», «Audio löschen», «Aufnahme löschen»; main buttons stay «Transkript kopieren» and
+   «Neu transkribieren». The audio line says «Audio wird behalten» instead of the deletion date.
+10. **Model comparison**: compute the overall WER from the tracks (the merged order of overlapping speech
+    made it higher than both tracks).
+
 ## Now
 
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
+- [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17 (safe way first). **[ux]**
 
 ## Next
 
