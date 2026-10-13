@@ -4,10 +4,7 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.22 – planned and decided with Andrea (build once item 3 is measured)
-
-Already done (in the repo, not released yet): clear message when the Mac app was started from «Downloads»
-(App Translocation) and tries to update itself – move it to «Programme». Add to the CHANGELOG with 0.7.22.
+## 0.7.23 – planned and decided with Andrea (build once item 3 is measured)
 
 1. **Maximum recording time**: setting «Aufnahme automatisch beenden nach», default **2 hours** (decided),
    empty = no limit. Notice 5 minutes before («Aufnahme endet in 5 Min.», button «+30 Min.»; Windows
@@ -25,6 +22,14 @@ Already done (in the repo, not released yet): clear message when the Mac app was
 4. **Is the model up to date?** Show «✓ Neuester Stand (geprüft heute 14:05)» / «Update verfügbar: Stand vom
    …» / «Nicht geprüft – keine Internetverbindung», button «Jetzt prüfen»; the date is when the revision
    was published, not when it was downloaded; the short id small below.
+
+## Proposed (waiting for Andrea's OK)
+
+- **DMG for the first Mac install** (drag to «Programme») and, when started from «Downloads», offer to move
+  itself to «Programme» and restart. The ZIP stays for automatic updates. **[ux]**
+- **«Problem melden»** (Log tab, later also next to error messages): creates the log ZIP, opens a prepared
+  e-mail to andrea@frehner.tech (version, system, short template) and shows the ZIP in Finder/Explorer to
+  drag into the mail. Not as a GitHub issue (public repo). **[ux]**
 
 ## Now
 

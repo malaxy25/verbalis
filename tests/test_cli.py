@@ -130,3 +130,35 @@ def test_compare_overall_wer_ignores_order_of_overlapping_speech(tmp_path, monke
     row = next(line for line in (tmp_path / "comparison.md").read_text(encoding="utf-8").splitlines()
                if line.startswith("| large-v3 |"))
     assert [c.strip() for c in row.split("|")][5:8] == ["0.0%", "0.0%", "0.0%"]
+
+
+def test_audio_test_reports_a_device_without_data(monkeypatch, capsys):
+    """verbalis audio-test: which device delivers audio – for the first tests on a Mac."""
+    import threading
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from verbalis.audio import devices
+
+    class Device:
+        def __init__(self, name, delivers):
+            self.name, self.delivers = name, delivers
+
+        @contextmanager
+        def recorder(self, samplerate, blocksize=None, channels=None):
+            device = self
+
+            class Rec:
+                def record(self, numframes):
+                    if not device.delivers:
+                        threading.Event().wait(0.05)
+                        return np.zeros((0, 1), dtype=np.float32)
+                    return np.full((numframes, 1), 0.1, dtype=np.float32)
+            yield Rec()
+
+    monkeypatch.setattr(devices, "select", lambda m, s: SimpleNamespace(
+        microphone=Device("Mikro", True), loopback=Device("Systemton", False)))
+    assert cli.main(["audio-test", "--seconds", "0.5"]) == 1
+    out = capsys.readouterr().out
+    assert "Mikrofon: «Mikro»" in out and "OK – " in out
+    assert "KEINE DATEN" in out and "1 Gerät(e) mit Problemen" in out

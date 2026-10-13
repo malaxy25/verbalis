@@ -144,6 +144,56 @@ def _transcribe_folder(folder: Path, transcriber, names: dict[str, str], until_s
     return transcribe(folder, transcriber, names, until_s, progress)
 
 
+def cmd_audio_test(args) -> int:
+    """Open the microphone and the others' audio one after the other and report what arrives.
+
+    Prints only numbers – nothing is recorded or saved. For devices that deliver nothing
+    (e.g. the first tests on a Mac).
+    """
+    import threading
+
+    from .audio import devices
+    from .audio.recorder import SAMPLERATE, MeterTrack
+    from .service import _db
+
+    try:
+        selection = devices.select(args.microphone, args.speakers)
+    except Exception as e:
+        print(f"Geräte konnten nicht gewählt werden: {e}")
+        return 1
+    problems = 0
+    for track, label, device in (("me", "Mikrofon", selection.microphone),
+                                 ("others", "Ton der anderen", selection.loopback)):
+        print(f"{label}: «{getattr(device, 'name', '?')}» – {args.seconds:.0f} s lang lesen …")
+        stop = threading.Event()
+        meter = MeterTrack(track, device, stop)
+        started = time.monotonic()
+        meter.start()
+        loudest = -90.0
+        while time.monotonic() - started < args.seconds and (meter.is_alive() or not meter.status.error):
+            time.sleep(0.1)
+            loudest = max(loudest, _db(meter.status.level_rms))
+            if not meter.is_alive():
+                break
+        stop.set()
+        meter.join(3)
+        seconds = meter.status.written_frames / SAMPLERATE
+        if meter.status.error:
+            result = f"FEHLER: {meter.status.error}"
+        elif seconds == 0:
+            result = "KEINE DATEN – das Gerät liefert nichts (Berechtigung oder Gerät prüfen)"
+        else:
+            result = f"OK – {seconds:.1f} s Audio erhalten, lautester Pegel {loudest:.0f} dB"
+            if loudest <= -89:
+                result += " (nur Stille)"
+        if meter.is_alive():
+            result += "; hängt beim Beenden"
+        problems += result.startswith(("FEHLER", "KEINE")) or meter.is_alive()
+        print(f"  {result}\n")
+    print("Alles in Ordnung." if not problems else f"{problems} Gerät(e) mit Problemen.")
+    return 1 if problems else 0
+
+
 def cmd_speakers_test(args) -> int:
     """How many speakers diarization finds per threshold – only numbers, no content (to tune THRESHOLD)."""
     from . import diarization
@@ -483,6 +533,12 @@ def main(argv: list[str] | None = None) -> int:
                                         "Transkript der Aufnahme), eine transcript.json oder ein Text wie "
                                         "testdata/reference_standard_german.txt")
     p.set_defaults(func=cmd_compare, until=180)  # default: first 3 minutes, 0 = everything
+
+    p = sub.add_parser("audio-test", help="Prüfen, ob Mikrofon und Ton der anderen Audio liefern (nichts wird gespeichert)")
+    p.add_argument("--microphone", help="Mikrofon (Namensteil), Standard: wie in der App")
+    p.add_argument("--speakers", help="Ton der anderen (Namensteil), Standard: wie in der App")
+    p.add_argument("--seconds", type=float, default=4.0, help="Wie lange pro Gerät (Standard: 4)")
+    p.set_defaults(func=cmd_audio_test)
 
     p = sub.add_parser("speakers-test", help="Sprechererkennung mit verschiedenen Schwellen testen (nur Zahlen)")
     p.add_argument("folder", help="Aufnahmeordner")

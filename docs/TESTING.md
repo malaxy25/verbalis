@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-202 tests in 22 files.
+204 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -108,7 +108,7 @@ Recognising calls: a call app uses the microphone → suggest recording (never r
 - **Suggestion offers a planned recording that is due**
 - **Switched off or recording means no suggestion**
 
-### `test_cli.py` (8)
+### `test_cli.py` (9)
 
 Run transcribe/compare with a simulated model.
 
@@ -120,6 +120,7 @@ Run transcribe/compare with a simulated model.
 - **Compare with corrected transcript per track**
 - **Compare warns about uncorrected reference**
 - **Compare overall wer ignores order of overlapping speech** – 0.7.17 bug: the overall WER compared the merged conversation, so overlapping speech in a
+- **Audio test reports a device without data** – verbalis audio-test: which device delivers audio – for the first tests on a Mac.
 
 ### `test_corrections.py` (7)
 
@@ -284,7 +285,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (31)
+### `test_service.py` (32)
 
 App flow without a window: recording → queue → transcript.
 
@@ -319,6 +320,7 @@ App flow without a window: recording → queue → transcript.
 - **Transcription waits for the user by default** – 0.7.18: after a meeting the number of people is entered first – transcribing starts by hand.
 - **Audio clip mixes both tracks**
 - **Delete waits for a file that is open for a moment** – 0.7.21 CI failure on Windows: deleting failed with «being used by another process» when the
+- **Track without any audio is reported while recording** – 0.7.21 on macOS: the recording ran without sound and nothing said which device delivered nothing.
 
 ### `test_spelling.py` (5)
 

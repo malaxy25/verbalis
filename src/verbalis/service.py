@@ -55,6 +55,7 @@ class ShuttingDown(BaseException):
 CLEANUP = ":cleanup"          # queue task (not a valid recording ID)
 CLEANUP_EVERY_S = 3600        # additionally every hour while the app stays open
 SOUND_DB = -55.0              # louder than this counts as "something is coming through"
+NO_DATA_AFTER_S = 5.0         # a track that has delivered no audio at all after this is reported
 MAX_CLIP_S = 120.0            # longest passage played at once
 MAX_PEOPLE = 30               # «Anzahl Personen» when re-assigning speakers
 CALL_CHECK_S = 3.0            # how often to look for a call app using the microphone
@@ -516,6 +517,11 @@ class Service:
         ended = rec.stop()
         errors = [str(e) or type(e).__name__ for e in rec.errors]   # readable, not repr()
         if not ended:
+            for track in getattr(rec, "tracks", []):
+                if track.is_alive():
+                    log.warning("Track %s (%s) did not end: %.1f s written, device %s", track.status.name,
+                                info["devices"].get(track.status.name, "?"),
+                                track.status.written_frames / rec.samplerate, getattr(track.device, "name", "?"))
             state = pipeline.STOP_TIMEOUT
             problem = ("Eine Spur liess sich nicht rechtzeitig beenden. Das Audio bis dahin ist gesichert, "
                        "wurde aber nicht automatisch transkribiert – bitte prüfen.")
@@ -536,6 +542,23 @@ class Service:
             log.exception("Writing meta.json for %s failed", info["id"])
             self._recording_error = f"Die Angaben zur Aufnahme konnten nicht gespeichert werden ({e})."
         return state
+
+    def _check_no_data(self, rec, info: dict) -> None:
+        """Call with the lock held. A track that has delivered no audio at all is reported once –
+        silence still arrives as data, so this means the device or the system blocks it."""
+        if rec.paused or rec.active_seconds() < NO_DATA_AFTER_S or info.get("no_data_reported"):
+            return
+        silent = [s.name for s in rec.status() if s.written_frames == 0]
+        if not silent:
+            return
+        info["no_data_reported"] = True
+        names = {"me": "Mikrofon", "others": "Ton der anderen"}
+        devices = ", ".join(f"{names.get(t, t)} «{info['devices'].get(t, '?')}»" for t in silent)
+        log.warning("No audio data after %.0f s from: %s", rec.active_seconds(), devices)
+        hint = (" Unter macOS: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon bzw. «Bildschirm- & "
+                "Systemaudioaufnahme» prüfen und Verbalis neu starten.") if sys.platform == "darwin" else ""
+        self._recording_error = (f"Von {devices} kommen keine Audiodaten an – diese Spur bleibt leer. "
+                                 "Aufnahme beenden und ein anderes Gerät wählen." + hint)
 
     def _new_folder(self, start: datetime) -> Path:
         """A new, empty recording folder – never an existing one (two starts in the same second)."""
@@ -1480,6 +1503,7 @@ class Service:
                 now = time.monotonic()
                 if rec.paused or _db(others.level_rms) > SOUND_DB:
                     self._others_last_sound = now
+                self._check_no_data(rec, info)
                 recording = {
                     "id": info["id"],
                     "duration_s": round(rec.active_seconds(), 1),

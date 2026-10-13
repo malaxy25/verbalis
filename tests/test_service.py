@@ -558,3 +558,22 @@ def test_delete_waits_for_a_file_that_is_open_for_a_moment():
     threading.Timer(0.3, handle.close).start()
     s.delete_recording(rid)
     assert not s._path(rid).exists()
+
+
+class SilentTrackRecorder(FakeRecorder):
+    """Like the first Mac test: the recording runs, but one device never delivers any audio."""
+
+    def status(self):
+        return [TrackStatus("me", self.folder / "me.wav", 0, 0, 0.0),
+                TrackStatus("others", self.folder / "others.wav", 48000 * 5, 0, 0.1)]
+
+
+def test_track_without_any_audio_is_reported_while_recording():
+    """0.7.21 on macOS: the recording ran without sound and nothing said which device delivered nothing."""
+    s = Service(settings=Settings(name="Andrea", model="test-model", auto_transcribe="on"),
+                recorder_factory=SilentTrackRecorder, select_devices=devices, list_devices=lambda: {})
+    s.start_recording(consent=True)
+    message = s.state()["recording_error"]
+    assert "Mikrofon «Mic»" in message and "keine Audiodaten" in message
+    assert "Ton der anderen" not in message                 # that track delivers
+    s.stop_recording()

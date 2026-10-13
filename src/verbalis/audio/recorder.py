@@ -179,6 +179,7 @@ class MeterTrack(Track):
             while not self.stop_event.is_set():
                 data = rec.record(numframes=block)
                 mono = data.mean(axis=1) if data.ndim == 2 else data
+                self.status.written_frames += len(mono)       # here: frames read (nothing is written)
                 self.status.level_rms = float(np.sqrt(np.mean(np.square(mono, dtype=np.float32)))) if len(mono) else 0.0
 
 

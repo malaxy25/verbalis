@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.22 – 2026-10-13
+Help for finding out why a Mac recording stays silent:
+- **Warning while recording** when a track delivers no audio data at all after a few seconds – with the
+  device name (silence still arrives as data, so this means the device or the system blocks it). The log
+  also says which track did not end when a recording can't be stopped cleanly.
+- New command `verbalis audio-test`: opens the microphone and the others' audio one after the other and
+  shows whether audio arrives, how loud, and whether the device hangs – nothing is recorded or saved. On a
+  Mac: `/Applications/Verbalis.app/Contents/MacOS/verbalis-cli audio-test` in the Terminal.
+- macOS: a clear message when Verbalis was started straight from «Downloads» and can't update itself –
+  move it to «Programme».
+
 ## 0.7.21 – 2026-10-13
 - **macOS: recording failed at once** («blocksize must be between 15.0 and 512»). On the Mac the block size
   sets the hardware buffer, which may be at most 512 frames; Verbalis asked for 0.1 s. It is now only given
