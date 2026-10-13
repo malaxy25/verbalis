@@ -39,6 +39,13 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## Now
 
+- [ ] **Mac: no audio again after the update 0.7.23.dev2 → 0.7.23** (14 Oct 2026). dev2 (signed with the
+  Verbalis certificate, fresh install, permissions granted) recorded fine; after the in-app update to 0.7.23
+  (same certificate) there was no audio again. Collect: «Diagnose kopieren», the log, `codesign -dvv` and
+  `codesign -d -r-` of the installed app (designated requirement), where the app lies. Check whether the
+  update keeps the signature/identifier (swap script, `--deep --identifier` also on nested code) and whether
+  TCC keys on the designated requirement as expected. Workaround: `tccutil reset Microphone|AudioCapture
+  ch.frehner.verbalis`, restart. **[ops]**
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
 - [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17/0.7.18 (safe way first). **[ux]**
 
