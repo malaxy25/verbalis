@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-205 tests in 22 files.
+209 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -198,7 +198,7 @@ Reading, filtering and exporting the log without personal data.
 - **Export is anonymised and without personal settings**
 - **Export removes device and person names**
 
-### `test_mac_tap.py` (6)
+### `test_mac_tap.py` (7)
 
 macOS system audio: the recorder side of the Swift helper, with a fake helper speaking its protocol.
 
@@ -208,6 +208,7 @@ macOS system audio: the recorder side of the Swift helper, with a fake helper sp
 - **Mac prefers system audio when available**
 - **Old mac falls back to virtual device**
 - **Macos version check**
+- **Silent helper is reported instead of hanging** – 0.7.22 on macOS: the system audio track delivered nothing and the recording could not be stopped.
 
 ### `test_migration.py` (5)
 
@@ -243,7 +244,7 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Subfolder model** – gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root.
 - **Default model is gcoli for new installations only** – 0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model.
 
-### `test_recorder.py` (8)
+### `test_recorder.py` (10)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -255,6 +256,8 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Device that cannot record explains why**
 - **Level monitor measures without writing** – 0.7.17: levels before recording – the meter tracks read the devices but create no file.
 - **Macos records without a block size** – 0.7.20 bug on macOS: «blocksize must be between 15.0 and 512» – every recording failed at once.
+- **Reader gives exact blocks and never waits forever** – 0.7.22 on macOS: devices that delivered nothing made the recording hang («stop_timeout»).
+- **Silent device ends the track instead of hanging**
 
 ### `test_release_workflow.py` (6)
 
@@ -354,7 +357,7 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Short answer after a question stays a paragraph**
 - **Aside in markdown and json**
 
-### `test_updates.py` (18)
+### `test_updates.py` (19)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -376,6 +379,7 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Mac app finds certificates** – 0.7.19 bug on macOS: the update check failed with «CERTIFICATE_VERIFY_FAILED» – the Python
 - **App started from downloads is recognised** – 0.7.21 on macOS: «Verbalis darf /private/var/folders/… nicht ändern» – the app had been started
 - **Mac app in a locked folder offers the download** – 0.7.22 on a Mac without admin rights: «Verbalis darf /Applications nicht ändern» – and no way on.
+- **Test build gets the real release as update** – A test build «0.7.23.dev1» (manual build, not released) must see the release 0.7.23 as newer.
 
 ### `test_wasapi_fix.py` (5)
 

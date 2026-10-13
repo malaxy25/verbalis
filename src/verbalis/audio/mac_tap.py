@@ -12,8 +12,10 @@ from __future__ import annotations
 import json
 import os
 import platform
+import queue
 import subprocess
 import sys
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -90,27 +92,53 @@ def _read_header(proc: subprocess.Popen) -> dict:
     return header
 
 
+READ_TIMEOUT_S = 3.0   # no data from the helper for this long: report it instead of waiting forever
+
+
 class _TapReader:
+    """Reads the helper's samples in a background thread, so `record` can wait with a time limit."""
+
     def __init__(self, proc: subprocess.Popen, source_rate: int, target_rate: int):
         self.proc = proc
         self.source_rate = source_rate
         self.target_rate = target_rate
         self.buffer = np.zeros(0, dtype=np.float32)
+        self.leftover = b""                      # bytes of an incomplete float
+        self.chunks: queue.Queue = queue.Queue()
         self.resampler = None
         if source_rate != target_rate:
             import soxr
 
             self.resampler = soxr.ResampleStream(source_rate, target_rate, 1, dtype="float32")
+        threading.Thread(target=self._pump, name="system-audio-reader", daemon=True).start()
+
+    def _pump(self) -> None:
+        try:
+            while True:
+                raw = self.proc.stdout.read1(65536)
+                if not raw:
+                    break
+                self.chunks.put(raw)
+        except (OSError, ValueError):
+            pass
+        self.chunks.put(None)                    # the helper has ended
 
     def record(self, numframes: int) -> np.ndarray:
-        """Exactly `numframes` samples at the target rate, shape (numframes, 1). Blocks like a device."""
+        """Exactly `numframes` samples at the target rate, shape (numframes, 1)."""
         while len(self.buffer) < numframes:
-            wanted = max(int((numframes - len(self.buffer)) * self.source_rate / self.target_rate), 64)
-            raw = self.proc.stdout.read(wanted * 4)
-            if not raw:
+            try:
+                raw = self.chunks.get(timeout=READ_TIMEOUT_S)
+            except queue.Empty:
+                raise RuntimeError("Vom Systemton kommen keine Audiodaten an (Berechtigung «Bildschirm- & "
+                                   "Systemaudioaufnahme» prüfen).") from None
+            if raw is None:
+                self.chunks.put(None)
                 detail = self.proc.stderr.read().decode("utf-8", "replace").strip()
                 raise RuntimeError("Die Systemton-Aufnahme wurde beendet." + (f" ({detail})" if detail else ""))
-            samples = np.frombuffer(raw[: len(raw) // 4 * 4], dtype=np.float32)
+            raw = self.leftover + raw
+            usable = len(raw) // 4 * 4
+            self.leftover = raw[usable:]
+            samples = np.frombuffer(raw[:usable], dtype=np.float32)
             if self.resampler is not None:
                 samples = self.resampler.resample_chunk(samples)
             self.buffer = np.concatenate([self.buffer, samples.astype(np.float32, copy=False)])

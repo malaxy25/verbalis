@@ -242,3 +242,10 @@ def test_mac_app_in_a_locked_folder_offers_the_download(monkeypatch):
     s.open_update_download()
     assert opened == [url, "https://github.com/malaxy25/verbalis/releases/latest"]
     assert service_module.sys.platform == "darwin"
+
+
+def test_test_build_gets_the_real_release_as_update():
+    """A test build «0.7.23.dev1» (manual build, not released) must see the release 0.7.23 as newer."""
+    assert updates.is_newer("0.7.23", "0.7.23.dev1")
+    assert not updates.is_newer("0.7.23.dev1", "0.7.23")
+    assert updates.is_newer("0.7.23.dev2", "0.7.23.dev1") and updates.is_newer("0.7.23.dev1", "0.7.22")

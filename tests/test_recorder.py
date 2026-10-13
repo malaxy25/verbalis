@@ -5,6 +5,7 @@ import time
 from contextlib import contextmanager
 
 import numpy as np
+import pytest
 import soundfile as sf
 
 from verbalis.audio.recorder import Track, missing_frames
@@ -221,3 +222,59 @@ def test_macos_records_without_a_block_size(tmp_path, monkeypatch):
     assert track.status.error is None
     data, sr = sf.read(tmp_path / "me.wav")
     assert abs(len(data) / sr - 1.0) < 0.15 and np.allclose(data, 0.2, atol=1e-3)
+
+
+class CoreAudioLikeRecorder:
+    """Like soundcard's macOS recorder: blocks arrive in `_queue` with `_record_event`; record() waits forever."""
+
+    def __init__(self, blocks):
+        import collections
+        self._queue = collections.deque()
+        self._record_event = threading.Event()
+        self._pending = np.zeros((0, 1), dtype=np.float32)
+
+        def feed():
+            for n in blocks:
+                time.sleep(0.01)
+                self._queue.append(np.full((n, 1), 0.3, dtype=np.float32))
+                self._record_event.set()
+        threading.Thread(target=feed, daemon=True).start()
+
+    def record(self, numframes=None):
+        assert numframes is None              # Verbalis asks for what's there, after waiting itself
+        while not self._queue:
+            self._record_event.wait()          # soundcard: no time limit
+            self._record_event.clear()
+        return self._queue.popleft()
+
+
+def test_reader_gives_exact_blocks_and_never_waits_forever(monkeypatch):
+    """0.7.22 on macOS: devices that delivered nothing made the recording hang («stop_timeout»)."""
+    from verbalis.audio import recorder
+    monkeypatch.setattr(recorder, "READ_TIMEOUT_S", 0.3)
+    reader = recorder._Reader(CoreAudioLikeRecorder([512] * 20), "MacBook Air-Mikrofon")
+    blocks = [reader.read(1000) for _ in range(10)]
+    assert all(b.shape == (1000, 1) for b in blocks)        # exact sizes from 512-frame chunks
+    started = time.monotonic()
+    with pytest.raises(recorder.NoAudioData, match="MacBook Air-Mikrofon"):
+        reader.read(1000)                                     # only 240 frames left, then nothing
+    assert time.monotonic() - started < 2
+
+
+def test_silent_device_ends_the_track_instead_of_hanging(tmp_path, monkeypatch):
+    from verbalis.audio import recorder
+    monkeypatch.setattr(recorder, "READ_TIMEOUT_S", 0.3)
+
+    class Silent:
+        name = "Stummes Gerät"
+
+        @contextmanager
+        def recorder(self, samplerate, blocksize=None, channels=None):
+            yield CoreAudioLikeRecorder([])
+
+    stop = threading.Event()
+    track = Track("me", Silent(), tmp_path / "me.wav", stop, t0=time.monotonic())
+    track.start()
+    track.join(3)
+    assert not track.is_alive() and isinstance(track.status.error, recorder.NoAudioData)
+    assert stop.is_set()                                      # the other track stops too

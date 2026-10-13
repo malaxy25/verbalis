@@ -39,9 +39,17 @@ def parse_version(text: str) -> tuple[int, ...]:
     return tuple(int(p) for p in m.group(1).split(".")) if m else ()
 
 
+def _order(text: str) -> tuple:
+    """Sort key: a test build «0.7.23.dev1» comes before the release 0.7.23 (so it gets that update)."""
+    numbers = parse_version(text)
+    dev = re.search(r"\.dev(\d+)$", (text or "").strip())
+    return numbers + ((-1, int(dev.group(1))) if dev else (0, 0))
+
+
 def is_newer(candidate: str, current: str = __version__) -> bool:
-    a, b = parse_version(candidate), parse_version(current)
-    return bool(a) and bool(b) and a > b
+    if not parse_version(candidate) or not parse_version(current):
+        return False
+    return _order(candidate) > _order(current)
 
 
 def is_installed() -> bool:

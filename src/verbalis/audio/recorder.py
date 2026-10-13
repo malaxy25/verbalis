@@ -35,6 +35,45 @@ SAMPLERATE = 48_000
 BLOCK_SECONDS = 0.1
 GAP_TOLERANCE_SECONDS = 0.25
 TRACKS = ("me", "others")
+READ_TIMEOUT_S = 3.0      # a device that delivers nothing for this long is reported (never wait forever)
+
+
+class NoAudioData(RuntimeError):
+    """A device delivers no audio at all (blocked by the system, or not running)."""
+
+
+class _Reader:
+    """Read exactly `numframes` per call – but never wait forever.
+
+    soundcard on macOS waits for the next audio block without a time limit, so a device that
+    delivers nothing made the recording hang (and it couldn't be stopped). Its recorder keeps
+    the blocks in `_queue` and signals `_record_event`; here we wait for that signal with a
+    time limit. Other devices (Windows, the system audio helper) are read as they are.
+    """
+
+    def __init__(self, rec, device_name: str):
+        self.rec, self.device_name = rec, device_name
+        self.event = getattr(rec, "_record_event", None) if hasattr(rec, "_queue") else None
+        self.spare = None
+
+    def read(self, numframes: int) -> np.ndarray:
+        if self.event is None:
+            return self.rec.record(numframes=numframes)
+        parts = [] if self.spare is None else [self.spare]
+        have = sum(len(p) for p in parts)
+        while have < numframes:
+            while not self.rec._queue:
+                self.event.clear()
+                if self.rec._queue:
+                    break
+                if not self.event.wait(READ_TIMEOUT_S):
+                    raise NoAudioData(f"Vom Gerät «{self.device_name}» kommen keine Audiodaten an.")
+            chunk = self.rec.record(numframes=None)   # the blocks that are there – doesn't wait now
+            parts.append(chunk)
+            have += len(chunk)
+        data = np.concatenate(parts, axis=0)
+        self.spare = data[numframes:]
+        return data[:numframes]
 
 
 def missing_frames(
@@ -147,8 +186,9 @@ class Track(threading.Thread):
         with sf.SoundFile(   # "x": never overwrite an existing recording
             s.path, "x", samplerate=self.samplerate, channels=1, subtype="PCM_16"
         ) as file, self._open_device(block) as rec:
+            reader = _Reader(rec, getattr(self.device, "name", "?"))
             while not self.stop_event.is_set():
-                data = rec.record(numframes=block)
+                data = reader.read(block)
                 if self.paused():
                     s.level_rms = 0.0
                     continue
@@ -176,8 +216,9 @@ class MeterTrack(Track):
     def _record(self) -> None:
         block = int(self.samplerate * BLOCK_SECONDS)
         with self._open_device(block) as rec:
+            reader = _Reader(rec, getattr(self.device, "name", "?"))
             while not self.stop_event.is_set():
-                data = rec.record(numframes=block)
+                data = reader.read(block)
                 mono = data.mean(axis=1) if data.ndim == 2 else data
                 self.status.written_frames += len(mono)       # here: frames read (nothing is written)
                 self.status.level_rms = float(np.sqrt(np.mean(np.square(mono, dtype=np.float32)))) if len(mono) else 0.0
