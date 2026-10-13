@@ -742,11 +742,11 @@
           <button type="button" class="action" id="btn-diag-copy">Diagnose kopieren</button>
           <button type="button" class="action" id="btn-diag-folder">Datenordner öffnen</button>
         </div>
+        <p class="log-result" id="diag-result">Der Audiotest liest die gewählten Geräte etwa 15 Sekunden lang – Schritt für
+          Schritt wie bei einer Aufnahme. «Diagnose kopieren» enthält Gerätenamen, aber keine Gesprächsinhalte.</p>
         <ol class="diag-steps" id="diag-steps"></ol>
         <ul class="diag-network" id="diag-network"></ul>
         <dl class="diag-info" id="diag-info"></dl>
-        <p class="log-result" id="diag-result">Der Audiotest liest die gewählten Geräte etwa 15 Sekunden lang – Schritt für
-          Schritt wie bei einer Aufnahme. «Diagnose kopieren» enthält Gerätenamen, aber keine Gesprächsinhalte.</p>
       </section>
     </div>
     <div class="dialog-buttons settings-foot">
@@ -1968,6 +1968,11 @@ async function checkNetwork() {
     const results = await call("check_network");
     list.replaceChildren(...results.map((r) => element("li", { class: `diag-result ${r.ok ? "good" : "bad"}` },
       `${r.name}: ${r.ok ? "erreichbar" : "nicht erreichbar"} – ${r.detail} (${r.seconds} s)`)));
+    // say it right below the buttons too – the list itself may be out of sight
+    const failed = results.filter((r) => !r.ok).length;
+    $("diag-result").textContent = failed ? `Internet geprüft: ${failed} von ${results.length} Diensten nicht erreichbar (rot markiert).`
+      : `Internet geprüft: alle ${results.length} Dienste erreichbar.`;
+    list.scrollIntoView({ block: "nearest", behavior: "smooth" });
   } catch (e) {
     list.replaceChildren(element("li", { class: "diag-result bad" }, `Prüfung nicht möglich: ${e.message}`));
   } finally {
