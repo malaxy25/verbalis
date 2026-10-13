@@ -4,27 +4,55 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
+## 0.7.19 – planned with Andrea (proposals marked «Vorschlag» still need his OK)
+
+Build as one version. UI texts German, code and docs English. Show Andrea a screenshot or a description of
+the new list, the recording form and the call notice before finishing.
+
+1. **Recording details (metadata)** in `meta.json`, editable at the top of a recording:
+   - **Name** (title), editable; default «Aufnahme Mo 13.10., 14:30». Shown in the list instead of the date,
+     in the transcript header and the Markdown file. The folder name stays the id.
+   - **Projekt**: free text with suggestions from earlier recordings (Vorschlag: no fixed project list).
+   - **Datum und Startzeit**: from the recording; for a planned recording the planned time.
+   - **Teilnehmende** per track («Am Mikrofon», «Im Call»): names, one per line or comma-separated. They
+     preset «Anzahl Personen» and are offered as names in the speaker box (choose instead of typing).
+   - **Notizen** (agenda, context) – later useful for a summary; never sent anywhere.
+2. **Plan a recording**: a «+» in the list creates a planned recording (state `planned`, no audio yet) with
+   the details above. It shows under «Geplant» at the top. Selecting it shows the details and the normal
+   record button – consent is still confirmed right before recording. Recording fills this planned entry
+   (same id); a planned entry that is never recorded can be deleted. Retention and clean-up ignore it.
+   (Later: import from the Outlook calendar.)
+3. **List grouped by time**: «Geplant», «Heute», «Diese Woche», «Letzte Woche», «Älter» (Vorschlag: «Älter»
+   split by month – «September 2026», … – once it gets long). Groups can be collapsed.
+4. **Recognise calls (Windows first)**: while Verbalis runs and isn't recording, check every few seconds
+   whether another app uses the microphone (Windows records this in the registry: CapabilityAccessManager
+   ConsentStore, the same source as the microphone icon in the taskbar). Verbalis itself is ignored (level
+   meters). Then suggest «Teams-Call erkannt – aufnehmen?»: in the window as a notice; when Verbalis is
+   minimised as a Windows notification. If a planned recording is due (± 30 min), the notice offers that one.
+   A click opens Verbalis ready to record – **never records by itself**, consent stays a checkbox (StGB
+   179ter). Only once per call, «Nicht mehr fragen» for this call; setting «Calls erkennen» (Vorschlag: on).
+   macOS later via the Swift helper (any app using the microphone) – needs Andrea's test.
+
 ## Now
 
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
-- [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17 (safe way first). **[ux]**
+- [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17/0.7.18 (safe way first). **[ux]**
 
 ## Next
 
-- [ ] **Speaker diarization: test with real calls** – 0.7.16 tells speakers apart (sherpa-onnx, no token needed). Check quality with 2–4 people on Teams and with similar voices; adjust `THRESHOLD` in `diarization.py` if people are split or merged too often; measure the extra time per hour in the log. **[quality]**
-- [ ] **Number of speakers from the meeting** – with meeting details (attendees) the expected number of speakers could guide the clustering. **[quality]**
-- [ ] **Name speakers** – per transcript, play a short snippet per detected speaker and assign a name; transcript updates everywhere. **[ux]**
-- [ ] **Audio playback** – click a timestamp/paragraph to hear that part; makes correcting much easier. **[ux]**
+- [ ] **Speaker diarization: test with real calls** – since 0.7.18 short-only speakers and small speakers are
+  merged (`refine`) and the number of people can be given. Check with 2–4 people on Teams and with similar
+  voices; tune `THRESHOLD`, `MIN_TURN_S`, `SMALL_SPEAKER_S`, `MERGE_DISTANCE` with `verbalis speakers-test`. **[quality]**
+- [ ] **Reading flow: check on real calls** – are interjections recognised well (≤ 3 words or ≤ 1 s while someone
+  else speaks)? How much slower are word timestamps? **[quality]**
+- [ ] **License check of gcoli for tocco** (MIT chain incl. training data). **[tocco]**
 - [ ] **Standard German reference text** – second read-aloud text with reference, check that the Swiss German model does not get worse on Standard German. **[quality]**
-- [ ] **WER per track** in `compare`, so microphone and Teams tests are evaluated separately. **[quality]**
-- [ ] **Decide default model** after Teams tests: compare Flix, gcoli and large-v3 on 2–3 corrected real calls (`verbalis compare --reference transcript`, see README); also check the licence situation for tocco (gcoli: MIT chain). **[quality]** **[tocco]**
 - [ ] **Remove the migration from «Mitschrift»** once no old installations remain (≥ 1.0). **[ops]**
 
 ## Later
 
 - [ ] **Recognize speakers across calls** – voice fingerprints. Biometric data under the Swiss revDSG: opt-in only, consent of the people concerned, deletable. **[privacy]** **[tocco]**
 - [ ] **Summary and action items** via LLM – optional and off by default; local model or a provider approved by tocco. **[tocco]**
-- [ ] **Resume transcription after app restart** – save progress per segment instead of starting over. **[ux]**
 - [ ] **Convert models from the UI** instead of the terminal. **[ux]**
 - [ ] **Search across transcripts.** **[ux]**
 - [ ] **Export** to Word/PDF (copy as Markdown exists). **[ux]**
@@ -72,6 +100,6 @@ Still open:
 - [ ] **Code signing** – Windows: SignPath Foundation offers free certificates for open-source projects (fully automated build required, each release approved by hand; SmartScreen reputation still builds up over time). macOS: Apple Developer Program (99 USD/year) for signing and notarization. **[ops]**
 
 - [ ] Talk to IT and data protection: local processing, consent per recording, retention (audio deleted after N days).
-- [ ] Check the licence situation of the default model (Flix: Apache 2.0, trained under the Swiss TDM research exception).
+- [ ] Check the licence situation of the default model (gcoli since 0.7.17: MIT chain; Flix: Apache 2.0, trained under the Swiss TDM research exception).
 - [ ] Standard consent text for customer calls (German and English).
 - [ ] Decide on defaults for colleagues: retention, model, storage location (Verbalis warns about synced folders since 0.7.11).
