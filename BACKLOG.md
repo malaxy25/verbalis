@@ -4,6 +4,25 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
+## 0.7.20 – planned and decided with Andrea (build once item 3 is measured)
+
+1. **Maximum recording time**: setting «Aufnahme automatisch beenden nach», default **2 hours** (decided),
+   empty = no limit. Notice 5 minutes before («Aufnahme endet in 5 Min.», button «+30 Min.»; Windows
+   notification when in the background). Ends cleanly as a complete recording; meta.json says why.
+2. **Ask to stop when the call is over**: only if a call was recognised when the recording started; when the
+   call app hasn't used the microphone for ~30 s: «Der Teams-Call ist zu Ende – Aufnahme beenden?»
+   («Beenden» / «Weiter aufnehmen»). Never stops by itself – the maximum time is the safety net.
+3. **Settings for recognition and speakers** – in plain words, few steps, values from measurements:
+   - «Sprechertrennung»: eher weniger Personen / Standard / eher mehr Personen (`THRESHOLD`)
+   - «Kurze Einwürfe am Rand zeigen» (on/off)
+   - «Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD) – needs a `compare` option to measure
+   **Waiting for measurements:** Andrea runs `verbalis speakers-test <folder> --track others|me
+   --thresholds 0.5 0.6 0.7 0.8 0.9` on 2–3 real recordings (Teams with 3–4 people, room meeting with 2,
+   1:1) and sends the numbers with the true number of people.
+4. **Is the model up to date?** Show «✓ Neuester Stand (geprüft heute 14:05)» / «Update verfügbar: Stand vom
+   …» / «Nicht geprüft – keine Internetverbindung», button «Jetzt prüfen»; the date is when the revision
+   was published, not when it was downloaded; the short id small below.
+
 ## Now
 
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
