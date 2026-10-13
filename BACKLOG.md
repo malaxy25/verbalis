@@ -25,8 +25,13 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## Proposed (waiting for Andrea's OK)
 
-- **DMG for the first Mac install** (drag to «Programme») and, when started from «Downloads», offer to move
-  itself to «Programme» and restart. The ZIP stays for automatic updates. **[ux]**
+- **Mac: install into the right place by itself** (agreed with Andrea, 14 Oct 2026):
+  1. At start, if Verbalis runs from «Downloads», «Dokumente», a translocated copy or any other unsuitable
+     place, ask once «Verbalis in den Ordner Programme verschieben?» – move itself and restart. Target:
+     `/Applications` when writable (admin), else `~/Applications` (create it). This also fixes self-updates
+     without an admin account and the read-only copy from «Downloads».
+  2. A DMG for the first download (Verbalis + arrow to «Programme»); the ZIP stays for automatic updates.
+  Item 1 matters more (it also helps when someone forgets to move it). Test build first; needs Andrea's Mac. **[ux]**
 - **«Problem melden»** (Log tab, later also next to error messages): creates the log ZIP, opens a prepared
   e-mail to andrea@frehner.tech (version, system, short template) and shows the ZIP in Finder/Explorer to
   drag into the mail. Not as a GitHub issue (public repo). Could also attach «Diagnose kopieren». **[ux]**
