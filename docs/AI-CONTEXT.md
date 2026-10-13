@@ -101,7 +101,18 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   (which app uses the microphone now). Only known call apps count – dictation tools and Voicemeeter use the
   microphone constantly. It only suggests; recording always needs the consent checkbox. The notification
   (`notify.py`) is a notification-area balloon via ctypes – no extra package, works without an AppUserModelID.
-- **Not signed** yet (Windows SmartScreen / macOS Gatekeeper warn on first install).
+- **macOS signing:** every Mac build is signed with the same self-made certificate «Verbalis Code Signing»
+  (GitHub secrets MACOS_SIGNING_CERT / MACOS_SIGNING_PASSWORD; Andrea keeps the .p12 in his password
+  manager). macOS ties microphone/audio permissions to the signature: with ad-hoc signatures every update
+  silently lost them (recordings without sound). Not notarized – Gatekeeper still warns on first start.
+- **Test builds:** Actions → «2 · Build & Release» → Run workflow on a branch with version `X.Y.Z.devN`
+  builds Windows and Mac without releasing (files at the run, login needed). Never push a dev version to
+  main – that would release it. `updates.is_newer` sorts dev builds before the release.
+- **Mac pitfalls found on real hardware (0.7.20–0.7.23):** soundcard's Windows-only warning class; no CA
+  certificates in the bundled Python (certifi via SSL_CERT_FILE); blocksize is the hardware buffer (≤ 512);
+  coreaudio waits forever for audio (`recorder._Reader`); App Translocation from «Downloads»; /Applications
+  not writable without admin (use ~/Applications); WebKit refuses the clipboard after an await (pbcopy).
+- **Not notarized / Windows not signed** yet (SmartScreen and Gatekeeper warn on first install).
 
 ## How work is delivered (important pitfalls)
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.23 – 2026-10-14
+Recording works on the Mac (tested on a MacBook Air with macOS 14.6, without an administrator account):
+- **macOS keeps its permissions across updates:** every Mac build is now signed with the same Verbalis
+  certificate. Until now each update counted as a new app, and macOS silently gave it no access to the
+  microphone and the system audio (recordings without sound). Updating to 0.7.23 asks once more; after that
+  the permissions stay. The first start still shows the Gatekeeper warning (that needs a paid Apple account).
+- **A device that delivers nothing no longer hangs the recording:** after 3 seconds without any audio
+  Verbalis stops with a clear message instead of waiting forever (it could not be stopped then).
+- **New settings tab «Diagnose»:** system and device information, an audio test in steps (microphone alone,
+  system audio alone, both, closing and reopening as when a recording starts), an internet check and
+  «Diagnose kopieren» for an e-mail – device names, no conversation content.
+- **«Kopieren» works on the Mac** (diagnosis and transcript): the Mac's window refused the clipboard.
+- macOS: when Verbalis can't replace itself (no administrator account or started from «Downloads»), the
+  update dialog says why and offers «Download öffnen». Without an administrator account, put Verbalis into
+  the personal «Programme» folder in the home folder – there it updates itself.
+- Test builds (e.g. 0.7.23.dev1, built by hand on GitHub without a release) get the next release as update.
+
 ## 0.7.22 – 2026-10-13
 Help for finding out why a Mac recording stays silent:
 - **Warning while recording** when a track delivers no audio data at all after a few seconds – with the

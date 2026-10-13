@@ -23,23 +23,14 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
    …» / «Nicht geprüft – keine Internetverbindung», button «Jetzt prüfen»; the date is when the revision
    was published, not when it was downloaded; the short id small below.
 
-## Done for the next release (not released yet)
-
-- macOS: when the app can't replace itself (no admin account, or started from «Downloads»), the update
-  dialog explains it and offers «Download öffnen» (the release ZIP) instead of only an error. Add to the
-  CHANGELOG with the next version.
-
 ## Proposed (waiting for Andrea's OK)
 
-- **Diagnostics window** – opens with 5 clicks on the «Verbalis» title (the version link opens the browser) or
-  Ctrl/Cmd+Shift+D: system and app info, devices (macOS: helper present, macOS version), the audio test as a
-  button, network check (GitHub, Hugging Face: certificates), downloaded models; «Diagnose kopieren» (redacted
-  like the log export), «Datenordner öffnen», «Problem melden». **[ux]**
 - **DMG for the first Mac install** (drag to «Programme») and, when started from «Downloads», offer to move
   itself to «Programme» and restart. The ZIP stays for automatic updates. **[ux]**
 - **«Problem melden»** (Log tab, later also next to error messages): creates the log ZIP, opens a prepared
   e-mail to andrea@frehner.tech (version, system, short template) and shows the ZIP in Finder/Explorer to
-  drag into the mail. Not as a GitHub issue (public repo). **[ux]**
+  drag into the mail. Not as a GitHub issue (public repo). Could also attach «Diagnose kopieren». **[ux]**
+- **Remove the test branch `mac-audio`** on GitHub once 0.7.23 is confirmed on the Mac. **[ops]**
 
 ## Now
 
