@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.21 – 2026-10-13
+- **macOS: recording failed at once** («blocksize must be between 15.0 and 512»). On the Mac the block size
+  sets the hardware buffer, which may be at most 512 frames; Verbalis asked for 0.1 s. It is now only given
+  on Windows; the recording still works in 0.1-second blocks on both. Windows is unchanged.
+
 ## 0.7.20 – 2026-10-13
 First test on a real Mac – two fixes:
 - **macOS: audio devices were not found** («module 'soundcard' has no attribute 'SoundcardRuntimeWarning'»),

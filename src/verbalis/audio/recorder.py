@@ -118,17 +118,22 @@ class Track(threading.Thread):
         certain size; some devices (e.g. Bluetooth headsets in hands-free mode, some USB devices)
         report a shorter one and the assertion fails. Giving the channel count explicitly avoids
         that query.
+
+        The block size is only given on Windows: there it sets the chunk size. On macOS soundcard
+        uses it as the hardware buffer, which must be at most 512 frames – 0.1 s (4800) made every
+        recording fail there. record(numframes=…) returns exactly that many frames on both.
         """
+        size = {"blocksize": block} if sys.platform == "win32" else {}
         with ExitStack() as stack:
             try:
-                rec = stack.enter_context(self.device.recorder(samplerate=self.samplerate, blocksize=block))
+                rec = stack.enter_context(self.device.recorder(samplerate=self.samplerate, **size))
             except AssertionError:
                 log.warning("Track %s: device format not readable, retrying with fixed channels",
                             self.status.name, exc_info=True)
                 channels = self.FALLBACK_CHANNELS.get(self.status.name, 1)
                 try:
                     rec = stack.enter_context(self.device.recorder(samplerate=self.samplerate,
-                                                                   channels=channels, blocksize=block))
+                                                                   channels=channels, **size))
                 except AssertionError as e:
                     raise RuntimeError(
                         f"Das Audiogerät «{getattr(self.device, 'name', '?')}» liefert ein Format, das Verbalis "

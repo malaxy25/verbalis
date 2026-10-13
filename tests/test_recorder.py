@@ -37,7 +37,7 @@ class FakeDevice:
         self.clock, self.stop, self.blocks = clock, stop, blocks
 
     @contextmanager
-    def recorder(self, samplerate, blocksize):
+    def recorder(self, samplerate, blocksize=None):
         device, count = self, {"n": 0}
 
         class Rec:
@@ -71,7 +71,7 @@ class PausingDevice(FakeDevice):
     """1 s of audio, then 2 s paused (device keeps delivering), then 1 s of audio."""
 
     @contextmanager
-    def recorder(self, samplerate, blocksize):
+    def recorder(self, samplerate, blocksize=None):
         device, count = self, {"n": 0}
 
         class Rec:
@@ -113,7 +113,7 @@ class UnreadableFormatDevice:
         self.clock, self.stop, self.works = clock, stop, works_with_channels
         self.asked = []
 
-    def recorder(self, samplerate, blocksize, channels=None):
+    def recorder(self, samplerate, blocksize=None, channels=None):
         self.asked.append(channels)
         if channels is None or not self.works:
             raise AssertionError()      # soundcard: assert blob.cbSize == 40
@@ -162,7 +162,7 @@ def test_level_monitor_measures_without_writing(tmp_path, monkeypatch):
         name = "Mic"
 
         @contextmanager
-        def recorder(self, samplerate, blocksize):
+        def recorder(self, samplerate, blocksize=None):
             class Rec:
                 def record(self, numframes):
                     time.sleep(0.01)
@@ -172,7 +172,7 @@ def test_level_monitor_measures_without_writing(tmp_path, monkeypatch):
     class Broken:
         name = "Kaputt"
 
-        def recorder(self, samplerate, blocksize):
+        def recorder(self, samplerate, blocksize=None):
             raise OSError("Gerät belegt")
 
     monitor = LevelMonitor(Endless(), Broken(), samplerate=SR)
@@ -185,3 +185,39 @@ def test_level_monitor_measures_without_writing(tmp_path, monkeypatch):
     monitor.stop()
     assert not any(t.is_alive() for t in monitor.tracks)
     assert list(tmp_path.iterdir()) == []
+
+
+class MacDevice:
+    """Like soundcard on macOS: the block size is the hardware buffer and must be ≤ 512 frames."""
+    name = "MacBook Air-Mikrofon"
+
+    def __init__(self, clock, stop):
+        self.clock, self.stop = clock, stop
+
+    def recorder(self, samplerate, channels=None, blocksize=None):
+        if blocksize is not None and not 15 <= blocksize <= 512:
+            raise TypeError("blocksize must be between 15.0 and 512")
+        device = self
+
+        @contextmanager
+        def ctx():
+            class Rec:
+                def record(self, numframes):
+                    device.clock.t += numframes / samplerate
+                    if device.clock.t >= 1.0:
+                        device.stop.set()
+                    return np.full((numframes, 1), 0.2, dtype=np.float32)
+            yield Rec()
+        return ctx()
+
+
+def test_macos_records_without_a_block_size(tmp_path, monkeypatch):
+    """0.7.20 bug on macOS: «blocksize must be between 15.0 and 512» – every recording failed at once."""
+    from verbalis.audio import recorder
+    monkeypatch.setattr(recorder.sys, "platform", "darwin")
+    clock, stop = FakeClock(), threading.Event()
+    track = Track("me", MacDevice(clock, stop), tmp_path / "me.wav", stop, t0=0.0, samplerate=SR, clock=clock)
+    track.run()
+    assert track.status.error is None
+    data, sr = sf.read(tmp_path / "me.wav")
+    assert abs(len(data) / sr - 1.0) < 0.15 and np.allclose(data, 0.2, atol=1e-3)

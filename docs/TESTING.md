@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-198 tests in 22 files.
+199 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -241,7 +241,7 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Subfolder model** – gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root.
 - **Default model is gcoli for new installations only** – 0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model.
 
-### `test_recorder.py` (7)
+### `test_recorder.py` (8)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -252,6 +252,7 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Device with unreadable format records with fixed channels** – Regression 0.7.12: «AssertionError» from soundcard stopped the recording at once.
 - **Device that cannot record explains why**
 - **Level monitor measures without writing** – 0.7.17: levels before recording – the meter tracks read the devices but create no file.
+- **Macos records without a block size** – 0.7.20 bug on macOS: «blocksize must be between 15.0 and 512» – every recording failed at once.
 
 ### `test_release_workflow.py` (6)
 

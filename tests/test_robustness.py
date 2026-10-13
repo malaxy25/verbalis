@@ -53,7 +53,7 @@ def test_recorder_refuses_to_overwrite_a_wav(tmp_path):
     class Device:
         name = "x"
 
-        def recorder(self, samplerate, blocksize):
+        def recorder(self, samplerate, blocksize=None):
             raise AssertionError("must not get this far")
 
     track = Track("me", Device(), tmp_path / "me.wav", threading.Event(), t0=0.0)

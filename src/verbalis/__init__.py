@@ -25,4 +25,4 @@ def _certificates_on_macos(platform: str | None = None) -> None:
 
 _certificates_on_macos()
 
-__version__ = "0.7.20"
+__version__ = "0.7.21"

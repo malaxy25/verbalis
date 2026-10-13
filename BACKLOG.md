@@ -4,7 +4,7 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.21 – planned and decided with Andrea (build once item 3 is measured)
+## 0.7.22 – planned and decided with Andrea (build once item 3 is measured)
 
 1. **Maximum recording time**: setting «Aufnahme automatisch beenden nach», default **2 hours** (decided),
    empty = no limit. Notice 5 minutes before («Aufnahme endet in 5 Min.», button «+30 Min.»; Windows
