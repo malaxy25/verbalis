@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.20 – 2026-10-13
+First test on a real Mac – two fixes:
+- **macOS: audio devices were not found** («module 'soundcard' has no attribute 'SoundcardRuntimeWarning'»),
+  so nothing could be recorded. The warning class only exists in soundcard's Windows part.
+- **macOS: downloads failed** («CERTIFICATE_VERIFY_FAILED»): the update check, the speaker-diarization models
+  and the spelling dictionary. The Mac app now uses the certificate list of certifi.
+- The release self-test now checks both on the Mac build.
+- README: badges for Build & Release, Dependabot and the latest version
+
 ## 0.7.19 – 2026-10-13
 - **Details per recording:** name (editable, shown in the list, the transcript and the Markdown file),
   project (free text with suggestions from earlier recordings), date and start time, participants per track

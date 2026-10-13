@@ -6,7 +6,7 @@ altgraph==0.17.5          # via macholib, pyinstaller
 anyio==4.15.1             # via httpx
 av==19.0.1                # via faster-whisper
 bottle==0.13.4            # via pywebview
-certifi==2026.7.22        # via httpcore, httpx
+certifi==2026.7.22        # via httpcore, httpx, verbalis (pyproject.toml)
 cffi==2.1.1               # via clr-loader, soundcard, soundfile
 click==8.5.0              # via huggingface-hub
 clr-loader==0.3.1 ; sys_platform == 'win32'  # via pythonnet

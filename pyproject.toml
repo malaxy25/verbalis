@@ -1,6 +1,6 @@
 [project]
 name = "verbalis"
-version = "0.7.19"
+version = "0.7.20"
 description = "Record and transcribe conversations locally (microphone + system audio), Standard and Swiss German"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,6 +14,7 @@ dependencies = [
     "pywebview>=5",
     "spylls>=0.1.7",
     "sherpa-onnx>=1.12",          # speaker diarization (Apache 2.0)
+    "certifi",                    # CA certificates for HTTPS in the Mac app (its Python has none)
 ]
 
 [project.optional-dependencies]

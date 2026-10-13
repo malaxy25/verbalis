@@ -25,8 +25,11 @@ def soundcard_module():
     """Import soundcard lazily (on Linux it needs libpulse)."""
     import soundcard as sc
 
-    # Windows often reports "data discontinuity" on short glitches – harmless.
-    warnings.filterwarnings("ignore", category=sc.SoundcardRuntimeWarning)
+    # Windows often reports "data discontinuity" on short glitches – harmless. The warning class only
+    # exists in soundcard's Windows backend: on macOS asking for it made every device lookup fail.
+    runtime_warning = getattr(sc, "SoundcardRuntimeWarning", None)
+    if runtime_warning is not None:
+        warnings.filterwarnings("ignore", category=runtime_warning)
     if sys.platform == "win32":
         # devices whose format soundcard can't handle (e.g. Jabra Link 380), see wasapi_fix.py
         from . import wasapi_fix

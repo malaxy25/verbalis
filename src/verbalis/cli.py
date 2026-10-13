@@ -371,7 +371,8 @@ def cmd_selftest(_args) -> int:
 
     def audio_devices_library():
         if sys.platform in ("win32", "darwin"):  # on Linux it needs a running PulseAudio
-            importlib.import_module("soundcard")
+            from .audio.devices import soundcard_module
+            soundcard_module()   # Verbalis' own entry point, not just the import (0.7.19 failed on macOS there)
 
     check("Audio komprimieren und lesen", audio_roundtrip)
     check("Stillefilter (Silero VAD)", silence_filter)
@@ -379,6 +380,14 @@ def cmd_selftest(_args) -> int:
     check("Oberfläche (index.html, Icon)", user_interface)
     check("Fenster (pywebview)", window_library)
     check("Audiogeräte (soundcard)", audio_devices_library)
+
+    def certificates():
+        import os
+        if sys.platform == "darwin":   # see verbalis/__init__.py: the Mac app's Python has no certificates
+            path = os.environ.get("SSL_CERT_FILE", "")
+            assert path and os.path.exists(path), f"Zertifikatsliste fehlt ({path or 'SSL_CERT_FILE leer'})"
+
+    check("Zertifikate für HTTPS", certificates)
     check("Rechtschreibung (spylls)", lambda: importlib.import_module("spylls.hunspell"))
 
     def system_audio_helper():

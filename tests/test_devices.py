@@ -93,3 +93,14 @@ def test_no_microphone_at_all_explains_what_to_do(monkeypatch):
     assert names["default_microphone"] == "" and "kein Mikrofon" in names["problems"][0]
     with pytest.raises(ValueError, match="kein Mikrofon"):
         devices.select(None, None)
+
+
+def test_soundcard_without_the_windows_warning_class(monkeypatch):
+    """0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
+    the class only exists in soundcard's Windows backend, so no device could be listed on a Mac."""
+    import sys
+    import types
+    mac_soundcard = types.ModuleType("soundcard")      # like soundcard on macOS: coreaudio backend only
+    monkeypatch.setitem(sys.modules, "soundcard", mac_soundcard)
+    monkeypatch.setattr(devices.sys, "platform", "darwin")
+    assert devices.soundcard_module() is mac_soundcard

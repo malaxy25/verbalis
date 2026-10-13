@@ -189,3 +189,21 @@ def test_check_reads_the_github_digest_and_name(monkeypatch):
     assert info["installer_sha256"] == "abc123" and info["installer_size"] == 5
     assert updates.expected_name(info)
     assert not updates.expected_name({**info, "installer_name": "Verbalis-98.0.0-setup.exe"})
+
+
+def test_mac_app_finds_certificates(monkeypatch):
+    """0.7.19 bug on macOS: the update check failed with «CERTIFICATE_VERIFY_FAILED» – the Python
+    inside the Mac app has no CA certificates. certifi's are used instead."""
+    import os
+
+    import certifi
+
+    import verbalis
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    verbalis._certificates_on_macos("win32")
+    assert "SSL_CERT_FILE" not in os.environ                 # Windows uses its own certificate store
+    verbalis._certificates_on_macos("darwin")
+    assert os.environ["SSL_CERT_FILE"] == certifi.where() and os.path.exists(certifi.where())
+    monkeypatch.setenv("SSL_CERT_FILE", "/company/ca.pem")
+    verbalis._certificates_on_macos("darwin")
+    assert os.environ["SSL_CERT_FILE"] == "/company/ca.pem"  # a certificate file set by IT wins

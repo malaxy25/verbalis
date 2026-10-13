@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-196 tests in 22 files.
+198 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -142,7 +142,7 @@ Recording details (name, project, participants, notes) and planned recordings.
 - **Planned recording is recorded into with its details**
 - **Planned recording can be deleted**
 
-### `test_devices.py` (5)
+### `test_devices.py` (6)
 
 Device selection, including macOS where the others' voices come from a virtual input device.
 
@@ -151,6 +151,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Mac without virtual device explains what to do**
 - **Missing default device does not break the list** – Regression 0.7.11: on a PC without a default microphone both device lists stayed empty.
 - **No microphone at all explains what to do**
+- **Soundcard without the windows warning class** – 0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
 
 ### `test_diarization.py` (17)
 
@@ -348,7 +349,7 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Short answer after a question stays a paragraph**
 - **Aside in markdown and json**
 
-### `test_updates.py` (15)
+### `test_updates.py` (16)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -367,6 +368,7 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Check picks the asset for this platform**
 - **Download checks sha256 and size**
 - **Check reads the github digest and name**
+- **Mac app finds certificates** – 0.7.19 bug on macOS: the update check failed with «CERTIFICATE_VERIFY_FAILED» – the Python
 
 ### `test_wasapi_fix.py` (5)
 
