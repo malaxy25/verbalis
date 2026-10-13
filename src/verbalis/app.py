@@ -40,8 +40,11 @@ class Api:
     def version(self):
         return {"ok": True, "data": __version__}
 
-    def state(self):
-        return self._call(self._s.state)
+    def state(self, focused=False):
+        return self._call(self._s.state, bool(focused))
+
+    def dismiss_call(self):
+        return self._call(self._s.dismiss_call)
 
     def settings(self):
         return self._call(self._s.settings)
@@ -55,8 +58,17 @@ class Api:
     def models(self):
         return self._call(self._s.models)
 
-    def start_recording(self, microphone, speakers, consent):
-        return self._call(self._s.start_recording, microphone, speakers, bool(consent))
+    def start_recording(self, microphone, speakers, consent, planned_id=""):
+        return self._call(self._s.start_recording, microphone, speakers, bool(consent), planned_id or "")
+
+    def plan_recording(self, data=None):
+        return self._call(self._s.plan_recording, data)
+
+    def update_details(self, recording_id, data):
+        return self._call(self._s.update_details, recording_id, data)
+
+    def projects(self):
+        return self._call(self._s.projects)
 
     def preview_levels(self, microphone, speakers):
         return self._call(self._s.preview_levels, microphone or "", speakers or "")
@@ -298,9 +310,21 @@ def start() -> None:
             service.save_settings({"window_size": last_size["value"]})
         service.shutdown()  # save a running recording properly
 
+    def bring_to_front() -> None:   # click on the «call recognised» notification
+        try:
+            window.restore()
+            window.show()
+        except Exception:
+            log.exception("Could not bring the window to the front")
+
+    from .notify import TrayNotifier
+    notifier = TrayNotifier(ICON, bring_to_front)
+    service.call_notifier = notifier if notifier.available else None
+
     api._window = window
     window.events.resized += remember_size
     window.events.closing += on_closing
+    window.events.closing += notifier.close
     webview.start(icon=str(ICON))
 
 

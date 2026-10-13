@@ -94,6 +94,13 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   timestamps are only kept in the partial file, not in `transcript.json`.
   sherpa-onnx bundles its own onnxruntime next to faster-whisper's – the release self-test runs both
   in one process with the real models on Windows and macOS.
+- **Recording details** (0.7.19) live in `meta.json` (`title`, `project`, `participants`, `notes`); they
+  survive the rewrite at the end of a recording (`pipeline.DETAIL_FIELDS`). A planned recording is a folder
+  with only `meta.json` and `state: planned`; recording into it keeps the id.
+- **Call detection** (`audio/call_detect.py`, Windows): reads the microphone consent store in the registry
+  (which app uses the microphone now). Only known call apps count – dictation tools and Voicemeeter use the
+  microphone constantly. It only suggests; recording always needs the consent checkbox. The notification
+  (`notify.py`) is a notification-area balloon via ctypes – no extra package, works without an AppUserModelID.
 - **Not signed** yet (Windows SmartScreen / macOS Gatekeeper warn on first install).
 
 ## How work is delivered (important pitfalls)

@@ -57,6 +57,9 @@ CLEANUP_EVERY_S = 3600        # additionally every hour while the app stays open
 SOUND_DB = -55.0              # louder than this counts as "something is coming through"
 MAX_CLIP_S = 120.0            # longest passage played at once
 MAX_PEOPLE = 30               # «Anzahl Personen» when re-assigning speakers
+CALL_CHECK_S = 3.0            # how often to look for a call app using the microphone
+PLANNED_DUE_S = 30 * 60       # a planned recording this close to now is offered when a call starts
+UI_FOCUS_S = 2.0              # the window counts as «in front» if it said so this recently
 PREVIEW_IDLE_S = 3.0          # level meters before a recording: close the devices when the UI stops asking
 MB = 1024 * 1024              # as shown in Windows Explorer
 log = logging.getLogger(__name__)
@@ -87,6 +90,7 @@ class Service:
         speller: Speller | None = None,
         check_updates_on_start: bool = False,
         monitor_factory: Callable | None = None,
+        detect_calls: Callable | None = None,
     ):
         self._lock = threading.RLock()
         self._s = settings or Settings.load()
@@ -99,6 +103,9 @@ class Service:
         self._monitor_key: tuple | None = None
         self._monitor_asked = 0.0         # when the UI last asked for levels (monotonic)
         self._monitor_failed: tuple | None = None   # (devices, when) – don't retry 4× a second
+        self._call: dict | None = None    # a call app uses the microphone: {"apps", "dismissed", "planned"}
+        self._ui_focused = 0.0            # when the window last said it is in front (monotonic)
+        self.call_notifier = None         # set by the app: shows a Windows notification (show/hide)
 
         self._rec = None
         self._rec_info: dict = {}
@@ -135,6 +142,11 @@ class Service:
             log.exception("Checking for cut-off transcriptions failed")
         if cleanup_on_start:
             self._queue.put(CLEANUP)  # check old audio files
+        if detect_calls is None and sys.platform == "win32":
+            from .audio.call_detect import detect as detect_calls
+        if detect_calls is not None:
+            threading.Thread(target=self._watch_calls, args=(detect_calls,), name="call-detection",
+                             daemon=True).start()
         if check_updates_on_start and self._s.update_check == "on":
             threading.Thread(target=self._check_updates_safely, name="update-check", daemon=True).start()
 
@@ -309,6 +321,64 @@ class Service:
                             "Details auf der Modellseite in den Einstellungen.")
             log.info("Model %s updated %s → %s", model, before["revision"][:7], after["revision"][:7])
 
+    # ------------------------------------------------------------ recognising calls
+
+    def _watch_calls(self, detect: Callable[[], list[str]]) -> None:
+        while not self._stopping.wait(CALL_CHECK_S):
+            try:
+                self._check_call(detect)
+            except Exception:
+                log.exception("Call detection failed")
+
+    def _check_call(self, detect: Callable[[], list[str]]) -> None:
+        """One look: did a call start (suggest recording) or end (forget it)?"""
+        if self._s.call_detection != "on" or self._rec is not None:
+            apps = []
+        else:
+            apps = detect()
+        with self._lock:
+            started = bool(apps) and self._call is None
+            ended = not apps and self._call is not None
+            if started:
+                self._call = {"apps": apps, "dismissed": False, "planned": self._due_planned()}
+            elif ended:
+                self._call = None
+            call = self._call
+        if started:
+            log.info("Call recognised (%s) – suggesting a recording", ", ".join(apps))
+            in_front = time.monotonic() - self._ui_focused < UI_FOCUS_S
+            if self.call_notifier is not None and not in_front:
+                planned = call["planned"]
+                text = (f"Geplant: {planned['title']}. " if planned else "") + \
+                       "Klicken, um Verbalis zu öffnen – aufgenommen wird erst, wenn du die Zustimmung bestätigst."
+                self.call_notifier.show(f"{apps[0]}-Call erkannt – aufnehmen?", text)
+        elif ended and self.call_notifier is not None:
+            self.call_notifier.hide()
+
+    def _due_planned(self) -> dict | None:
+        """The planned recording closest to now, if it is within PLANNED_DUE_S."""
+        now = datetime.now().astimezone()
+        best = None
+        base = self._s.recordings
+        for folder in (base.iterdir() if base.exists() else []):
+            if not folder.is_dir() or not VALID_ID.match(folder.name):
+                continue
+            meta = pipeline.read_meta(folder)
+            start = _parse_time(meta.get("start")) if meta.get("state") == pipeline.PLANNED else None
+            if start is not None and abs((start - now).total_seconds()) <= PLANNED_DUE_S:
+                distance = abs((start - now).total_seconds())
+                if best is None or distance < best[0]:
+                    best = (distance, {"id": folder.name, "title": meta.get("title") or pipeline.default_title(start)})
+        return best[1] if best else None
+
+    def dismiss_call(self) -> None:
+        """«Nicht aufnehmen»: don't ask again during this call."""
+        with self._lock:
+            if self._call is not None:
+                self._call["dismissed"] = True
+        if self.call_notifier is not None:
+            self.call_notifier.hide()
+
     # ------------------------------------------------------------ levels before recording
 
     def preview_levels(self, microphone: str = "", speakers: str = "") -> dict | None:
@@ -370,7 +440,9 @@ class Service:
 
     # ------------------------------------------------------------ recording
 
-    def start_recording(self, microphone: str = "", speakers: str = "", consent: bool = False) -> str:
+    def start_recording(self, microphone: str = "", speakers: str = "", consent: bool = False,
+                        planned_id: str = "") -> str:
+        """planned_id: record into this planned recording (its details stay)."""
         with self._lock:
             if self._rec is not None:
                 raise RuntimeError("Es läuft bereits eine Aufnahme.")
@@ -382,14 +454,26 @@ class Service:
                 raise RuntimeError(f"Zu wenig Speicherplatz für eine Aufnahme (noch {free:.0f} MB frei). "
                                    "Bitte Platz schaffen, z.B. alte Audiodateien löschen.")
             self._close_monitor()   # free the devices for the recording
+            if self._call is not None:
+                self._call["dismissed"] = True   # being recorded: no more suggestion
+                if self.call_notifier is not None:
+                    self.call_notifier.hide()
             devices = self._select_devices(microphone or None, speakers or None)
             start = datetime.now().astimezone()
-            folder = self._new_folder(start)
+            known = {}
+            if planned_id:
+                folder = self._path(planned_id)
+                meta = pipeline.read_meta(folder)
+                if meta.get("state") != pipeline.PLANNED or pipeline.has_audio(folder):
+                    raise RuntimeError("Diese geplante Aufnahme gibt es nicht mehr oder sie wurde schon aufgenommen.")
+                known = {**pipeline.details(meta), "planned_start": meta.get("start")}
+            else:
+                folder = self._new_folder(start)
             consent = datetime.now().astimezone().isoformat(timespec="seconds")
             names = {"me": devices.microphone.name, "others": devices.loopback.name}
             rec = self._recorder_factory(devices.microphone, devices.loopback, folder)
             # consent and start are on disk before the first sample – they survive a crash
-            pipeline.start_meta(folder, start, getattr(rec, "samplerate", 48_000), consent, names)
+            pipeline.start_meta(folder, start, getattr(rec, "samplerate", 48_000), consent, names, known)
             rec.start()
 
             self._rec = rec
@@ -1240,9 +1324,11 @@ class Service:
             raise ValueError(f"Ungültige Aufnahme: {recording_id!r}")
         return self._s.recordings / recording_id
 
-    def _status(self, recording_id: str, folder: Path) -> str:
+    def _status(self, recording_id: str, folder: Path, meta: dict | None = None) -> str:
         if self._rec_info.get("id") == recording_id:
             return "recording"
+        if (meta or {}).get("state") == pipeline.PLANNED:
+            return "planned"
         if self._job and self._job["id"] == recording_id:
             return "paused" if self._pause_reason() and self._job["start"] is not None else "running"
         if recording_id in self._queued:
@@ -1269,7 +1355,7 @@ class Service:
                     "id": folder.name,
                     "start": meta.get("start") or folder.name,
                     "duration_s": meta.get("duration_s"),
-                    "status": self._status(folder.name, folder),
+                    "status": self._status(folder.name, folder, meta),
                     "state": "damaged" if meta.get("damaged") else meta.get("state", pipeline.COMPLETE),
                     "problem": meta.get("problem"),
                     "missing_tracks": pipeline.missing_tracks(folder) if audio else [],
@@ -1279,8 +1365,73 @@ class Service:
                     "audio_delete": self._deletion_date(folder) if audio else None,
                     "keep_audio": bool(meta.get("keep_audio")),
                     "people": meta.get("people") or {},
+                    "title": meta.get("title") or pipeline.default_title(_parse_time(meta.get("start"))
+                                                                         or pipeline.recording_start(folder)),
+                    "project": meta.get("project") or "",
+                    "participants": meta.get("participants") or {},
+                    "notes": meta.get("notes") or "",
                 })
         return result
+
+    # ------------------------------------------------------------ details and planned recordings
+
+    def plan_recording(self, data: dict | None = None) -> str:
+        """A planned recording: its details are entered now, the audio is recorded later into it."""
+        data = dict(data or {})
+        start = _parse_time(data.pop("start", None)) or _next_half_hour()
+        with self._lock:
+            folder = self._new_folder(start)
+            pipeline.write_json_atomic(folder / "meta.json", {"app_version": __version__, "state": pipeline.PLANNED,
+                                                              "start": start.isoformat(timespec="seconds")})
+        self.update_details(folder.name, data)
+        log.info("Recording %s planned", folder.name)
+        return folder.name
+
+    def update_details(self, recording_id: str, data: dict) -> dict:
+        """Name, project, participants, notes – and for a planned recording its start."""
+        folder = self._path(recording_id)
+        meta = pipeline.read_meta(folder)
+        if not meta or meta.get("damaged"):
+            raise ValueError("Die Angaben dieser Aufnahme lassen sich nicht ändern (meta.json fehlt oder ist defekt).")
+        changes: dict = {}
+        if "title" in data:
+            changes["title"] = _clean_text(data["title"], 200)
+        if "project" in data:
+            changes["project"] = _clean_text(data["project"], 100)
+        if "notes" in data:
+            changes["notes"] = str(data["notes"] or "").strip()[:10_000]
+        if "participants" in data:
+            changes["participants"] = {t: _names(v) for t, v in (data["participants"] or {}).items()
+                                       if t in pipeline.TRACKS}
+        if "start" in data:
+            if meta.get("state") != pipeline.PLANNED:
+                raise ValueError("Datum und Startzeit ergeben sich aus der Aufnahme und lassen sich nicht ändern.")
+            start = _parse_time(data["start"])
+            if start is None:
+                raise ValueError("Bitte ein gültiges Datum mit Uhrzeit angeben.")
+            changes["start"] = start.isoformat(timespec="seconds")
+        pipeline.update_meta(folder, **changes)
+        if ("title" in changes or "project" in changes) and (folder / "transcript.json").exists():
+            _, transcript = self._transcript_data(recording_id)
+            meta = pipeline.read_meta(folder)
+            transcript["title"] = meta.get("title") or pipeline.default_title(pipeline.recording_start(folder))
+            transcript.setdefault("header", {}).pop("Projekt", None)
+            if meta.get("project"):
+                transcript["header"]["Projekt"] = meta["project"]
+            self._write_transcript(folder, transcript)
+        return pipeline.details(pipeline.read_meta(folder))
+
+    def projects(self) -> list[str]:
+        """Projects of earlier recordings – suggestions while typing."""
+        base = self._s.recordings
+        found: dict[str, str] = {}
+        if base.exists():
+            for folder in base.iterdir():
+                if folder.is_dir() and VALID_ID.match(folder.name):
+                    project = pipeline.read_meta(folder).get("project")
+                    if project:
+                        found.setdefault(project.lower(), project)
+        return sorted(found.values(), key=str.lower)
 
     def transcript(self, recording_id: str) -> dict | None:
         folder = self._path(recording_id)
@@ -1310,8 +1461,14 @@ class Service:
 
     # ------------------------------------------------------------ state for the UI
 
-    def state(self) -> dict:
+    def state(self, focused: bool = False) -> dict:
+        """focused: the window is in front – then a recognised call is shown there, not as a notification."""
+        if focused:
+            self._ui_focused = time.monotonic()
         with self._lock:
+            call = None
+            if self._call is not None and not self._call["dismissed"] and self._rec is None:
+                call = {"app": self._call["apps"][0], "planned": self._call["planned"]}
             rec, info = self._rec, self._rec_info
             recording = None
             if rec is not None and rec.running:  # stopped by itself = a track failed
@@ -1353,6 +1510,7 @@ class Service:
                 "model_updates": (sorted(self._model_updates[1]) if self._model_updates and self._model_updates[1]
                                   and not self._model_updates_dismissed else []),
                 "model_download": dict(self._model_download) if self._model_download else None,
+                "call": call,
                 "update_progress": self._update_progress}
 
     def shutdown(self, wait_s: float = 0.0) -> None:
@@ -1395,3 +1553,34 @@ def _wav_url(samples, rate: int) -> str:
     buffer = io.BytesIO()
     sf.write(buffer, samples, rate, format="WAV", subtype="PCM_16")
     return "data:audio/wav;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _parse_time(value) -> datetime | None:
+    """An ISO date-time (from meta.json or the date field of the UI), with the local time zone if it has none."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.astimezone()
+
+
+def _next_half_hour() -> datetime:
+    now = datetime.now().astimezone().replace(second=0, microsecond=0)
+    return now + timedelta(minutes=30 - now.minute % 30)
+
+
+def _clean_text(value, limit: int) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
+def _names(value) -> list[str]:
+    """Participants from a list or from text with one name per line or separated by commas."""
+    items = value if isinstance(value, list) else re.split(r"[\n,;]", str(value or ""))
+    names: list[str] = []
+    for item in items:
+        name = _clean_text(item, 80)
+        if name and name.lower() not in (n.lower() for n in names):
+            names.append(name)
+    return names[:MAX_PEOPLE]

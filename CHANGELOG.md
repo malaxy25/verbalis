@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.19 – 2026-10-13
+- **Details per recording:** name (editable, shown in the list, the transcript and the Markdown file),
+  project (free text with suggestions from earlier recordings), date and start time, participants per track
+  («Am Mikrofon», «Im Call») and notes. Participants preset the number of people and can be chosen as
+  names in the speaker box. Details entered during a recording are kept.
+- **Plan a recording:** «+» in the list creates a planned recording with all details. At the meeting select
+  it, confirm consent and record – the audio goes into that entry.
+- **List grouped by time:** «Geplant», «Heute», «Diese Woche», «Letzte Woche», then by month; groups can be
+  collapsed.
+- **Calls are recognised (Windows):** when Teams, Zoom, Webex, Slack, Skype, Discord or a browser uses the
+  microphone, Verbalis suggests recording – in the window, or as a Windows notification when it is in the
+  background (a click brings Verbalis to the front). A planned recording due within 30 minutes is offered.
+  Verbalis never records by itself; consent is still confirmed with the checkbox. Dictation tools and audio
+  mixers are ignored. Setting «Calls erkennen» (on by default).
+
 ## 0.7.18 – 2026-10-13
 - **Step-by-step transcription:** long calls are transcribed in pieces of about two minutes, cut in speech
   pauses, both tracks alternately. What is finished shows below the progress bar while it runs (read-only,

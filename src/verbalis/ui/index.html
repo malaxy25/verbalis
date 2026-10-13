@@ -65,6 +65,23 @@
     font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
     margin: 0; padding: 20px 20px 12px;
   }
+  .history-head { display: flex; align-items: center; justify-content: space-between; padding-right: 14px; }
+  .plan-button {
+    width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+    cursor: pointer; font-size: 18px; line-height: 1; color: var(--ink);
+  }
+  .plan-button:hover { border-color: var(--ink); }
+  .list .group { margin-top: 6px; }
+  .list .group-head {
+    display: flex; gap: 4px; align-items: center; padding: 6px 12px 4px; font-size: 12px; font-weight: 600;
+    letter-spacing: .03em; text-transform: uppercase; color: var(--muted);
+  }
+  .list .group-head:hover { background: none; color: var(--ink); }
+  .list .group-head .chevron { width: 1em; }
+  .list .group-count { margin-left: auto; font-weight: 400; }
+  .list .when { grid-column: 1 / -1; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list .date { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list .status.is-planned { color: var(--limmat); }
   .list { list-style: none; margin: 0; padding: 0 10px; overflow-y: auto; flex: 1; }
   .list button {
     width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
@@ -229,6 +246,31 @@
     background: var(--limmat-soft); color: var(--ink); display: flex; gap: 12px; align-items: flex-start;
   }
   .notice[hidden] { display: none; }
+  .call-notice {
+    grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--limmat);
+    background: var(--limmat-soft); color: var(--ink); display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+  }
+  .call-notice[hidden] { display: none; }
+  .call-notice span { flex: 1 1 24em; }
+  .target-hint { grid-column: 1 / -1; margin: 0; font-size: 14px; color: var(--limmat); font-weight: 600; }
+  .target-hint[hidden] { display: none; }
+  .details-panel { max-width: 52em; display: grid; gap: 10px; margin-bottom: 16px; }
+  .title-input {
+    font-size: 22px; font-weight: 600; letter-spacing: -0.01em; border: 1px solid transparent; border-radius: 6px;
+    padding: 2px 6px; margin-left: -7px; background: none; width: 100%;
+  }
+  .title-input:hover { border-color: var(--line); }
+  .title-input:focus { border-color: var(--limmat); background: var(--surface); }
+  .details-row { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: end; font-size: 14px; }
+  .details-row label { display: grid; gap: 2px; }
+  .details-row label > span { font-size: 13px; color: var(--muted); }
+  .details-row input { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  .details-row input[list] { width: 16em; }
+  .details-row .saved { color: var(--muted); font-size: 12px; align-self: center; }
+  .when-text { padding: 5px 0; }
+  .details-more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  .details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: 12px 20px; margin: 10px 0 6px; }
+  .details-grid textarea { padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); resize: vertical; font: inherit; font-size: 14px; }
   .notice span { flex: 1; }
   .notice button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
   .notice button:hover { color: var(--ink); }
@@ -478,7 +520,10 @@
 <body>
 
 <aside class="history" aria-label="Aufnahmen">
-  <h1>Verbalis</h1>
+  <div class="history-head">
+    <h1>Verbalis</h1>
+    <button type="button" class="plan-button" id="btn-plan" title="Aufnahme planen: Name, Projekt und Teilnehmende schon vorher erfassen" aria-label="Aufnahme planen">+</button>
+  </div>
   <ol class="list" id="list"></ol>
   <footer>
     <button type="button" class="update-banner" id="btn-update" hidden></button>
@@ -531,6 +576,12 @@
 
     <p class="silent-hint" id="silent-hint" role="status" hidden></p>
     <p class="disk-hint" id="disk-hint" role="status" hidden></p>
+    <p class="target-hint" id="target-hint" hidden></p>
+    <div class="call-notice" id="call-notice" role="status" hidden>
+      <span id="call-text"></span>
+      <button type="button" class="action" id="btn-call-planned" hidden></button>
+      <button type="button" class="action" id="btn-call-dismiss">Nicht aufnehmen</button>
+    </div>
     <p class="notice" id="notice" role="status" hidden><span id="notice-text"></span><button type="button" id="btn-notice-close" aria-label="Hinweis schliessen" title="Schliessen">×</button></p>
     <p class="message" id="message" role="alert" hidden><span id="message-text"></span><button type="button" id="btn-message-close" aria-label="Meldung schliessen" title="Schliessen">×</button></p>
   </section>
@@ -588,6 +639,11 @@
             <input type="text" name="recordings_dir" autocomplete="off" spellcheck="false">
             <small id="folder-hint"></small>
           </label>
+          <div class="field">
+            <span>Calls erkennen</span>
+            <label class="consent-like"><input type="checkbox" name="call_detection"> Aufnahme vorschlagen, wenn Teams, Zoom, Webex, Slack oder ein Browser das Mikrofon benutzt</label>
+            <small>Verbalis schlägt nur vor – aufgenommen wird erst, wenn du die Zustimmung bestätigst und startest. Ist Verbalis im Hintergrund, kommt eine Windows-Benachrichtigung.</small>
+          </div>
         </div>
       </section>
       <section class="tab-panel columns" id="panel-transcription" role="tabpanel" aria-labelledby="tab-transcription" hidden>
@@ -768,6 +824,7 @@ function longDate(a) {
 }
 
 const STATUS_TEXT = {
+  planned: "Geplant",
   recording: "Aufnahme läuft",
   queued: "Wartet auf Transkription",
   running: "Wird transkribiert",
@@ -792,27 +849,85 @@ async function loadList() {
   renderContent();
 }
 
+/* Groups in the list: planned first (soonest at the top), then by time. */
+function groupOf(a) {
+  if (a.status === "planned") return { key: "planned", label: "Geplant" };
+  const d = startDate(a);
+  if (!d) return { key: "older", label: "Älter" };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const lastMonday = new Date(monday);
+  lastMonday.setDate(monday.getDate() - 7);
+  if (d >= today) return { key: "today", label: "Heute" };
+  if (d >= monday) return { key: "week", label: "Diese Woche" };
+  if (d >= lastMonday) return { key: "lastweek", label: "Letzte Woche" };
+  const month = d.toLocaleDateString("de-CH", { month: "long", year: "numeric" });
+  return { key: `month-${d.getFullYear()}-${d.getMonth()}`, label: month };
+}
+
+function collapsedGroups() {
+  try { return new Set(JSON.parse(localStorage.getItem("verbalis.collapsed") || "[]")); } catch (_) { return new Set(); }
+}
+
+function toggleGroup(key) {
+  const groups = collapsedGroups();
+  if (groups.has(key)) groups.delete(key); else groups.add(key);
+  try { localStorage.setItem("verbalis.collapsed", JSON.stringify([...groups])); } catch (_) { /* only for this session */ }
+  state.collapsed = groups;
+  renderList();
+}
+
 function renderList() {
   const list = $("list");
   list.replaceChildren();
   if (!state.recordings.length) {
-    list.append(element("li", { class: "list-empty" }, "Noch keine Aufnahmen."));
+    list.append(element("li", { class: "list-empty" }, "Noch keine Aufnahmen. Mit + lässt sich eine Aufnahme planen."));
     return;
   }
-  for (const a of state.recordings) {
-    const statusClass = { running: "is-active", paused: "is-active", queued: "is-active", error: "is-error", recording: "is-recording" }[a.status] || "";
+  const collapsed = state.collapsed || (state.collapsed = collapsedGroups());
+  const planned = state.recordings.filter((a) => a.status === "planned")
+    .sort((x, y) => (startDate(x) || 0) - (startDate(y) || 0));
+  const ordered = [...planned, ...state.recordings.filter((a) => a.status !== "planned")];
+  let current = null, items = null;
+  for (const a of ordered) {
+    const group = groupOf(a);
+    if (!current || group.key !== current.key) {
+      current = group;
+      const closed = collapsed.has(group.key) && !(a.id === state.selected);
+      const count = ordered.filter((x) => groupOf(x).key === group.key).length;
+      list.append(element("li", { class: "group" }, element("button", {
+        type: "button", class: "group-head", "aria-expanded": String(!closed),
+        onclick: () => toggleGroup(group.key) }, element("span", { class: "chevron", "aria-hidden": "true" }, closed ? "▸" : "▾"),
+        ` ${group.label}`, element("span", { class: "group-count" }, String(count)))));
+      items = closed ? null : list;
+    }
+    if (!items) continue;
+    const statusClass = { running: "is-active", paused: "is-active", queued: "is-active", error: "is-error", recording: "is-recording", planned: "is-planned" }[a.status] || "";
     const button = element("button", {
         type: "button",
         "aria-current": String(a.id === state.selected),
         onclick: () => { state.selected = a.id; renderList(); renderContent(); },
       },
-      element("span", { class: "date" }, shortDate(a)),
+      element("span", { class: "date" }, a.title || shortDate(a)),
       element("span", { class: "duration" }, a.duration_s != null ? timeText(a.duration_s) : ""),
+      element("span", { class: "when" }, [shortDate(a), a.project].filter(Boolean).join(" · ")),
       element("span", { class: `status ${statusClass}` }, STATUS_TEXT[a.status] || ""),
       STATE_SHORT[a.state] ? element("span", { class: "flag", title: STATE_TEXT[a.state] }, STATE_SHORT[a.state]) : null,
     );
-    list.append(element("li", {}, button));
+    items.append(element("li", {}, button));
   }
+}
+
+async function planRecording() {
+  try {
+    const id = await call("plan_recording", {});
+    state.selected = id;
+    state.listSignature = "";
+    state.focusTitle = id;     // the new entry's name field gets the focus
+    await loadList();
+  } catch (e) { showMessage(e.message); }
 }
 
 /* ---------- Content ---------- */
@@ -843,10 +958,20 @@ async function renderContent(force = false) {
   }, text);
 
   switch (a.status) {
+    case "planned":
+      content.replaceChildren(detailsPanel(a, true), element("div", { class: "empty" },
+        element("h2", {}, "Geplante Aufnahme"),
+        element("p", {}, "Zur Meeting-Zeit diesen Eintrag auswählen, die Zustimmung aller Teilnehmenden bestätigen und mit dem "
+          + "roten Knopf aufnehmen – die Aufnahme kommt in diesen Eintrag, mit allen Angaben."),
+        element("div", { class: "actions" }, deleteRecordingButton(a.id, "Geplante Aufnahme löschen")),
+      ));
+      return;
     case "recording":
-      content.replaceChildren(element("div", { class: "empty" },
+      content.replaceChildren(detailsPanel(a), element("div", { class: "empty" },
         element("h2", {}, "Aufnahme läuft"),
-        element("p", {}, "Das Transkript wird nach dem Beenden der Aufnahme automatisch erstellt."),
+        element("p", {}, state.settings.auto_transcribe === "on"
+          ? "Das Transkript wird nach dem Beenden der Aufnahme automatisch erstellt."
+          : "Nach dem Beenden: Anzahl Personen prüfen und «Transkribieren» wählen. Name, Projekt und Teilnehmende lassen sich schon jetzt erfassen."),
       ));
       return;
     case "queued":
@@ -890,7 +1015,7 @@ async function renderContent(force = false) {
       return;
     case "none": {
       const people = a.audio ? peopleFields(a) : null;
-      content.replaceChildren(element("div", { class: "empty" },
+      content.replaceChildren(detailsPanel(a), element("div", { class: "empty" },
         element("h2", {}, a.audio ? "Bereit zum Transkribieren" : "Noch kein Transkript"),
         problemBox(a),
         element("p", {}, a.audio
@@ -929,13 +1054,80 @@ function problemBox(a) {
   );
 }
 
+/* Details of a recording: name, project, date, participants, notes. Each field saves itself when it is left. */
+function detailsPanel(a, open = false) {
+  const saved = element("span", { class: "saved", "aria-live": "polite" });
+  const save = async (data) => {
+    try {
+      await call("update_details", a.id, data);
+      saved.textContent = "gespeichert";
+      setTimeout(() => { saved.textContent = ""; }, 2000);
+      state.listSignature = "";
+      await loadList();
+    } catch (e) { showMessage(e.message); }
+  };
+  const title = element("input", { type: "text", class: "title-input", "aria-label": "Name der Aufnahme",
+    maxlength: "200", autocomplete: "off", placeholder: "Name der Aufnahme" });
+  title.value = a.title || "";
+  title.addEventListener("change", () => save({ title: title.value }));
+  title.addEventListener("keydown", (event) => { if (event.key === "Enter") title.blur(); });
+  if (state.focusTitle === a.id) {
+    state.focusTitle = null;
+    setTimeout(() => { title.focus(); title.select(); }, 0);
+  }
+
+  const projects = element("datalist", { id: `projects-${a.id}` });
+  call("projects").then((names) => projects.replaceChildren(...names.map((n) => element("option", { value: n })))).catch(() => {});
+  const project = element("input", { type: "text", list: projects.id, maxlength: "100", autocomplete: "off",
+    placeholder: "z.B. Kunde oder Projekt", "aria-label": "Projekt" });
+  project.value = a.project || "";
+  project.addEventListener("change", () => save({ project: project.value }));
+
+  let when;
+  if (a.status === "planned") {
+    when = element("input", { type: "datetime-local", "aria-label": "Datum und Startzeit" });
+    const d = startDate(a);
+    if (d) when.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    when.addEventListener("change", () => when.value && save({ start: when.value }));
+  } else {
+    when = element("span", { class: "when-text" }, longDate(a));
+  }
+
+  const lines = (track) => ((a.participants || {})[track] || []).join("\n");
+  const area = (label, value, onSave, rows = 3) => {
+    const field = element("textarea", { rows: String(rows), "aria-label": label });
+    field.value = value;
+    field.addEventListener("change", () => onSave(field.value));
+    return element("label", { class: "field" }, element("span", {}, label), field);
+  };
+  const participants = (track, text) => area(text, lines(track),
+    (value) => save({ participants: { ...(a.participants || {}), [track]: value } }));
+  const more = element("details", { class: "details-more" },
+    element("summary", {}, "Teilnehmende und Notizen"),
+    element("div", { class: "details-grid" },
+      participants("me", `Am Mikrofon (${state.settings.name || "Ich"})`),
+      participants("others", "Im Call"),
+      area("Notizen", a.notes || "", (value) => save({ notes: value }), 4)),
+    element("small", { class: "edit-hint" }, "Ein Name pro Zeile. Die Namen lassen sich später in der Sprecherbox auswählen."));
+  if (open || a.status === "planned") more.open = true;
+
+  return element("section", { class: "details-panel", "aria-label": "Angaben zur Aufnahme" },
+    title,
+    element("div", { class: "details-row" },
+      element("label", {}, element("span", {}, "Projekt"), project, projects),
+      element("label", {}, element("span", {}, a.status === "planned" ? "Geplant für" : "Aufgenommen"), when),
+      saved),
+    more);
+}
+
 /* Number of people per track before transcribing: empty = find out, 1 = nobody to tell apart. */
 function peopleFields(a) {
   const known = a.people || {};
   const input = (track, label) => {
     const field = element("input", { type: "number", min: "1", max: "30", placeholder: "automatisch",
       inputmode: "numeric", "aria-label": label });
-    field.value = known[track] ? String(known[track]) : "";
+    const listed = ((a.participants || {})[track] || []).length;   // from the participants entered
+    field.value = known[track] ? String(known[track]) : listed ? String(listed) : "";
     return field;
   };
   const me = input("me", "Personen auf deiner Spur");
@@ -976,7 +1168,7 @@ async function renderTranscript(a) {
   });
 
   const header = element("header", { class: "transcript-header" },
-    element("h2", {}, longDate(a)),
+    detailsPanel(a),
     problemBox(a),
     headerList,
     element("div", { class: "actions" },
@@ -1090,7 +1282,8 @@ function speakersPanel(a, t) {
   const rows = entries.filter(([id]) => talk[id]).sort(([x], [y]) => talk[y] - talk[x]).map(([id, info]) => {
     typed[id] = info.name;
     const saved = element("span", { class: "saved", "aria-live": "polite" });
-    const input = element("input", { type: "text", value: info.name, "aria-label": `Name für ${info.name}`, autocomplete: "off" });
+    const input = element("input", { type: "text", value: info.name, "aria-label": `Name für ${info.name}`, autocomplete: "off",
+      list: `people-${a.id}-${info.track}` });   // the participants entered for this track
     input.addEventListener("input", () => { typed[id] = input.value.trim() || info.name; });
     input.addEventListener("change", () => saveName(id, input, saved));
     input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); input.blur(); } });
@@ -1120,6 +1313,8 @@ function speakersPanel(a, t) {
       : "Namen eintragen – sie werden gespeichert, sobald du das Feld verlässt. Hörproben gibt es keine mehr, das Audio wurde gelöscht. ")
       + "Wurde eine Person doppelt erkannt: «Gleiche Person wie …» wählen. Einzelne Absätze lassen sich über den Namen im Text umhängen."),
     element("div", { class: "speaker-list" }, ...rows),
+    ...["me", "others"].map((track) => element("datalist", { id: `people-${a.id}-${track}` },
+      ...((a.participants || {})[track] || []).map((n) => element("option", { value: n })))),
     ...speakerCountRows(a, t, talk),
   );
 }
@@ -1524,7 +1719,9 @@ async function toggleRecording() {
       const id = await call("stop_recording");
       if (id) state.selected = id;
     } else {
-      const id = await call("start_recording", $("sel-microphone").value, $("sel-speakers").value, $("chk-consent").checked);
+      const target = chosen();   // a selected planned recording is recorded into
+      const planned = target && target.status === "planned" ? target.id : "";
+      const id = await call("start_recording", $("sel-microphone").value, $("sel-speakers").value, $("chk-consent").checked, planned);
       state.selected = id;
       $("time").textContent = "00:00";
     }
@@ -1535,6 +1732,33 @@ async function toggleRecording() {
   } finally {
     updateRecordButton();
   }
+}
+
+/* A call app uses the microphone: suggest recording. Recording itself still needs the consent checkbox. */
+function showCall(call) {
+  const box = $("call-notice");
+  box.hidden = !call || state.running;
+  if (box.hidden) return;
+  const key = `${call.app}:${call.planned ? call.planned.id : ""}`;
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  $("call-text").textContent = `${call.app === "Browser" ? "Ein Call im Browser" : `Ein ${call.app}-Call`} wurde erkannt. `
+    + "Aufnehmen? Dafür die Zustimmung aller Teilnehmenden bestätigen und den roten Knopf drücken.";
+  const planned = $("btn-call-planned");
+  planned.hidden = !call.planned;
+  if (call.planned) {
+    planned.textContent = `In «${call.planned.title}» aufnehmen`;
+    planned.onclick = () => { state.selected = call.planned.id; renderList(); renderContent(); $("chk-consent").focus(); };
+  }
+}
+
+/* Which entry the record button records into. */
+function showTarget() {
+  const a = chosen();
+  const hint = $("target-hint");
+  const planned = !state.running && a && a.status === "planned";
+  hint.hidden = !planned;
+  if (planned) hint.textContent = `Nimmt auf in die geplante Aufnahme «${a.title}».`;
 }
 
 /* ---------- Progress & pause ---------- */
@@ -1605,8 +1829,10 @@ async function poll() {
   if (state.busy) return;
   state.busy = true;
   try {
-    const z = await call("state");
+    const z = await call("state", document.hasFocus() && !document.hidden);
     showRecording(z.recording);
+    showCall(z.call);
+    showTarget();
     // show a recording error once – closed or timed out, it doesn't come back with the next poll
     if (z.recording_error && z.recording_error !== state.recordingError) showMessage(z.recording_error);
     state.recordingError = z.recording_error;
@@ -1711,14 +1937,14 @@ async function exportLog() {
   } catch (e) { result.textContent = e.message; }
 }
 
-function deleteRecordingButton(id) {
-  const button = element("button", { type: "button", class: "action" }, "Aufnahme löschen");
+function deleteRecordingButton(id, label = "Aufnahme löschen") {
+  const button = element("button", { type: "button", class: "action" }, label);
   let confirmed = false;
   button.addEventListener("click", async () => {
     if (!confirmed) {   // deletes audio and transcript – a second click confirms
       confirmed = true;
-      button.textContent = "Mit Transkript endgültig löschen? Nochmals klicken";
-      setTimeout(() => { confirmed = false; button.textContent = "Aufnahme löschen"; }, 4000);
+      button.textContent = "Endgültig löschen? Nochmals klicken";
+      setTimeout(() => { confirmed = false; button.textContent = label; }, 4000);
       return;
     }
     try {
@@ -1916,6 +2142,7 @@ async function openSettings(tab) {
   form.elements.diarize_others.checked = e.diarize_others !== "off";
   form.elements.diarize_me.checked = e.diarize_me === "on";
   form.elements.auto_transcribe.checked = e.auto_transcribe === "on";
+  form.elements.call_detection.checked = e.call_detection !== "off";
   $("audio-hint").textContent = AUDIO_HINT;
   call("audio_usage").then((sp) => {
     $("audio-hint").textContent = `${AUDIO_HINT} Belegt: ${sp.audio_mb.toLocaleString("de-CH")} MB.`;
@@ -2248,6 +2475,7 @@ function collectSettings() {
   data.diarize_others = form.elements.diarize_others.checked ? "on" : "off";
   data.diarize_me = form.elements.diarize_me.checked ? "on" : "off";
   data.auto_transcribe = form.elements.auto_transcribe.checked ? "on" : "off";
+  data.call_detection = form.elements.call_detection.checked ? "on" : "off";
   const choice = chosenModel();
   data.model = choice === CUSTOM ? (form.elements.model_custom ? form.elements.model_custom.value.trim() : "") : choice;
   return data;
@@ -2308,6 +2536,8 @@ async function init() {
   $("chk-log-errors").addEventListener("change", loadLog);
   $("btn-log-export").addEventListener("click", exportLog);
   $("btn-message-close").addEventListener("click", () => showMessage(""));
+  $("btn-plan").addEventListener("click", planRecording);
+  $("btn-call-dismiss").addEventListener("click", () => { $("call-notice").hidden = true; call("dismiss_call").catch(() => {}); });
   for (const type of ["mousemove", "mousedown", "keydown", "wheel"]) {
     window.addEventListener(type, () => { lastActivity = Date.now(); }, { passive: true });
   }

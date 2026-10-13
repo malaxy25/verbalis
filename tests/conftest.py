@@ -47,3 +47,10 @@ def no_real_diarization(monkeypatch):
     monkeypatch.setattr(diarization, "ensure_models", lambda *a, **k: None)
     monkeypatch.setattr(diarization, "find_turns", lambda audio, folder=None, **kwargs: list(turns.value))
     return turns
+
+
+@pytest.fixture(autouse=True)
+def no_real_call_detection(monkeypatch):
+    """Tests never read which apps use the microphone on the machine running them."""
+    from verbalis.audio import call_detect
+    monkeypatch.setattr(call_detect, "detect", lambda: [])

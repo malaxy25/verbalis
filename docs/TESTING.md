@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-187 tests in 20 files.
+196 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -98,6 +98,16 @@ Compressing and retaining the audio files.
 - **Size query while compressing** – Regression: GitHub Action on Windows – FileNotFoundError for gegenueber.wav.
 - **Kept audio survives retention days and size limit** – 0.7.17 bug: a test recording was deleted by the size limit – «Audio behalten» protects it.
 
+### `test_calls.py` (5)
+
+Recognising calls: a call app uses the microphone → suggest recording (never record by itself).
+
+- **Only call apps count and verbalis is ignored**
+- **Call is suggested once and forgotten when it ends**
+- **No notification when the window is in front and never a recording**
+- **Suggestion offers a planned recording that is due**
+- **Switched off or recording means no suggestion**
+
 ### `test_cli.py` (8)
 
 Run transcribe/compare with a simulated model.
@@ -122,6 +132,15 @@ Correction list: unique targets, variants, applying rules, suggestions from edit
 - **Ignores identical words**
 - **Suggestions from edit**
 - **No suggestions for rephrasing and insertions**
+
+### `test_details.py` (4)
+
+Recording details (name, project, participants, notes) and planned recordings.
+
+- **Details are saved and shown in the transcript**
+- **Details survive the end of the recording** – meta.json is rewritten when a recording ends – what was entered meanwhile must stay.
+- **Planned recording is recorded into with its details**
+- **Planned recording can be deleted**
 
 ### `test_devices.py` (5)
 

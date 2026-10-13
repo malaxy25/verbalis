@@ -4,36 +4,6 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.19 – planned and decided with Andrea
-
-Build as one version. UI texts German, code and docs English. Show Andrea a screenshot or a description of
-the new list, the recording form and the call notice before finishing.
-
-1. **Recording details (metadata)** in `meta.json`, editable at the top of a recording:
-   - **Name** (title), editable; default «Aufnahme Mo 13.10., 14:30». Shown in the list instead of the date,
-     in the transcript header and the Markdown file. The folder name stays the id.
-   - **Projekt**: free text with suggestions from earlier recordings (decided: no fixed project list).
-   - **Datum und Startzeit**: from the recording; for a planned recording the planned time.
-   - **Teilnehmende** per track («Am Mikrofon», «Im Call»): names, one per line or comma-separated. They
-     preset «Anzahl Personen» and are offered as names in the speaker box (choose instead of typing).
-   - **Notizen** (agenda, context) – later useful for a summary; never sent anywhere.
-2. **Plan a recording**: a «+» in the list creates a planned recording (state `planned`, no audio yet) with
-   the details above. It shows under «Geplant» at the top. Selecting it shows the details and the normal
-   record button – consent is still confirmed right before recording. Recording fills this planned entry
-   (same id); a planned entry that is never recorded can be deleted. Retention and clean-up ignore it.
-   (Later: import from the Outlook calendar.)
-3. **List grouped by time**: «Geplant», «Heute», «Diese Woche», «Letzte Woche», then by month («September
-   2026», …) for everything older (decided). Groups can be collapsed.
-4. **Recognise calls (Windows first)**: while Verbalis runs and isn't recording, check every few seconds
-   whether another app uses the microphone (Windows records this in the registry: CapabilityAccessManager
-   ConsentStore, the same source as the microphone icon in the taskbar). Verbalis itself is ignored (level
-   meters). Then suggest «Teams-Call erkannt – aufnehmen?»: in the window as a notice; when Verbalis is
-   minimised as a Windows notification. If a planned recording is due (± 30 min), the notice offers that one.
-   A click opens Verbalis ready to record – **never records by itself**, consent stays a checkbox (StGB
-   179ter). Only once per call, «Nicht mehr fragen» for this call; setting «Calls erkennen» (decided: on by
-   default, switchable in the settings).
-   macOS later via the Swift helper (any app using the microphone) – needs Andrea's test.
-
 ## Now
 
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
@@ -63,6 +33,8 @@ the new list, the recording form and the call notice before finishing.
 - [ ] **Echo without headset** – reduce remote voices on the microphone track. **[quality]**
 - [ ] **Taskbar icon on Windows** – may still show the Python icon; set an AppUserModelID / window icon. **[ux]**
 - [ ] **Ubuntu test** – PipeWire monitor source, pywebview with GTK or Qt. **[ops]**
+- [ ] **Call detection on macOS** – via the Swift helper (any call app using the microphone). **[ux]**
+- [ ] **Planned recordings from the Outlook calendar.** **[ux]**
 - [ ] **Test the Mac version on Andrea's Mac** – install, both permission prompts, recording with «Systemton» (Core Audio tap via the Swift helper), transcription, update to the next version. **[ops]**
 
 - [ ] **Intel Macs** – only Apple Silicon is built; add an Intel build if needed. **[ops]**

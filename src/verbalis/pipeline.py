@@ -162,6 +162,22 @@ COMPLETE = "complete"
 INCOMPLETE = "incomplete"        # a device failed; what was recorded until then is kept
 STOP_TIMEOUT = "stop_timeout"    # a track didn't end in time; files may be incomplete
 INTERRUPTED = "interrupted"      # found running after a restart (crash, power loss)
+PLANNED = "planned"              # created in advance with its details, nothing recorded yet
+
+# What the user enters about a recording – kept when meta.json is rewritten at the end of a recording
+DETAIL_FIELDS = ("title", "project", "participants", "notes", "people", "keep_audio", "planned_start")
+WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+
+
+def default_title(start: datetime | None) -> str:
+    """«Aufnahme Mo 13.10., 14:30» – until the user gives the recording a name."""
+    if start is None:
+        return "Aufnahme"
+    return f"Aufnahme {WEEKDAYS[start.weekday()]} {start:%d.%m.}, {start:%H:%M}"
+
+
+def details(meta: dict) -> dict:
+    return {k: meta[k] for k in DETAIL_FIELDS if k in meta}
 
 # Shown next to the consent checkbox; stored with every recording so it is clear what was confirmed
 CONSENT_TEXT = "Alle Teilnehmenden haben der Aufnahme zugestimmt"
@@ -172,9 +188,14 @@ def consent_record(timestamp: str) -> dict:
     return {"confirmed": True, "timestamp": timestamp, "text": CONSENT_TEXT, "text_version": CONSENT_TEXT_VERSION}
 
 
-def start_meta(folder: Path, start: datetime, samplerate: int, consent_time: str, devices: dict[str, str]) -> dict:
-    """Written when a recording starts, so consent and start survive a crash."""
+def start_meta(folder: Path, start: datetime, samplerate: int, consent_time: str, devices: dict[str, str],
+               known: dict | None = None) -> dict:
+    """Written when a recording starts, so consent and start survive a crash.
+
+    known: details entered before (a planned recording) – they stay.
+    """
     meta = {
+        **(known or {}),
         "app_version": __version__,
         "start": start.isoformat(timespec="seconds"),
         "state": RECORDING,
@@ -191,6 +212,7 @@ def write_meta(folder: Path, start: datetime, duration_s: float, samplerate: int
                consent_time: str, devices: dict[str, str], tracks: list,
                state: str = COMPLETE, problem: str | None = None) -> dict:
     meta = {
+        **details(read_meta(folder)),     # entered before or during the recording
         "app_version": __version__,
         "start": start.isoformat(timespec="seconds"),
         "state": state,
@@ -477,16 +499,19 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
                                                 problems=problems, partial=folder / PARTIAL, model=model,
                                                 people=people)
     h = header(folder, model, compute, recording)
+    meta = read_meta(folder)
+    if meta.get("project"):
+        h["Projekt"] = meta["project"]
     if missing := missing_tracks(folder):
         h["Hinweis"] = "Unvollständig – keine Aufnahme von: " + ", ".join(names.get(t, t) for t in missing)
-    meta = read_meta(folder)
     if meta.get("state") in (INCOMPLETE, STOP_TIMEOUT, INTERRUPTED):
         h["Aufnahme"] = (h.get("Aufnahme") or "") + " (nicht vollständig aufgenommen)"
     if n := apply_corrections(paragraphs, corrections):
         h["Korrekturen"] = f"{n} automatisch ersetzt"
     if problems:
         h["Sprecher"] = " ".join(problems)
-    path = save(folder, "transcript", paragraphs, f"Transkript {folder.name}", h, tracks=names)
+    path = save(folder, "transcript", paragraphs, meta.get("title") or default_title(recording_start(folder)), h,
+                tracks=names)
     (folder / "transcript_original.json").unlink(missing_ok=True)  # older edits are obsolete
     (folder / PARTIAL).unlink(missing_ok=True)                     # done: no need to resume
     return path, compute, recording
