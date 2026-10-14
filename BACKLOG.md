@@ -26,7 +26,6 @@ Items 1, 2, 4, 5 of the 0.7.26 plan and the Mac self-install were released in 0.
 
 - [ ] **Mac: test 0.7.26** – self-install into «Programme» (from the desktop and from the DMG), and that an
   update keeps the permissions (stable signature, «Authority=Verbalis Code Signing»). **[ops]**
-- [ ] **frehner.tech: Mac button → the DMG** (once a release has one). **[ops]**
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
 - [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17/0.7.18 (safe way first). **[ux]**
 
