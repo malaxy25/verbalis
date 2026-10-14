@@ -4,7 +4,7 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.25 – planned and decided with Andrea (build once item 3 is measured)
+## 0.7.26 – planned and decided with Andrea (build once item 3 is measured)
 
 1. **Maximum recording time**: setting «Aufnahme automatisch beenden nach», default **2 hours** (decided),
    empty = no limit. Notice 5 minutes before («Aufnahme endet in 5 Min.», button «+30 Min.»; Windows
@@ -19,6 +19,9 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
    **Waiting for measurements:** Andrea runs `verbalis speakers-test <folder> --track others|me
    --thresholds 0.5 0.6 0.7 0.8 0.9` on 2–3 real recordings (Teams with 3–4 people, room meeting with 2,
    1:1) and sends the numbers with the true number of people.
+5. **«Keiner – nur Mikrofon»** as a choice under «Ton der anderen kommt über» (proposed by Andrea, 14 Oct 2026):
+   for meetings in a room – only the microphone track is recorded, no system audio warning, speaker
+   diarization on the own track.
 4. **Is the model up to date?** Show «✓ Neuester Stand (geprüft heute 14:05)» / «Update verfügbar: Stand vom
    …» / «Nicht geprüft – keine Internetverbindung», button «Jetzt prüfen»; the date is when the revision
    was published, not when it was downloaded; the short id small below.

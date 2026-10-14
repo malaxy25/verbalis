@@ -28,11 +28,18 @@ Progress = Callable[[str, float], None]  # (display name of the current track, f
 # ---------------------------------------------------------------- audio files
 
 def audio_file(folder: Path, track: str) -> Path | None:
-    """The audio file of a track – compressed (.flac) or freshly recorded (.wav)."""
+    """The audio file of a track – compressed (.flac) or freshly recorded (.wav).
+
+    An empty file counts as no file: 0.7.24 turned a track without any audio into a 0-byte
+    FLAC that could not be opened («Format not recognised»), so nothing could be transcribed.
+    """
     for ext in AUDIO_EXTENSIONS:
         path = folder / f"{track}{ext}"
-        if path.exists():
-            return path
+        try:
+            if path.stat().st_size > 0:
+                return path
+        except FileNotFoundError:
+            continue
     return None
 
 
@@ -131,6 +138,12 @@ def compress_audio(folder: Path) -> int:
     for track in TRACKS:
         wav, flac = folder / f"{track}.wav", folder / f"{track}.flac"
         if not wav.exists():
+            continue
+        with sf.SoundFile(wav) as src:
+            empty = src.frames == 0
+        if empty:   # the device never delivered audio (e.g. no system audio): nothing to keep
+            wav.unlink()
+            log.info("%s: track %s had no audio – no file kept", folder.name, track)
             continue
         tmp = folder / f"{track}.flac.tmp"
         with sf.SoundFile(wav) as src, sf.SoundFile(tmp, "w", samplerate=ARCHIVE_SAMPLERATE, channels=1,

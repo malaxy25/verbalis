@@ -152,3 +152,17 @@ def test_kept_audio_survives_retention_days_and_size_limit(home):
     assert not pipeline.has_audio(kept)
     s.delete_audio(other.name)                       # by hand it can always be deleted
     assert not pipeline.has_audio(other)
+
+
+def test_track_without_any_audio_does_not_block_the_transcription(tmp_path):
+    """0.7.24 on macOS: recorded with the microphone only – the silent system audio track became a 0-byte
+    FLAC and transcribing failed with «Error opening …: Format not recognised»."""
+    with sf.SoundFile(tmp_path / "others.wav", "x", samplerate=48000, channels=1, subtype="PCM_16"):
+        pass                                                   # the device never delivered audio
+    _wav(tmp_path / "me.wav")
+    assert pipeline.compress_audio(tmp_path) == 1
+    assert not (tmp_path / "others.wav").exists() and not (tmp_path / "others.flac").exists()
+    assert pipeline.missing_tracks(tmp_path) == ["others"]    # the transcript says it is missing
+
+    (tmp_path / "others.flac").write_bytes(b"")                 # recordings made with 0.7.24
+    assert pipeline.audio_file(tmp_path, "others") is None and pipeline.has_audio(tmp_path)

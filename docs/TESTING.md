@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-213 tests in 22 files.
+214 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -84,7 +84,7 @@ Window size and position, log output without console, file dialog filter.
 - **Zip filter is valid for pywebview** – Regression 0.7.3: «ZIP-Datei (*.zip)» was rejected by the save dialog.
 - **Taskbar identity only for development version on windows** – Regression: the development version showed the Python logo in the taskbar.
 
-### `test_audio.py` (9)
+### `test_audio.py` (10)
 
 Compressing and retaining the audio files.
 
@@ -97,6 +97,7 @@ Compressing and retaining the audio files.
 - **Settings validate input**
 - **Size query while compressing** – Regression: GitHub Action on Windows – FileNotFoundError for gegenueber.wav.
 - **Kept audio survives retention days and size limit** – 0.7.17 bug: a test recording was deleted by the size limit – «Audio behalten» protects it.
+- **Track without any audio does not block the transcription** – 0.7.24 on macOS: recorded with the microphone only – the silent system audio track became a 0-byte
 
 ### `test_calls.py` (5)
 

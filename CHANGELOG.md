@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.25 – 2026-10-14
+- **A track without any audio no longer blocks the transcription** (on all systems): recorded with the
+  microphone only, the silent system audio track became an empty file and transcribing failed with «Format
+  not recognised». Such a track is now left out; the transcript notes it is missing. Recordings already made
+  with 0.7.24 can be transcribed after the update.
+
 ## 0.7.24 – 2026-10-14
 - **macOS: recordings no longer stop when a track is quiet for a moment.** 0.7.23 ended a recording after
   3 seconds without audio – but macOS delivers nothing while it still asks for the permission, and the
