@@ -265,8 +265,9 @@ def _app(folder, version="0.7.26"):
 def test_where_verbalis_lies_and_where_it_goes(tmp_path):
     """0.7.26: started from «Downloads», «Schreibtisch» or the disk image, Verbalis offers to move itself."""
     from pathlib import PurePosixPath
-    home = tmp_path / "home"
+    home = tmp_path / "home"     # on a Mac tmp_path lies in /private/var/folders – not a translocated copy
     assert updates.install_place(home / "Applications" / "Verbalis.app", home) is None
+    assert not updates.translocated(PurePosixPath("/private/var/folders/36/tj/T/pytest-0/home/Verbalis.app"))
     assert "Desktop" in updates.install_place(home / "Desktop" / "Verbalis.app", home)
     assert "schreibgeschützt" in updates.install_place(
         PurePosixPath("/private/var/folders/x/T/AppTranslocation/A/d/Verbalis.app"), home)

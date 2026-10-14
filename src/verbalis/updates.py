@@ -146,7 +146,7 @@ def app_bundle(executable: str | None = None) -> Path | None:
 def translocated(bundle: Path) -> bool:
     """macOS runs an app started straight from «Downloads» from a read-only random copy
     (/private/var/folders/…/AppTranslocation/…) – it can't replace itself there."""
-    return "AppTranslocation" in bundle.parts or str(bundle).startswith(("/private/var/folders/", "/var/folders/"))
+    return "AppTranslocation" in bundle.parts   # (/private/var/folders/… alone is just the temp folder)
 
 
 # ---------------------------------------------------------------- macOS: install into «Programme»
