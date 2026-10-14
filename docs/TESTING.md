@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-212 tests in 22 files.
+213 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -208,7 +208,7 @@ macOS system audio: the recorder side of the Swift helper, with a fake helper sp
 - **Mac prefers system audio when available**
 - **Old mac falls back to virtual device**
 - **Macos version check**
-- **Silent helper is reported instead of hanging** – 0.7.22 on macOS: the system audio track delivered nothing and the recording could not be stopped.
+- **Silent helper neither hangs nor aborts** – 0.7.23 on macOS: the system audio delivers nothing while macOS asks for the permission or nothing
 
 ### `test_migration.py` (5)
 
@@ -244,7 +244,7 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Subfolder model** – gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root.
 - **Default model is gcoli for new installations only** – 0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model.
 
-### `test_recorder.py` (11)
+### `test_recorder.py` (12)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -257,7 +257,8 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Level monitor measures without writing** – 0.7.17: levels before recording – the meter tracks read the devices but create no file.
 - **Macos records without a block size** – 0.7.20 bug on macOS: «blocksize must be between 15.0 and 512» – every recording failed at once.
 - **Reader gives exact blocks and never waits forever** – 0.7.22 on macOS: devices that delivered nothing made the recording hang («stop_timeout»).
-- **Silent device ends the track instead of hanging**
+- **Device without audio neither hangs nor aborts** – 0.7.23 on macOS: a recording ended after 3 s without system audio – while macOS still asked for
+- **Audio that starts late is padded in sync** – The permission is granted after a moment: the silence before is filled in, the track stays in sync.
 - **Measure tells a working from a silent device** – Diagnosis: which device delivers, how loud, and whether it can be closed.
 
 ### `test_release_workflow.py` (6)

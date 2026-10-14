@@ -5,7 +5,6 @@ import time
 from contextlib import contextmanager
 
 import numpy as np
-import pytest
 import soundfile as sf
 
 from verbalis.audio.recorder import Track, missing_frames
@@ -251,39 +250,77 @@ class CoreAudioLikeRecorder:
 def test_reader_gives_exact_blocks_and_never_waits_forever(monkeypatch):
     """0.7.22 on macOS: devices that delivered nothing made the recording hang («stop_timeout»)."""
     from verbalis.audio import recorder
-    monkeypatch.setattr(recorder, "READ_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(recorder, "READ_WAIT_S", 0.1)
     reader = recorder._Reader(CoreAudioLikeRecorder([512] * 20), "MacBook Air-Mikrofon")
     blocks = [reader.read(1000) for _ in range(10)]
     assert all(b.shape == (1000, 1) for b in blocks)        # exact sizes from 512-frame chunks
     started = time.monotonic()
-    with pytest.raises(recorder.NoAudioData, match="MacBook Air-Mikrofon"):
-        reader.read(1000)                                     # only 240 frames left, then nothing
-    assert time.monotonic() - started < 2
+    assert len(reader.read(1000)) == 0                       # only 240 frames left, then nothing: empty, no hang
+    assert time.monotonic() - started < 1
 
 
-def test_silent_device_ends_the_track_instead_of_hanging(tmp_path, monkeypatch):
+def test_device_without_audio_neither_hangs_nor_aborts(tmp_path, monkeypatch):
+    """0.7.23 on macOS: a recording ended after 3 s without system audio – while macOS still asked for
+    the permission, or while nothing was playing. Now it keeps running and can be stopped at once."""
     from verbalis.audio import recorder
-    monkeypatch.setattr(recorder, "READ_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(recorder, "READ_WAIT_S", 0.1)
 
     class Silent:
-        name = "Stummes Gerät"
+        name = "Systemton"
 
         @contextmanager
         def recorder(self, samplerate, blocksize=None, channels=None):
             yield CoreAudioLikeRecorder([])
 
     stop = threading.Event()
-    track = Track("me", Silent(), tmp_path / "me.wav", stop, t0=time.monotonic())
+    track = Track("others", Silent(), tmp_path / "others.wav", stop, t0=time.monotonic())
     track.start()
-    track.join(3)
-    assert not track.is_alive() and isinstance(track.status.error, recorder.NoAudioData)
-    assert stop.is_set()                                      # the other track stops too
+    time.sleep(1.0)
+    assert track.is_alive() and track.status.error is None and not stop.is_set()   # still recording
+    stop.set()
+    track.join(1)
+    assert not track.is_alive() and track.status.written_frames == 0
+
+
+def test_audio_that_starts_late_is_padded_in_sync(tmp_path, monkeypatch):
+    """The permission is granted after a moment: the silence before is filled in, the track stays in sync."""
+    from verbalis.audio import recorder
+    monkeypatch.setattr(recorder, "READ_WAIT_S", 0.05)
+
+    class Late:
+        name = "MacBook Air-Mikrofon"
+
+        @contextmanager
+        def recorder(self, samplerate, blocksize=None, channels=None):
+            rec = CoreAudioLikeRecorder([])
+
+            def later():
+                time.sleep(0.6)                      # «Erlauben» clicked after 0.6 s
+                while not stop.is_set():
+                    time.sleep(0.01)
+                    rec._queue.append(np.full((480, 1), 0.3, dtype=np.float32))
+                    rec._record_event.set()
+            threading.Thread(target=later, daemon=True).start()
+            yield rec
+
+    stop = threading.Event()
+    started = time.monotonic()
+    track = Track("me", Late(), tmp_path / "me.wav", stop, t0=started)
+    track.start()
+    time.sleep(1.5)
+    stop.set()
+    track.join(2)
+    elapsed = time.monotonic() - started
+    data, sr = sf.read(tmp_path / "me.wav")
+    assert track.status.error is None
+    assert track.status.padded_frames / sr > 0.4                       # the silence at the start
+    assert abs(len(data) / sr - elapsed) < 0.4                          # in sync with the clock
 
 
 def test_measure_tells_a_working_from_a_silent_device(monkeypatch):
     """Diagnosis: which device delivers, how loud, and whether it can be closed."""
     from verbalis.audio import recorder
-    monkeypatch.setattr(recorder, "READ_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(recorder, "READ_WAIT_S", 0.1)
 
     class Device:
         def __init__(self, name, blocks):
@@ -296,4 +333,4 @@ def test_measure_tells_a_working_from_a_silent_device(monkeypatch):
     good, silent = recorder.measure([("me", Device("Mikro", [512] * 400)), ("others", Device("Systemton", []))], 1.0)
     assert good["device"] == "Mikro" and good["first_data_s"] is not None and good["received_s"] > 0
     assert -20 < good["peak_db"] < -5 and not good["hangs"] and good["error"] is None
-    assert silent["first_data_s"] is None and "keine Audiodaten" in silent["error"]
+    assert silent["first_data_s"] is None and silent["received_s"] == 0 and not silent["hangs"]

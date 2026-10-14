@@ -80,10 +80,11 @@ def test_macos_version_check(monkeypatch):
     assert mac_tap.macos_version() >= mac_tap.MIN_MACOS
 
 
-def test_silent_helper_is_reported_instead_of_hanging(tmp_path, monkeypatch):
-    """0.7.22 on macOS: the system audio track delivered nothing and the recording could not be stopped."""
+def test_silent_helper_neither_hangs_nor_aborts(tmp_path, monkeypatch):
+    """0.7.23 on macOS: the system audio delivers nothing while macOS asks for the permission or nothing
+    plays – that must not abort the recording (and must not hang it either)."""
     import time
-    monkeypatch.setattr(mac_tap, "READ_TIMEOUT_S", 0.5)
+    monkeypatch.setattr(mac_tap, "READ_WAIT_S", 0.2)
     silent = fake_helper(tmp_path, """
         import sys, time
         sys.stderr.write('{"samplerate": 48000, "channels": 2}\\n'); sys.stderr.flush()
@@ -91,6 +92,5 @@ def test_silent_helper_is_reported_instead_of_hanging(tmp_path, monkeypatch):
     """)
     started = time.monotonic()
     with mac_tap.TapDevice(silent).recorder(samplerate=48_000) as rec:
-        with pytest.raises(RuntimeError, match="keine Audiodaten"):
-            rec.record(numframes=4_800)
-    assert time.monotonic() - started < 6                     # incl. ending the helper
+        assert rec.record(numframes=4_800).shape == (0, 1)       # nothing yet – no error, no hang
+    assert time.monotonic() - started < 6                        # incl. ending the helper

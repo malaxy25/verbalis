@@ -687,10 +687,11 @@ class Service:
         names = {"me": "Mikrofon", "others": "Ton der anderen"}
         devices = ", ".join(f"{names.get(t, t)} «{info['devices'].get(t, '?')}»" for t in silent)
         log.warning("No audio data after %.0f s from: %s", rec.active_seconds(), devices)
-        hint = (" Unter macOS: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon bzw. «Bildschirm- & "
-                "Systemaudioaufnahme» prüfen und Verbalis neu starten.") if sys.platform == "darwin" else ""
-        self._recording_error = (f"Von {devices} kommen keine Audiodaten an – diese Spur bleibt leer. "
-                                 "Aufnahme beenden und ein anderes Gerät wählen." + hint)
+        hint = (" Unter macOS: eine offene Frage nach der Berechtigung beantworten bzw. in Systemeinstellungen → "
+                "Datenschutz & Sicherheit → Mikrofon und «Bildschirm- & Systemaudioaufnahme» prüfen.") \
+            if sys.platform == "darwin" else " Sonst ein anderes Gerät wählen."
+        self._recording_error = (f"Von {devices} kommen bisher keine Audiodaten an. Die Aufnahme läuft weiter "
+                                 "und holt den Ton nach, sobald er kommt." + hint)
 
     def _new_folder(self, start: datetime) -> Path:
         """A new, empty recording folder – never an existing one (two starts in the same second)."""

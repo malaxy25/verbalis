@@ -92,7 +92,7 @@ def _read_header(proc: subprocess.Popen) -> dict:
     return header
 
 
-READ_TIMEOUT_S = 3.0   # no data from the helper for this long: report it instead of waiting forever
+READ_WAIT_S = 0.25     # no data from the helper for this long: return nothing (never wait forever)
 
 
 class _TapReader:
@@ -124,13 +124,13 @@ class _TapReader:
         self.chunks.put(None)                    # the helper has ended
 
     def record(self, numframes: int) -> np.ndarray:
-        """Exactly `numframes` samples at the target rate, shape (numframes, 1)."""
+        """`numframes` samples at the target rate, shape (numframes, 1) – or none, if nothing came for a moment
+        (permission question still open, or nothing playing). Not an error: the recorder fills the gap."""
         while len(self.buffer) < numframes:
             try:
-                raw = self.chunks.get(timeout=READ_TIMEOUT_S)
+                raw = self.chunks.get(timeout=READ_WAIT_S)
             except queue.Empty:
-                raise RuntimeError("Vom Systemton kommen keine Audiodaten an (Berechtigung «Bildschirm- & "
-                                   "Systemaudioaufnahme» prüfen).") from None
+                return np.zeros((0, 1), dtype=np.float32)
             if raw is None:
                 self.chunks.put(None)
                 detail = self.proc.stderr.read().decode("utf-8", "replace").strip()

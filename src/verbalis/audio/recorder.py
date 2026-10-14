@@ -35,20 +35,20 @@ SAMPLERATE = 48_000
 BLOCK_SECONDS = 0.1
 GAP_TOLERANCE_SECONDS = 0.25
 TRACKS = ("me", "others")
-READ_TIMEOUT_S = 3.0      # a device that delivers nothing for this long is reported (never wait forever)
-
-
-class NoAudioData(RuntimeError):
-    """A device delivers no audio at all (blocked by the system, or not running)."""
+READ_WAIT_S = 0.25        # wait at most this long for audio, then return nothing (never wait forever)
 
 
 class _Reader:
-    """Read exactly `numframes` per call – but never wait forever.
+    """Read exactly `numframes` per call – or nothing, if the device delivers nothing for a moment.
 
     soundcard on macOS waits for the next audio block without a time limit, so a device that
     delivers nothing made the recording hang (and it couldn't be stopped). Its recorder keeps
     the blocks in `_queue` and signals `_record_event`; here we wait for that signal with a
-    time limit. Other devices (Windows, the system audio helper) are read as they are.
+    time limit and return an empty block when nothing came. That is not an error: macOS
+    delivers nothing while its permission question is open, and the system audio may deliver
+    nothing while nobody plays anything. The track fills such gaps with silence once audio
+    arrives again (see missing_frames), so both tracks stay in sync. Other devices (Windows)
+    are read as they are.
     """
 
     def __init__(self, rec, device_name: str):
@@ -66,8 +66,9 @@ class _Reader:
                 self.event.clear()
                 if self.rec._queue:
                     break
-                if not self.event.wait(READ_TIMEOUT_S):
-                    raise NoAudioData(f"Vom Gerät «{self.device_name}» kommen keine Audiodaten an.")
+                if not self.event.wait(READ_WAIT_S):
+                    self.spare = np.concatenate(parts, axis=0) if parts else None   # keep what came
+                    return np.zeros((0, 1), dtype=np.float32)
             chunk = self.rec.record(numframes=None)   # the blocks that are there – doesn't wait now
             parts.append(chunk)
             have += len(chunk)
@@ -189,7 +190,7 @@ class Track(threading.Thread):
             reader = _Reader(rec, getattr(self.device, "name", "?"))
             while not self.stop_event.is_set():
                 data = reader.read(block)
-                if self.paused():
+                if self.paused() or not len(data):   # nothing came: filled with silence once audio arrives
                     s.level_rms = 0.0
                     continue
                 mono = data.mean(axis=1) if data.ndim == 2 else data
