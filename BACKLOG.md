@@ -20,7 +20,10 @@ Items 1, 2, 4, 5 of the 0.7.26 plan and the Mac self-install were released in 0.
    speaker); without a number 10 speakers, 94.9 % pure. Now: find speakers as usual, then join the most
    similar voices down to the number (`merge_to_count`, 2-minute voice prints) – 75 % on that recording.
    One of Andrea's groups (≈4 min) sounds like the other person to the model; loudness did not help.
-   Idea for later: per-turn re-assignment (83 % in a test) or «klingt ähnlich wie …» hints when merging by hand.
+   Second on-site recording, 4 people, 12 min: forced «4» 76 %, without a number 7 speakers 90 % pure,
+   new join to 4 **90 %** (every small speaker went to the right person). Per-turn re-assignment: 83 % on
+   the first, 85 % on the second – not better, dropped. Idea for later: «klingt ähnlich wie …» hints when
+   merging by hand.
 
 ## Proposed (waiting for Andrea's OK)
 
