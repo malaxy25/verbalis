@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.24 – 2026-10-14
+- **macOS: recordings no longer stop when a track is quiet for a moment.** 0.7.23 ended a recording after
+  3 seconds without audio – but macOS delivers nothing while it still asks for the permission, and the
+  system audio apparently nothing while nothing plays. Now Verbalis keeps recording, fills such gaps with
+  silence once audio comes again (both tracks stay in sync) and can still be stopped at once. If a track
+  delivers nothing at all for 5 seconds, a notice says so – the recording goes on.
+
 ## 0.7.23 – 2026-10-14
 Recording works on the Mac (tested on a MacBook Air with macOS 14.6, without an administrator account):
 - **macOS keeps its permissions across updates:** every Mac build is now signed with the same Verbalis

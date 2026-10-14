@@ -4,7 +4,7 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.23 – planned and decided with Andrea (build once item 3 is measured)
+## 0.7.25 – planned and decided with Andrea (build once item 3 is measured)
 
 1. **Maximum recording time**: setting «Aufnahme automatisch beenden nach», default **2 hours** (decided),
    empty = no limit. Notice 5 minutes before («Aufnahme endet in 5 Min.», button «+30 Min.»; Windows
@@ -39,13 +39,10 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## Now
 
-- [ ] **Mac: no audio again after the update 0.7.23.dev2 → 0.7.23** (14 Oct 2026). dev2 (signed with the
-  Verbalis certificate, fresh install, permissions granted) recorded fine; after the in-app update to 0.7.23
-  (same certificate) there was no audio again. Collect: «Diagnose kopieren», the log, `codesign -dvv` and
-  `codesign -d -r-` of the installed app (designated requirement), where the app lies. Check whether the
-  update keeps the signature/identifier (swap script, `--deep --identifier` also on nested code) and whether
-  TCC keys on the designated requirement as expected. Workaround: `tccutil reset Microphone|AudioCapture
-  ch.frehner.verbalis`, restart. **[ops]**
+- [ ] **Mac: confirm after the update 0.7.23 → 0.7.24** (14 Oct 2026): no new permission question and sound on
+  both tracks = the stable signature works. Found: the signature was fine («Authority=Verbalis Code
+  Signing»); 0.7.23 aborted recordings after 3 s without audio (permission question open / nothing playing),
+  fixed in 0.7.24. Then remove the test branch `mac-audio`. **[ops]**
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
 - [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17/0.7.18 (safe way first). **[ux]**
 
