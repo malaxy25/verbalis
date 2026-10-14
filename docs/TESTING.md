@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-225 tests in 22 files.
+227 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -159,7 +159,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Soundcard without the windows warning class** – 0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
 - **Microphone only choice has no second device**
 
-### `test_diarization.py` (17)
+### `test_diarization.py` (19)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -177,6 +177,8 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Merging never loses a given name** – 0.7.17: merging «Hans Muster» into the unnamed «Gegenüber 1» kept «Gegenüber 1» – the name was lost.
 - **Speaker with only short turns goes to the most similar voice** – 0.7.18: a 40-min call with 4 people gave 60+ speakers – short turns created speakers of their own.
 - **Small speaker merged only when the voice is close**
+- **Known number of people joins the similar voices not the outliers** – 0.7.26: on site with 2 people, the clustering told «2» put nearly everything into one speaker and a few
+- **Known number of people leaves fewer speakers alone**
 - **Reassign with known number of people keeps given names**
 - **Speakers test prints only numbers**
 - **Diarization runs in its own process and reports errors** – 0.7.18 bug: sherpa-onnx blocks Python while it computes – the app froze during «Neu zuordnen».

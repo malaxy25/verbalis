@@ -15,6 +15,12 @@ Items 1, 2, 4, 5 of the 0.7.26 plan and the Mac self-install were released in 0.
    **Waiting for measurements:** Andrea runs `verbalis speakers-test <folder> --track others|me
    --thresholds 0.5 0.6 0.7 0.8 0.9` on 2–3 real recordings (Teams with 3–4 people, room meeting with 2,
    1:1) and sends the numbers with the true number of people.
+2. **Known number of people: join instead of forcing** (done in the working copy, 14 Oct 2026). On-site
+   meeting with 2 people (microphone only): «2» told to the clustering gave 56 % right (nearly all in one
+   speaker); without a number 10 speakers, 94.9 % pure. Now: find speakers as usual, then join the most
+   similar voices down to the number (`merge_to_count`, 2-minute voice prints) – 75 % on that recording.
+   One of Andrea's groups (≈4 min) sounds like the other person to the model; loudness did not help.
+   Idea for later: per-turn re-assignment (83 % in a test) or «klingt ähnlich wie …» hints when merging by hand.
 
 ## Proposed (waiting for Andrea's OK)
 

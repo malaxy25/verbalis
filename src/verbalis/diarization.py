@@ -12,8 +12,10 @@ and short coughs/interjections. After clustering, `refine` therefore
 - gives turns of speakers who only ever say something short (< MIN_TURN_S) to the
   most similar established speaker, and
 - merges speakers with little talk time into the most similar one when close enough.
-With a known number of people (`num_speakers`) the clustering is told that number and
-nothing is refined.
+With a known number of people (`num_speakers`) the same happens first; then `merge_to_count`
+joins the most similar speakers until that number is left. (Until 0.7.26 the clustering was told the
+number directly: in an on-site meeting with 2 people it put nearly everything into one speaker and a few
+coughs into the other – 56 % right, while the many small speakers without the number were 94 % pure.)
 
 The voice prints only exist while a recording is processed – nothing is stored, so
 no voice database is built (recognising people across calls would be a separate,
@@ -54,6 +56,7 @@ MIN_TURN_S = 1.5         # a speaker with only shorter turns is no speaker of it
 SMALL_SPEAKER_S = 20.0   # speakers with less talk time are merged into a similar one …
 MERGE_DISTANCE = 0.8     # … if their voice prints are at most this far apart (cosine distance)
 PROFILE_S = 30.0         # seconds of audio per voice print
+MERGE_PROFILE_S = 120.0  # … when joining down to a known number of people (more audio: 75 % instead of 71 % right)
 SAMPLERATE = 16_000
 
 
@@ -105,7 +108,7 @@ def _threads() -> int:
     return max(1, min(4, (os.cpu_count() or 2) - 1))
 
 
-def _config(folder: Path, threshold: float, num_speakers: int | None):
+def _config(folder: Path, threshold: float):
     import sherpa_onnx
 
     threads = _threads()
@@ -115,7 +118,7 @@ def _config(folder: Path, threshold: float, num_speakers: int | None):
                 model=str(folder / SEGMENTATION["file"])), num_threads=threads),
         embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(folder / EMBEDDING["file"]),
                                                                num_threads=threads),
-        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=num_speakers or -1, threshold=threshold),
+        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=-1, threshold=threshold),
         min_duration_on=0.3, min_duration_off=0.5)
 
 
@@ -123,13 +126,13 @@ def find_turns(audio, folder: Path | None = None, threshold: float = THRESHOLD, 
                refine_turns: bool = True, progress=None) -> list[tuple[float, float, int]]:
     """(start, end, speaker index) for 16 kHz mono float32 audio.
 
-    num_speakers: the known number of people on this track (then nothing is refined).
+    num_speakers: the known number of people on this track (the found speakers are merged down to it).
     progress(fraction) is called while sherpa-onnx works.
     """
     import sherpa_onnx
 
     folder = folder or models_dir()
-    diarizer = sherpa_onnx.OfflineSpeakerDiarization(_config(folder, threshold, num_speakers))
+    diarizer = sherpa_onnx.OfflineSpeakerDiarization(_config(folder, threshold))
     started = time.monotonic()
 
     def report(done, total):
@@ -140,8 +143,10 @@ def find_turns(audio, folder: Path | None = None, threshold: float = THRESHOLD, 
     result = diarizer.process(audio, callback=report).sort_by_start_time()
     turns = [(r.start, r.end, r.speaker) for r in result]
     found = len({t[2] for t in turns})
-    if refine_turns and not num_speakers and found > 1:
+    if refine_turns and found > 1:
         turns = refine(turns, embedder(audio, folder))
+    if num_speakers and found > num_speakers:
+            turns = merge_to_count(turns, embedder(audio, folder, MERGE_PROFILE_S), num_speakers)
     log.info("Diarization: %d turns, %d speakers (%d before refining), %.1f s for %.0f s audio",
              len(turns), len({t[2] for t in turns}), found, time.monotonic() - started, len(audio) / SAMPLERATE)
     return turns
@@ -200,8 +205,8 @@ def _turns_worker(path: str, until_s, options: dict, messages) -> None:
         messages.put(("error", str(e) or repr(e)))
 
 
-def embedder(audio, folder: Path | None = None):
-    """A function (intervals) → voice print, for the given audio."""
+def embedder(audio, folder: Path | None = None, profile_s: float = PROFILE_S):
+    """A function (intervals) → voice print from up to profile_s seconds of them, for the given audio."""
     import numpy as np
     import sherpa_onnx
 
@@ -212,7 +217,7 @@ def embedder(audio, folder: Path | None = None):
     def embed(intervals: list[tuple[float, float]]) -> list[float]:
         pieces, total = [], 0.0
         for start, end in intervals:
-            take = min(end - start, PROFILE_S - total)
+            take = min(end - start, profile_s - total)
             if take <= 0:
                 break
             pieces.append(audio[int(start * SAMPLERATE):int((start + take) * SAMPLERATE)])
@@ -266,6 +271,47 @@ def refine(turns: list[tuple[float, float, int]], embed, min_turn_s: float = MIN
             turns = [(s, e, nearest if x == sp else x) for s, e, x in turns]
             talk[nearest] += talk.pop(sp)
     return turns
+
+
+def merge_to_count(turns: list[tuple[float, float, int]], embed, count: int,
+                   small_s: float = SMALL_SPEAKER_S) -> list[tuple[float, float, int]]:
+    """Join speakers until `count` are left. embed(intervals) → voice print.
+
+    A speaker with little talk time (coughs, noise) first goes to the most similar voice – otherwise such
+    an outlier would stay a «person» of its own. Then the two most similar voices are joined, again and again.
+    """
+    talk: dict[int, float] = {}
+    spans: dict[int, list[tuple[float, float]]] = {}
+    for start, end, speaker in turns:
+        talk[speaker] = talk.get(speaker, 0.0) + end - start
+        spans.setdefault(speaker, []).append((start, end))
+    if len(talk) <= max(1, count):
+        return turns
+    profiles = {sp: _unit(embed(sorted(spans[sp], key=lambda t: t[0] - t[1]))) for sp in talk}
+    joined: dict[int, int] = {}
+    while len(talk) > count:
+        smallest = min(talk, key=talk.get)
+        if talk[smallest] < small_s:
+            gone = smallest
+            stays = min((o for o in talk if o != gone), key=lambda o: distance(profiles[gone], profiles[o]))
+        else:
+            pairs = [(a, b) for a in talk for b in talk if a < b]
+            a, b = min(pairs, key=lambda p: distance(profiles[p[0]], profiles[p[1]]))
+            stays, gone = (a, b) if talk[a] >= talk[b] else (b, a)
+        weight = talk[gone] / (talk[stays] + talk[gone])   # the joined voice print: weighted by talk time
+        profiles[stays] = _unit([x * (1 - weight) + y * weight for x, y in zip(profiles[stays], profiles[gone])])
+        talk[stays] += talk.pop(gone)
+        del profiles[gone]
+        joined[gone] = stays
+        for old, new in joined.items():
+            if new == gone:
+                joined[old] = stays
+    return [(s, e, joined.get(sp, sp)) for s, e, sp in turns]
+
+
+def _unit(vector) -> list[float]:
+    norm = math.sqrt(sum(x * x for x in vector))
+    return [x / norm for x in vector] if norm else list(vector)
 
 
 def reassign_names(old: list[dict], new: list, base_name: str) -> dict[str, str]:

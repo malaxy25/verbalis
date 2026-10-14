@@ -250,6 +250,25 @@ def test_small_speaker_merged_only_when_the_voice_is_close():
     assert [sp for _, _, sp in refined] == [0, 1, 0, 3]
 
 
+def test_known_number_of_people_joins_the_similar_voices_not_the_outliers():
+    """0.7.26: on site with 2 people, the clustering told «2» put nearly everything into one speaker and a few
+    coughs into the other (56 % right). Now the many small, pure speakers are joined by voice."""
+    voices = {0: [1.0, 0.1, 0.0], 1: [0.9, 0.2, 0.0], 2: [0.1, 1.0, 0.0], 3: [0.0, 0.9, 0.2], 4: [0.0, 0.0, 1.0]}
+    turns = [(0, 60, 0), (60, 120, 2), (120, 170, 1), (170, 230, 3), (231, 234, 4)]   # 4: a cough, like nobody
+
+    def embed(intervals):
+        return voices[next(sp for s, e, sp in turns if (s, e) == tuple(intervals[0]))]
+
+    who = [sp for _, _, sp in diarization.merge_to_count(turns, embed, 2)]
+    assert len(set(who)) == 2
+    assert who[0] == who[2] and who[1] == who[3] and who[0] != who[1]
+
+
+def test_known_number_of_people_leaves_fewer_speakers_alone():
+    turns = [(0, 60, 0), (60, 120, 1)]
+    assert diarization.merge_to_count(turns, lambda intervals: [1.0, 0.0], 3) == turns
+
+
 def test_reassign_with_known_number_of_people_keeps_given_names(no_real_diarization):
     s, rid = service_with_speakers(no_real_diarization)
     folder, data = s._transcript_data(rid)
