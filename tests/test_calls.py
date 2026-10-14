@@ -82,3 +82,34 @@ def test_switched_off_or_recording_means_no_suggestion():
     s._check_call(lambda: ["Teams"])
     assert s.state()["call"] is None
     s.stop_recording()
+
+
+def test_asks_to_stop_the_recording_when_the_call_is_over():
+    """0.7.26: the recognised Teams call ended – ask whether to stop the recording (never stop by itself)."""
+    import time
+    s = _service(["Teams"])
+    s._check_call(lambda: ["Teams"])                       # call recognised, then recorded
+    s.start_recording(consent=True)
+    assert s._rec_info["call_app"] == "Teams"
+    s._check_call(lambda: ["Teams"])
+    assert s.state()["recording"]["call_over"] is None
+    s._check_call(lambda: [])                              # Teams just released the microphone …
+    assert s.state()["recording"]["call_over"] is None     # … but only for a moment so far
+    s._rec_info["call_seen"] = time.monotonic() - 31
+    s._check_call(lambda: [])
+    assert s.state()["recording"]["call_over"] == "Teams"
+    assert s.call_notifier.shown[-1][0] == "Der Teams-Call ist zu Ende – Aufnahme beenden?"
+    assert s.state()["recording"] is not None              # still recording
+    s.keep_recording()                                     # «Weiter aufnehmen»
+    assert s.state()["recording"]["call_over"] is None
+    s.stop_recording()
+
+
+def test_no_question_without_a_call_at_the_start():
+    import time
+    s = _service([])
+    s.start_recording(consent=True)                        # e.g. a meeting in the room
+    s._rec_info["call_seen"] = time.monotonic() - 60
+    s._check_call(lambda: [])
+    assert s.state()["recording"]["call_over"] is None
+    s.stop_recording()

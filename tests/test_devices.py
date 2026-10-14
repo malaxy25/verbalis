@@ -104,3 +104,9 @@ def test_soundcard_without_the_windows_warning_class(monkeypatch):
     monkeypatch.setitem(sys.modules, "soundcard", mac_soundcard)
     monkeypatch.setattr(devices.sys, "platform", "darwin")
     assert devices.soundcard_module() is mac_soundcard
+
+
+def test_microphone_only_choice_has_no_second_device(monkeypatch):
+    use(monkeypatch, "win32", ["Mikro"], ["Lautsprecher"])
+    chosen = devices.select("Mikro", devices.MICROPHONE_ONLY)
+    assert chosen.microphone.name == "Mikro" and chosen.loopback is None

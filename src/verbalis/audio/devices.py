@@ -86,6 +86,7 @@ def _is_virtual(name: str) -> bool:
 NO_MICROPHONE = ("Es wurde kein Mikrofon gefunden. Headset oder Mikrofon anschliessen – und unter Windows "
                  "in den Einstellungen → Datenschutz und Sicherheit → Mikrofon den Zugriff für Desktop-Apps erlauben. "
                  "Danach «Geräte neu laden».")
+MICROPHONE_ONLY = "__none__"   # «Keiner – nur Mikrofon»: record the microphone track only
 NO_SPEAKERS = ("Es wurde kein Ausgabegerät gefunden. Lautsprecher oder Headset anschliessen und "
                "«Geräte neu laden».")
 
@@ -136,11 +137,14 @@ def device_names() -> dict:
 
 
 def select(microphone: str | None = None, speakers: str | None = None) -> DeviceSelection:
+    """speakers = MICROPHONE_ONLY: no second track (meeting in a room)."""
     sc = soundcard_module()
     mic_list = sc.all_microphones()
     mic = _pick(mic_list, microphone, _default(sc.default_microphone, mic_list))
     if mic is None:
         raise ValueError(NO_MICROPHONE)
+    if speakers == MICROPHONE_ONLY:
+        return DeviceSelection(microphone=mic, speakers=None, loopback=None)
     if sys.platform == "darwin":
         from . import mac_tap
 

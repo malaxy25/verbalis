@@ -60,6 +60,9 @@ MAX_CLIP_S = 120.0            # longest passage played at once
 MAX_PEOPLE = 30               # «Anzahl Personen» when re-assigning speakers
 CALL_CHECK_S = 3.0            # how often to look for a call app using the microphone
 PLANNED_DUE_S = 30 * 60       # a planned recording this close to now is offered when a call starts
+CALL_OVER_AFTER_S = 30.0      # the call app hasn't used the microphone this long: ask whether to stop
+END_WARNING_S = 5 * 60        # notice this long before the maximum recording time is reached
+EXTEND_S = 30 * 60            # «+30 Min.»
 UI_FOCUS_S = 2.0              # the window counts as «in front» if it said so this recently
 PREVIEW_IDLE_S = 3.0          # level meters before a recording: close the devices when the UI stops asking
 MB = 1024 * 1024              # as shown in Windows Explorer
@@ -347,22 +350,37 @@ class Service:
                 log.exception("Call detection failed")
 
     def _check_call(self, detect: Callable[[], list[str]]) -> None:
-        """One look: did a call start (suggest recording) or end (forget it)?"""
-        if self._s.call_detection != "on" or self._rec is not None:
-            apps = []
-        else:
-            apps = detect()
+        """One look: did a call start (suggest recording) or end (forget it; while recording: ask to stop)?"""
+        apps = detect() if self._s.call_detection == "on" else []
+        call_over = None
         with self._lock:
+            recording = self._rec is not None
+            if recording:
+                info, now = self._rec_info, time.monotonic()
+                app = info.get("call_app")
+                if app and app in apps:
+                    info["call_seen"] = now
+                elif app and not info.get("call_over") and now - info.get("call_seen", now) >= CALL_OVER_AFTER_S:
+                    info["call_over"] = True
+                    call_over = app
             started = bool(apps) and self._call is None
             ended = not apps and self._call is not None
-            if started:
-                self._call = {"apps": apps, "dismissed": False, "planned": self._due_planned()}
+            if started:   # during a recording: no suggestion – it is being recorded
+                self._call = {"apps": apps, "dismissed": recording, "planned": None if recording else self._due_planned()}
             elif ended:
                 self._call = None
             call = self._call
+        in_front = time.monotonic() - self._ui_focused < UI_FOCUS_S
+        if call_over:
+            log.info("The %s call is over – asking whether to stop the recording", call_over)
+            if self.call_notifier is not None and not in_front:
+                self.call_notifier.show(f"Der {call_over}-Call ist zu Ende – Aufnahme beenden?",
+                                        "Klicken, um Verbalis zu öffnen.")
+            return
+        if recording:
+            return
         if started:
             log.info("Call recognised (%s) – suggesting a recording", ", ".join(apps))
-            in_front = time.monotonic() - self._ui_focused < UI_FOCUS_S
             if self.call_notifier is not None and not in_front:
                 planned = call["planned"]
                 text = (f"Geplant: {planned['title']}. " if planned else "") + \
@@ -476,7 +494,13 @@ class Service:
 
         try:
             chosen = self._select_devices(microphone or None, speakers or None)
-            mic, others = ("Mikrofon", chosen.microphone), ("Ton der anderen", chosen.loopback)
+            mic = ("Mikrofon", chosen.microphone)
+            if chosen.loopback is None:                       # «nur Mikrofon»
+                step("Nur Mikrofon", [mic], 3)
+                step("Wie beim Aufnahmestart: öffnen …", [mic], 2)
+                step("… schliessen und sofort neu öffnen", [mic], 3)
+                return
+            others = ("Ton der anderen", chosen.loopback)
             step("Nur Mikrofon", [mic], 3)
             step("Nur Ton der anderen", [others], 3)
             step("Beide zusammen", [mic, others], 3)
@@ -603,7 +627,10 @@ class Service:
             else:
                 folder = self._new_folder(start)
             consent = datetime.now().astimezone().isoformat(timespec="seconds")
-            names = {"me": devices.microphone.name, "others": devices.loopback.name}
+            only_microphone = devices.loopback is None          # «Keiner – nur Mikrofon»
+            names = {"me": devices.microphone.name, "others": "" if only_microphone else devices.loopback.name}
+            if only_microphone:
+                known["only_microphone"] = True
             rec = self._recorder_factory(devices.microphone, devices.loopback, folder)
             # consent and start are on disk before the first sample – they survive a crash
             pipeline.start_meta(folder, start, getattr(rec, "samplerate", 48_000), consent, names, known)
@@ -613,7 +640,10 @@ class Service:
             self._recording_error = None
             self._others_last_sound = time.monotonic()
             self._rec_info = {"id": folder.name, "folder": folder, "start": start, "consent": consent,
-                              "devices": names}
+                              "devices": names, "limit_s": self._s.max_recording_s,
+                              # a recognised call: ask to stop the recording when it is over
+                              "call_app": self._call["apps"][0] if self._call else None,
+                              "call_seen": time.monotonic()}
             # Remember the chosen devices for next time
             if (microphone, speakers) != (self._s.microphone, self._s.speakers):
                 self.save_settings({"microphone": microphone, "speakers": speakers})
@@ -632,17 +662,42 @@ class Service:
             self._rec.resume()
             self._others_last_sound = time.monotonic()  # silence during the pause doesn't count
 
-    def stop_recording(self, reason: str | None = None) -> str | None:
+    def stop_recording(self, reason: str | None = None, note: str | None = None) -> str | None:
+        """reason: ended early (incomplete). note: ended on purpose by Verbalis (complete), e.g. the maximum time."""
         with self._lock:
             rec, info = self._rec, self._rec_info
             if rec is None:
                 return None
             self._rec, self._rec_info = None, {}
         state = self._finish(rec, info, reason)
+        if note:
+            pipeline.update_meta(info["folder"], ended_by=note)
+            self._notice = note
+            log.info("Recording %s: %s", info["id"], note)
+        if self.call_notifier is not None and (info.get("call_over") or info.get("end_warned")):
+            self.call_notifier.hide()
         if self._s.auto_transcribe == "on" and state in (pipeline.COMPLETE, pipeline.INCOMPLETE) \
                 and rec.active_seconds() >= 1 and pipeline.has_audio(info["folder"]):
             self.transcribe(info["id"])   # otherwise the user enters the number of people first and starts it
         return info["id"]
+
+    def extend_recording(self, seconds: float = EXTEND_S) -> None:
+        """«+30 Min.»: push the maximum recording time back."""
+        with self._lock:
+            info = self._rec_info
+            if self._rec is None or not info.get("limit_s"):
+                return
+            info["limit_s"] = max(info["limit_s"], self._rec.active_seconds()) + seconds
+            info["end_warned"] = False
+        if self.call_notifier is not None:
+            self.call_notifier.hide()
+
+    def keep_recording(self) -> None:
+        """«Weiter aufnehmen» after the call was over: don't ask again during this recording."""
+        with self._lock:
+            self._rec_info["call_over_dismissed"] = True
+        if self.call_notifier is not None:
+            self.call_notifier.hide()
 
     def _finish(self, rec, info: dict, reason: str | None = None) -> str:
         """Stop the recorder and record honestly in meta.json how the recording ended."""
@@ -674,6 +729,30 @@ class Service:
             log.exception("Writing meta.json for %s failed", info["id"])
             self._recording_error = f"Die Angaben zur Aufnahme konnten nicht gespeichert werden ({e})."
         return state
+
+    def _check_time_limit(self, recording: dict) -> dict | None:
+        """The maximum recording time: a notice 5 minutes before, then the recording ends (complete)."""
+        with self._lock:
+            info, rec = self._rec_info, self._rec
+            limit = info.get("limit_s")
+            if rec is None or not limit:
+                return recording
+            left = limit - rec.active_seconds()
+            warn = left <= END_WARNING_S and not info.get("end_warned")
+            if warn:
+                info["end_warned"] = True
+        if left <= 0:
+            hours, minutes = divmod(int(round(limit / 60)), 60)
+            length = f"{hours} Std. {minutes} Min." if hours and minutes else f"{hours} Std." if hours else f"{minutes} Min."
+            self.stop_recording(note=f"Die Aufnahme wurde nach {length} automatisch beendet (Höchstdauer, "
+                                     "einstellbar unter Einstellungen → Allgemein).")
+            return None
+        if left <= END_WARNING_S:
+            recording["ends_in_s"] = round(left)
+        if warn and self.call_notifier is not None and time.monotonic() - self._ui_focused >= UI_FOCUS_S:
+            self.call_notifier.show(f"Die Aufnahme endet in {max(round(left / 60), 1)} Min.",
+                                    "Höchstdauer erreicht. Klicken, um Verbalis zu öffnen und zu verlängern.")
+        return recording
 
     def _check_no_data(self, rec, info: dict) -> None:
         """Call with the lock held. A track that has delivered no audio at all is reported once –
@@ -1668,19 +1747,24 @@ class Service:
             rec, info = self._rec, self._rec_info
             recording = None
             if rec is not None and rec.running:  # stopped by itself = a track failed
-                me, others = rec.status()
+                tracks = {s.name: s for s in rec.status()}
+                others = tracks.get("others")                  # None: «nur Mikrofon»
                 now = time.monotonic()
-                if rec.paused or _db(others.level_rms) > SOUND_DB:
+                if rec.paused or others is None or _db(others.level_rms) > SOUND_DB:
                     self._others_last_sound = now
                 self._check_no_data(rec, info)
                 recording = {
                     "id": info["id"],
                     "duration_s": round(rec.active_seconds(), 1),
                     "paused": rec.paused,
-                    "levels": {"me": _db(me.level_rms), "others": _db(others.level_rms)},
+                    "levels": {"me": _db(tracks["me"].level_rms),
+                               "others": _db(others.level_rms) if others else -90.0},
                     # long silence on the others track usually means the wrong output device
                     "others_silent_s": round(now - self._others_last_sound),
                     "others_device": info["devices"]["others"],
+                    "only_microphone": others is None,
+                    "call_over": info.get("call_app") if info.get("call_over")
+                    and not info.get("call_over_dismissed") else None,
                 }
             job = None
             if self._job:
@@ -1700,6 +1784,8 @@ class Service:
                 recording = None
             elif free is not None and free < WARN_FREE_MB:
                 recording["disk_minutes_left"] = max(int((free - STOP_FREE_MB) / MB_PER_MINUTE), 0)
+            if recording is not None:
+                recording = self._check_time_limit(recording)
         update = self._update
         return {"recording": recording, "job": job, "queued": queued, "pause": pause,
                 "recording_error": self._recording_error, "notice": self._notice,

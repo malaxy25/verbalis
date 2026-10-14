@@ -79,6 +79,12 @@ class Api:
     def stop_recording(self):
         return self._call(self._s.stop_recording)
 
+    def extend_recording(self):
+        return self._call(self._s.extend_recording)
+
+    def keep_recording(self):
+        return self._call(self._s.keep_recording)
+
     def pause_recording(self):
         return self._call(self._s.pause_recording)
 

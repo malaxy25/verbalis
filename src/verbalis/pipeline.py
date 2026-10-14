@@ -49,7 +49,9 @@ def has_audio(folder: Path) -> bool:
 
 
 def missing_tracks(folder: Path) -> list[str]:
-    return [t for t in TRACKS if audio_file(folder, t) is None]
+    """Tracks that should be there but aren't – «nur Mikrofon» recordings have no «others» on purpose."""
+    expected = ["me"] if read_meta(folder).get("only_microphone") else list(TRACKS)
+    return [t for t in expected if audio_file(folder, t) is None]
 
 
 # ---------------------------------------------------------------- crash-safe files
@@ -185,7 +187,8 @@ INTERRUPTED = "interrupted"      # found running after a restart (crash, power l
 PLANNED = "planned"              # created in advance with its details, nothing recorded yet
 
 # What the user enters about a recording – kept when meta.json is rewritten at the end of a recording
-DETAIL_FIELDS = ("title", "project", "participants", "notes", "people", "keep_audio", "planned_start")
+DETAIL_FIELDS = ("title", "project", "participants", "notes", "people", "keep_audio", "planned_start",
+                 "only_microphone")
 WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
 

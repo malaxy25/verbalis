@@ -240,9 +240,10 @@ class LevelMonitor:
     stop_events: list[threading.Event] = field(default_factory=list)
 
     def start(self) -> None:
-        self.stop_events = [threading.Event(), threading.Event()]
-        self.tracks = [MeterTrack("me", self.microphone, self.stop_events[0], self.samplerate),
-                       MeterTrack("others", self.loopback, self.stop_events[1], self.samplerate)]
+        devices = [("me", self.microphone)] + ([("others", self.loopback)] if self.loopback is not None else [])
+        self.stop_events = [threading.Event() for _ in devices]
+        self.tracks = [MeterTrack(name, device, stop, self.samplerate)
+                       for (name, device), stop in zip(devices, self.stop_events)]
         for track in self.tracks:
             track.start()
 
@@ -279,9 +280,10 @@ class TwoTrackRecorder:
         common = dict(paused=lambda: self.paused, paused_time=self.paused_time)
         self.tracks = [
             Track("me", self.microphone, self.folder / "me.wav", self.stop_event, self.t0, self.samplerate, **common),
-            Track("others", self.loopback, self.folder / "others.wav", self.stop_event, self.t0, self.samplerate,
-                  **common),
         ]
+        if self.loopback is not None:   # None: «nur Mikrofon» – a meeting in a room
+            self.tracks.append(Track("others", self.loopback, self.folder / "others.wav", self.stop_event, self.t0,
+                                     self.samplerate, **common))
         for track in self.tracks:
             track.start()
 

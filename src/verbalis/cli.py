@@ -88,7 +88,8 @@ def cmd_record(args) -> int:
             elapsed = time.monotonic() - rec.t0
             if args.duration and elapsed >= args.duration:
                 break
-            me, others = rec.status()
+            tracks = {s.name: s for s in rec.status()}
+            me, others = tracks["me"], tracks.get("others", tracks["me"])
             mm, ss = divmod(int(elapsed), 60)
             sys.stdout.write(
                 f"\r● {mm:02d}:{ss:02d}   Ich {_level_bar(me.level_rms)}"

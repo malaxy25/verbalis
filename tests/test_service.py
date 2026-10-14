@@ -617,3 +617,62 @@ def test_copy_on_macos_goes_through_pbcopy(monkeypatch):
     assert calls == [(["/usr/bin/pbcopy"], "Grüezi – Diagnose", "en_US.UTF-8")]
     monkeypatch.setattr(sys, "platform", "win32")
     assert service_module.copy_to_clipboard("x", run=fake_run) is False   # Windows: the window copies
+
+
+class MicOnlyRecorder(FakeRecorder):
+    """Like TwoTrackRecorder with loopback=None: only the microphone track."""
+
+    def start(self):
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self.t0 = time.monotonic() - 5
+        sf.write(self.folder / "me.wav", np.full(48000, 0.1, dtype=np.float32), 48000)
+
+    def status(self):
+        return [TrackStatus("me", self.folder / "me.wav", 48000 * 5, 0, 0.1)]
+
+
+def test_microphone_only_recording_for_a_meeting_in_a_room():
+    """0.7.26: «Keiner – nur Mikrofon» – no second track, no warning about it, nothing reported missing."""
+    seen = []
+
+    def mic_only(microphone, speakers):
+        seen.append(speakers)
+        return SimpleNamespace(microphone=SimpleNamespace(name="MacBook Air-Mikrofon"), loopback=None)
+
+    s = Service(settings=Settings(name="Andrea", model="test-model", auto_transcribe="on"),
+                recorder_factory=lambda mic, loop, folder: MicOnlyRecorder(mic, loop, folder),
+                select_devices=mic_only, list_devices=lambda: {}, transcriber_factory=FakeTranscriber)
+    rid = s.start_recording("", "__none__", consent=True)
+    state = s.state()["recording"]
+    assert state["only_microphone"] and state["levels"]["others"] == -90.0 and state["others_silent_s"] == 0
+    assert s.state()["recording_error"] is None                       # no «keine Audiodaten» for the others
+    s.stop_recording()
+    assert wait_until(lambda: s.recordings()[0]["status"] == "done")
+    entry = s.recordings()[0]
+    assert entry["missing_tracks"] == [] and seen == ["__none__"]
+    md = (s._path(rid) / "transcript.md").read_text(encoding="utf-8")
+    assert "Unvollständig" not in md and "Hallo von test-model" in md
+
+
+def test_maximum_recording_time_warns_extends_and_ends_cleanly():
+    """0.7.26: a forgotten recording ends after the maximum time (2 h by default) – as a complete recording."""
+    from verbalis import pipeline
+    notes = []
+    s = make_service()
+    s.call_notifier = SimpleNamespace(show=lambda title, text: notes.append(title), hide=lambda: None)
+    assert s._s.max_recording_s == 7200
+    rid = s.start_recording(consent=True)
+    s._rec_info["limit_s"] = s._rec.active_seconds() + 200       # 3 min 20 s left
+    state = s.state()["recording"]
+    assert 190 <= state["ends_in_s"] <= 200 and notes == ["Die Aufnahme endet in 3 Min."]
+    s.state()
+    assert len(notes) == 1                                       # one notice
+    s.extend_recording()                                         # «+30 Min.»
+    assert "ends_in_s" not in s.state()["recording"]
+    s._rec_info["limit_s"] = 4                                   # the time is up
+    assert s.state()["recording"] is None
+    meta = pipeline.read_meta(s._path(rid))
+    assert meta["state"] == "complete" and "automatisch beendet" in meta["ended_by"]
+    assert "automatisch beendet" in s.state()["notice"]
+    assert Settings.from_dict({"max_recording_min": ""}).max_recording_s is None
+    assert Settings.from_dict({"max_recording_min": "abc"}).max_recording_min == "120"

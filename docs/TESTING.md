@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-214 tests in 22 files.
+220 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -99,7 +99,7 @@ Compressing and retaining the audio files.
 - **Kept audio survives retention days and size limit** – 0.7.17 bug: a test recording was deleted by the size limit – «Audio behalten» protects it.
 - **Track without any audio does not block the transcription** – 0.7.24 on macOS: recorded with the microphone only – the silent system audio track became a 0-byte
 
-### `test_calls.py` (5)
+### `test_calls.py` (7)
 
 Recognising calls: a call app uses the microphone → suggest recording (never record by itself).
 
@@ -108,6 +108,8 @@ Recognising calls: a call app uses the microphone → suggest recording (never r
 - **No notification when the window is in front and never a recording**
 - **Suggestion offers a planned recording that is due**
 - **Switched off or recording means no suggestion**
+- **Asks to stop the recording when the call is over** – 0.7.26: the recognised Teams call ended – ask whether to stop the recording (never stop by itself).
+- **No question without a call at the start**
 
 ### `test_cli.py` (9)
 
@@ -145,7 +147,7 @@ Recording details (name, project, participants, notes) and planned recordings.
 - **Planned recording can be deleted**
 - **Details are saved while meta json is being read** – Windows: replacing meta.json failed while another thread had it open for a moment (WinError 5/32).
 
-### `test_devices.py` (6)
+### `test_devices.py` (7)
 
 Device selection, including macOS where the others' voices come from a virtual input device.
 
@@ -155,6 +157,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Missing default device does not break the list** – Regression 0.7.11: on a PC without a default microphone both device lists stayed empty.
 - **No microphone at all explains what to do**
 - **Soundcard without the windows warning class** – 0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
+- **Microphone only choice has no second device**
 
 ### `test_diarization.py` (17)
 
@@ -245,7 +248,7 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Subfolder model** – gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root.
 - **Default model is gcoli for new installations only** – 0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model.
 
-### `test_recorder.py` (12)
+### `test_recorder.py` (13)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -261,6 +264,7 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Device without audio neither hangs nor aborts** – 0.7.23 on macOS: a recording ended after 3 s without system audio – while macOS still asked for
 - **Audio that starts late is padded in sync** – The permission is granted after a moment: the silence before is filled in, the track stays in sync.
 - **Measure tells a working from a silent device** – Diagnosis: which device delivers, how loud, and whether it can be closed.
+- **Recorder and meters with the microphone only**
 
 ### `test_release_workflow.py` (6)
 
@@ -291,7 +295,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (34)
+### `test_service.py` (36)
 
 App flow without a window: recording → queue → transcript.
 
@@ -329,6 +333,8 @@ App flow without a window: recording → queue → transcript.
 - **Track without any audio is reported while recording** – 0.7.21 on macOS: the recording ran without sound and nothing said which device delivered nothing.
 - **Diagnosis runs the steps of a recording start** – Diagnose tab: each device alone, both together, closing and reopening at once – with a report to copy.
 - **Copy on macos goes through pbcopy** – 0.7.23.dev1 on macOS: «Diagnose kopieren» did nothing – WebKit refuses the clipboard after an await.
+- **Microphone only recording for a meeting in a room** – 0.7.26: «Keiner – nur Mikrofon» – no second track, no warning about it, nothing reported missing.
+- **Maximum recording time warns extends and ends cleanly** – 0.7.26: a forgotten recording ends after the maximum time (2 h by default) – as a complete recording.
 
 ### `test_spelling.py` (5)
 

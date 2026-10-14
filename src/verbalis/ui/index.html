@@ -588,6 +588,11 @@
     <p class="silent-hint" id="silent-hint" role="status" hidden></p>
     <p class="disk-hint" id="disk-hint" role="status" hidden></p>
     <p class="target-hint" id="target-hint" hidden></p>
+    <div class="call-notice" id="rec-notice" role="status" hidden>
+      <span id="rec-notice-text"></span>
+      <button type="button" class="action primary" id="btn-rec-notice-stop" hidden>Beenden</button>
+      <button type="button" class="action" id="btn-rec-notice-go"></button>
+    </div>
     <div class="call-notice" id="call-notice" role="status" hidden>
       <span id="call-text"></span>
       <button type="button" class="action" id="btn-call-planned" hidden></button>
@@ -651,6 +656,13 @@
             <input type="text" name="recordings_dir" autocomplete="off" spellcheck="false">
             <small id="folder-hint"></small>
           </label>
+          <div class="field">
+            <span>Höchstdauer einer Aufnahme</span>
+            <div class="field-row">
+              <label>nach <input type="text" name="max_recording_min" inputmode="numeric" autocomplete="off" aria-label="Minuten"> Minuten beenden</label>
+            </div>
+            <small>Falls man das Beenden vergisst. 5 Minuten vorher kommt ein Hinweis mit «+30 Min.». Leer heisst ohne Grenze.</small>
+          </div>
           <div class="field">
             <span>Calls erkennen</span>
             <label class="consent-like"><input type="checkbox" name="call_detection"> Aufnahme vorschlagen, wenn Teams, Zoom, Webex, Slack oder ein Browser das Mikrofon benutzt</label>
@@ -1781,6 +1793,27 @@ function showCall(call) {
   }
 }
 
+/* While recording: the maximum time comes close, or the recognised call is over. */
+function showRecordingNotice(recording) {
+  const box = $("rec-notice");
+  const over = recording && recording.call_over;
+  const ends = recording && recording.ends_in_s != null;
+  box.hidden = !over && !ends;
+  if (box.hidden) return;
+  if (over) {
+    $("rec-notice-text").textContent = `Der ${over === "Browser" ? "Call im Browser" : `${over}-Call`} ist zu Ende – Aufnahme beenden?`;
+    $("btn-rec-notice-stop").hidden = false;
+    $("btn-rec-notice-go").textContent = "Weiter aufnehmen";
+    box.dataset.kind = "call";
+  } else {
+    const minutes = Math.max(Math.ceil(recording.ends_in_s / 60), 1);
+    $("rec-notice-text").textContent = `Die Aufnahme endet in ${minutes} Min. (Höchstdauer aus den Einstellungen).`;
+    $("btn-rec-notice-stop").hidden = true;
+    $("btn-rec-notice-go").textContent = "+30 Min.";
+    box.dataset.kind = "time";
+  }
+}
+
 /* Which entry the record button records into. */
 function showTarget() {
   const a = chosen();
@@ -1860,6 +1893,7 @@ async function poll() {
   try {
     const z = await call("state", document.hasFocus() && !document.hidden);
     showRecording(z.recording);
+    showRecordingNotice(z.recording);
     showCall(z.call);
     showTarget();
     // show a recording error once – closed or timed out, it doesn't come back with the next poll
@@ -1883,10 +1917,13 @@ async function poll() {
 
 /* ---------- Devices & settings ---------- */
 
-function fillOptions(select, names, fallback, chosen) {
+const MICROPHONE_ONLY = "__none__";   // «Keiner – nur Mikrofon»: no second track (meeting in a room)
+
+function fillOptions(select, names, fallback, chosen, withNone = false) {
   select.replaceChildren(element("option", { value: "" }, fallback ? `Systemstandard (${fallback})` : "Bitte Gerät wählen …"));
   for (const n of names) select.append(element("option", { value: n }, n));
-  select.value = names.includes(chosen) ? chosen : "";
+  if (withNone) select.append(element("option", { value: MICROPHONE_ONLY }, "Keiner – nur Mikrofon (Besprechung vor Ort)"));
+  select.value = names.includes(chosen) || (withNone && chosen === MICROPHONE_ONLY) ? chosen : "";
 }
 
 async function reloadDevices() {
@@ -2064,7 +2101,7 @@ async function loadDevices() {
   try {
     const g = await call("devices");
     fillOptions($("sel-microphone"), g.microphones, g.default_microphone, state.settings.microphone);
-    fillOptions($("sel-speakers"), g.speakers, g.default_speakers, state.settings.speakers);
+    fillOptions($("sel-speakers"), g.speakers, g.default_speakers, state.settings.speakers, true);
     const hint = $("device-hint");
     const notes = [...(g.problems || [])];
     if (g.platform === "darwin" && !g.virtual_device) {
@@ -2239,7 +2276,7 @@ async function openSettings(tab) {
   showTab(typeof tab === "string" ? tab : "general");   // called as click handler too (then tab is the event)
   const form = $("form-settings");
   const e = state.settings;
-  for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb"]) form.elements[field].value = e[field] || "";
+  for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb", "max_recording_min"]) form.elements[field].value = e[field] || "";
   form.elements.update_check.checked = e.update_check !== "off";
   form.elements.model_auto_update.checked = e.model_auto_update === "on";
   form.elements.diarize_others.checked = e.diarize_others !== "off";
@@ -2579,7 +2616,7 @@ function replaceWord(range, replacement) {
 function collectSettings() {
   const form = $("form-settings");
   const data = {};
-  for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "audio_days", "audio_max_mb"]) data[field] = form.elements[field].value;
+  for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "audio_days", "audio_max_mb", "max_recording_min"]) data[field] = form.elements[field].value;
   data.update_check = form.elements.update_check.checked ? "on" : "off";
   data.model_auto_update = form.elements.model_auto_update.checked ? "on" : "off";
   data.diarize_others = form.elements.diarize_others.checked ? "on" : "off";
@@ -2595,6 +2632,11 @@ function collectSettings() {
 async function saveSettings(event) {
   if (event) event.preventDefault();
   const data = collectSettings();
+  if (data.max_recording_min.trim() && !/^\d+$/.test(data.max_recording_min.trim())) {
+    showTab("general");
+    showMessage("Bitte bei der Höchstdauer nur ganze Minuten eingeben oder das Feld leer lassen.");
+    return false;
+  }
   for (const field of ["audio_days", "audio_max_mb"]) {
     if (data[field].trim() && !/^\d+$/.test(data[field].trim())) {
       showTab("retention");
@@ -2651,6 +2693,11 @@ async function init() {
   $("btn-diag-folder").addEventListener("click", () => call("open_data_folder").catch((e) => showMessage(e.message)));
   $("btn-message-close").addEventListener("click", () => showMessage(""));
   $("btn-plan").addEventListener("click", planRecording);
+  $("btn-rec-notice-stop").addEventListener("click", () => { $("rec-notice").hidden = true; toggleRecording(); });
+  $("btn-rec-notice-go").addEventListener("click", () => {
+    $("rec-notice").hidden = true;
+    call($("rec-notice").dataset.kind === "call" ? "keep_recording" : "extend_recording").catch((e) => showMessage(e.message));
+  });
   $("btn-call-dismiss").addEventListener("click", () => { $("call-notice").hidden = true; call("dismiss_call").catch(() => {}); });
   for (const type of ["mousemove", "mousedown", "keydown", "wheel"]) {
     window.addEventListener(type, () => { lastActivity = Date.now(); }, { passive: true });

@@ -337,3 +337,28 @@ def test_measure_tells_a_working_from_a_silent_device(monkeypatch):
     assert good["device"] == "Mikro" and good["first_data_s"] is not None and good["received_s"] > 0
     assert -20 < good["peak_db"] < -5 and not good["hangs"] and good["error"] is None
     assert silent["first_data_s"] is None and silent["received_s"] == 0 and not silent["hangs"]
+
+def test_recorder_and_meters_with_the_microphone_only(tmp_path):
+    from verbalis.audio.recorder import LevelMonitor, TwoTrackRecorder
+
+    class Endless:
+        name = "Mikro"
+
+        @contextmanager
+        def recorder(self, samplerate, blocksize=None, channels=None):
+            class Rec:
+                def record(self, numframes):
+                    time.sleep(0.01)
+                    return np.full((numframes, 1), 0.1, dtype=np.float32)
+            yield Rec()
+
+    rec = TwoTrackRecorder(Endless(), None, tmp_path)
+    rec.start()
+    time.sleep(0.3)
+    assert rec.stop() and [s.name for s in rec.status()] == ["me"]
+    assert (tmp_path / "me.wav").exists() and not (tmp_path / "others.wav").exists()
+    monitor = LevelMonitor(Endless(), None)
+    monitor.start()
+    time.sleep(0.2)
+    assert set(monitor.levels()) == {"me"}
+    monitor.stop()

@@ -29,6 +29,7 @@ class Settings:
     diarize_others: str = "on"        # tell the others apart (Gegenüber 1, 2, …)
     diarize_me: str = "off"           # tell speakers apart on the own microphone (meetings in a room)
     call_detection: str = "on"        # "on" = suggest recording when a call app uses the microphone
+    max_recording_min: str = "120"    # end a recording after N minutes (notice 5 min before); empty = never
     auto_transcribe: str = "off"      # "on" = transcribe right after recording; "off" = start it by hand
                                       # (after entering the number of people)
     last_seen_version: str = ""       # version whose «what's new» was shown last
@@ -44,6 +45,10 @@ class Settings:
     @property
     def max_mb(self) -> int | None:
         return int(self.audio_max_mb) if self.audio_max_mb else None
+
+    @property
+    def max_recording_s(self) -> float | None:
+        return int(self.max_recording_min) * 60 if self.max_recording_min and int(self.max_recording_min) else None
 
     @property
     def beam_size(self) -> int:
@@ -83,7 +88,7 @@ class Settings:
             s.auto_transcribe = "off"
         if s.call_detection not in ("on", "off"):
             s.call_detection = "on"
-        for name, default in (("audio_days", "3"), ("audio_max_mb", "")):
+        for name, default in (("audio_days", "3"), ("audio_max_mb", ""), ("max_recording_min", "120")):
             value = getattr(s, name)
             if value and not (value.isdigit() and int(value) < 100_000):
                 setattr(s, name, default)  # invalid input → default
