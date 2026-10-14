@@ -296,10 +296,13 @@ def test_audio_that_starts_late_is_padded_in_sync(tmp_path, monkeypatch):
 
             def later():
                 time.sleep(0.6)                      # «Erlauben» clicked after 0.6 s
-                while not stop.is_set():
+                last = time.monotonic()
+                while not stop.is_set():              # exactly as much audio as time passed (slow CI too)
                     time.sleep(0.01)
-                    rec._queue.append(np.full((480, 1), 0.3, dtype=np.float32))
+                    now = time.monotonic()
+                    rec._queue.append(np.full((int((now - last) * 48_000), 1), 0.3, dtype=np.float32))
                     rec._record_event.set()
+                    last = now
             threading.Thread(target=later, daemon=True).start()
             yield rec
 
@@ -308,9 +311,9 @@ def test_audio_that_starts_late_is_padded_in_sync(tmp_path, monkeypatch):
     track = Track("me", Late(), tmp_path / "me.wav", stop, t0=started)
     track.start()
     time.sleep(1.5)
+    elapsed = time.monotonic() - started
     stop.set()
     track.join(2)
-    elapsed = time.monotonic() - started
     data, sr = sf.read(tmp_path / "me.wav")
     assert track.status.error is None
     assert track.status.padded_frames / sr > 0.4                       # the silence at the start
