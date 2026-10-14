@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-227 tests in 22 files.
+228 tests in 23 files.
 
 ### `test_app.py` (7)
 
@@ -370,6 +370,12 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Interjection while someone speaks is an aside**
 - **Short answer after a question stays a paragraph**
 - **Aside in markdown and json**
+
+### `test_ui_list.py` (1)
+
+The recording list in the UI: groups open and close. Runs the list functions of index.html in Node.js.
+
+- **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
 
 ### `test_updates.py` (23)
 

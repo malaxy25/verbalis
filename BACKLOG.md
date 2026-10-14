@@ -18,6 +18,11 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    people and a 1:1 Teams call, transcribed without a number and every speaker named correctly; Claude
    measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
    first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
+2. **Done in the working copy** (for the 0.7.28 CHANGELOG):
+   - The list groups open and close reliably: «Diese Woche» could be closed but not opened again, and
+     «Heute» could not be closed while its recording was selected (`toggleGroup` read localStorage, which
+     the app does not keep). First UI test that runs index.html code in Node.js (`tests/test_ui_list.py`).
+   - GitHub release notes completely English (the install hints were German).
 
 ## Proposed (waiting for Andrea's OK)
 

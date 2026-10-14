@@ -16,7 +16,8 @@ at tocco AG later. Everything runs on the user's computer; nothing is uploaded.
 
 ## Language rule
 
-Code, identifiers, file names, CLI commands, comments and docs are **English**.
+Code, identifiers, file names, CLI commands, comments and docs are **English** – also CHANGELOG.md and
+the GitHub release notes (with the install hints the release workflow adds), as agreed with Andrea.
 Everything a user reads – UI, error messages, CLI output, transcripts – is **German**
 (Swiss spelling: «ss», no «ß»). Keep both when changing anything.
 

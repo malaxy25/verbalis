@@ -932,7 +932,8 @@ function collapsedGroups() {
 }
 
 function toggleGroup(key) {
-  const groups = collapsedGroups();
+  // From the state, not from localStorage: where that is not kept, «Diese Woche» stayed closed for good.
+  const groups = new Set(state.collapsed || collapsedGroups());
   if (groups.has(key)) groups.delete(key); else groups.add(key);
   try { localStorage.setItem("verbalis.collapsed", JSON.stringify([...groups])); } catch (_) { /* only for this session */ }
   state.collapsed = groups;
@@ -947,6 +948,11 @@ function renderList() {
     return;
   }
   const collapsed = state.collapsed || (state.collapsed = collapsedGroups());
+  const selected = state.recordings.find((a) => a.id === state.selected);
+  if (selected && state.revealed !== selected.id) {   // a newly selected recording is shown once;
+    state.revealed = selected.id;                     // afterwards its group can be closed like any other
+    collapsed.delete(groupOf(selected).key);
+  }
   const planned = state.recordings.filter((a) => a.status === "planned")
     .sort((x, y) => (startDate(x) || 0) - (startDate(y) || 0));
   const ordered = [...planned, ...state.recordings.filter((a) => a.status !== "planned")];
@@ -955,7 +961,7 @@ function renderList() {
     const group = groupOf(a);
     if (!current || group.key !== current.key) {
       current = group;
-      const closed = collapsed.has(group.key) && !(a.id === state.selected);
+      const closed = collapsed.has(group.key);
       const count = ordered.filter((x) => groupOf(x).key === group.key).length;
       list.append(element("li", { class: "group" }, element("button", {
         type: "button", class: "group-head", "aria-expanded": String(!closed),

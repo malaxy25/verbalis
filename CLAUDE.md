@@ -24,7 +24,7 @@ holds the agreed plan for the next version, if there is one).
 
 ## Rules
 
-- **Language:** code, identifiers, comments, docs, tests in English; everything a user reads (UI,
+- **Language:** code, identifiers, comments, docs, tests, CHANGELOG and release notes in English; everything a user reads (UI,
   messages, CLI output, transcripts) in German.
 - **Releases are automatic.** A release = raise the version in `pyproject.toml` *and*
   `src/verbalis/__init__.py` + a section `## X.Y.Z – date` at the top of `CHANGELOG.md` + push to main.
