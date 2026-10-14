@@ -4,26 +4,20 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.27 – planned and decided with Andrea (waiting for measurements)
+## 0.7.28 – planned and decided with Andrea (waiting for measurements)
 
-Items 1, 2, 4, 5 of the 0.7.26 plan and the Mac self-install were released in 0.7.26.
+0.7.27 (14 Oct 2026): a known number of people joins similar voices (`merge_to_count`) – on-site
+recordings with 2 and 4 people: 75 % / 90 % right instead of 56 % / 76 %. Per-turn re-assignment was
+tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hints when merging by hand.
 
 1. **Settings for recognition and speakers** – in plain words, few steps, values from measurements:
    - «Sprechertrennung»: eher weniger Personen / Standard / eher mehr Personen (`THRESHOLD`)
    - «Kurze Einwürfe am Rand zeigen» (on/off)
    - «Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD) – needs a `compare` option to measure
-   **Waiting for measurements:** Andrea runs `verbalis speakers-test <folder> --track others|me
-   --thresholds 0.5 0.6 0.7 0.8 0.9` on 2–3 real recordings (Teams with 3–4 people, room meeting with 2,
-   1:1) and sends the numbers with the true number of people.
-2. **Known number of people: join instead of forcing** (done in the working copy, 14 Oct 2026). On-site
-   meeting with 2 people (microphone only): «2» told to the clustering gave 56 % right (nearly all in one
-   speaker); without a number 10 speakers, 94.9 % pure. Now: find speakers as usual, then join the most
-   similar voices down to the number (`merge_to_count`, 2-minute voice prints) – 75 % on that recording.
-   One of Andrea's groups (≈4 min) sounds like the other person to the model; loudness did not help.
-   Second on-site recording, 4 people, 12 min: forced «4» 76 %, without a number 7 speakers 90 % pure,
-   new join to 4 **90 %** (every small speaker went to the right person). Per-turn re-assignment: 83 % on
-   the first, 85 % on the second – not better, dropped. Idea for later: «klingt ähnlich wie …» hints when
-   merging by hand.
+   **Waiting for recordings:** on-site (2 and 4 people) is measured. Andrea sends a Teams call with 3–4
+   people and a 1:1 Teams call, transcribed without a number and every speaker named correctly; Claude
+   measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
+   first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
 
 ## Proposed (waiting for Andrea's OK)
 

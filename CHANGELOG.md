@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.27 – 2026-10-14
+- **A known number of people now helps instead of hurting.** Until now «2 Personen» was handed straight
+  to the speaker clustering – in an on-site meeting it put nearly everything into one speaker and a few
+  coughs into the other (56 % right). Now the speakers are found as without a number and the most similar
+  voices are joined until the number is reached; small groups such as coughs never count as a person.
+  Measured on two on-site recordings (2 and 4 people): 75 % and 90 % right instead of 56 % and 76 %.
+
 ## 0.7.26 – 2026-10-14
 - **«Keiner – nur Mikrofon»** under «Ton der anderen kommt über», for a meeting in a room: only the
   microphone track is recorded – no warning about the system audio, nothing reported as missing.
