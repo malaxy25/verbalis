@@ -36,6 +36,8 @@ window.pywebview = { api: {
     { id: "Flix-AI/flix-swissgerman-full", name: "Flix Schweizerdeutsch", size_gb: 3.1, description: "Schweizerdeutsch-Fine-Tune (large-v3), langsamer", status: "auf diesem PC", local: true, label: "Flix-AI/flix-swissgerman-full – auf diesem PC", page: "https://huggingface.co/malaxy/flix-swissgerman-ct2", revision: "4f2e9c1", loaded: "2026-10-08T15:20+02:00", source: "Hugging Face" },
     { id: "large-v3", name: "Whisper large-v3", size_gb: 3.1, description: "Original von OpenAI, fast gleich gut, etwas schneller", status: "wird bei Bedarf heruntergeladen (ca. 3,1 GB)", local: false, label: "large-v3 – wird bei Bedarf heruntergeladen (ca. 3,1 GB)", page: "https://huggingface.co/Systran/faster-whisper-large-v3", revision: null, loaded: null, source: "Hugging Face" },
     { id: "large-v3-turbo", previous: true, name: "Whisper large-v3 turbo", size_gb: 1.6, description: "deutlich schneller, aber schwächer bei Dialekt", status: "auf diesem PC", local: true, label: "large-v3-turbo – auf diesem PC", page: "https://huggingface.co/mobiuslabsgmbh/faster-whisper-large-v3-turbo", revision: "0c94664", loaded: "2026-10-07T21:43+02:00", source: "Hugging Face" }]),
+  check_models_now: () => ok([
+    { id: "gcoli/whisper-large-v3-turbo-swiss-german-mit", name: "Schweizerdeutsch turbo (gcoli)", size_gb: 1.6, description: "Schweizerdeutsch-Fine-Tune", local: true, revision: "540fb2e", loaded: "2026-10-08T15:20+02:00", source: "Hugging Face", check: { state: "current", changed: "2026-09-30T10:00+02:00", checked: new Date().toISOString() } }]),
   model_updates: () => new Promise((res) => setTimeout(() => res({ ok: true, data: { "Flix-AI/flix-swissgerman-full": { revision: "9be17d0", changed: "2026-11-02T08:00+01:00" } } }), 300)),
   open_model_page: (id) => { window.__modelPage = id; return ok(null); },
   update_model: (id) => { window.__modelDl = { model: id, progress: 0.42 }; return ok(null); },
@@ -63,6 +65,8 @@ window.pywebview = { api: {
   projects: () => ok(["tocco Release", "Verbalis"]),
   extend_recording: () => { window.__extended = true; return ok(null); },
   keep_recording: () => { window.__kept_recording = true; return ok(null); },
+  install_check: () => ok(window.__scenario === "macinstall" ? { reason: "Verbalis liegt in «Desktop», nicht im Ordner «Programme».", target: "/Users/andrea/Applications", target_name: "Programme (in deinem Benutzerordner)" } : null),
+  install_to_applications: () => ok({ target: "/Users/andrea/Applications/Verbalis.app", left_behind: null }),
   dismiss_call: () => { window.__callDismissed = true; return ok(null); },
   audio_clip: (id, start, end) => { window.__clip = [start, end]; return ok({ url: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=", start }); },
   partial_transcript: () => ok({ until: 240, tracks: { me: "Andrea", others: "Gegenüber" }, segments: segments.filter((g) => g.start < 30).map((g) => ({ ...g, speaker: g.track === "me" ? "Andrea" : "Gegenüber", speaker_id: null })) }),

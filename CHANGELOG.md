@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.26 – 2026-10-14
+- **«Keiner – nur Mikrofon»** under «Ton der anderen kommt über», for a meeting in a room: only the
+  microphone track is recorded – no warning about the system audio, nothing reported as missing.
+- **Maximum recording time** (Einstellungen → Allgemein, 2 hours by default) in case the stop is forgotten:
+  5 minutes before, a notice with «+30 Min.»; then the recording ends cleanly and complete.
+- **When the recognised call is over** (Windows): «Der Teams-Call ist zu Ende – Aufnahme beenden?» with
+  «Beenden» / «Weiter aufnehmen». Verbalis never stops by itself.
+- **Model tiles say whether the model is up to date:** «✓ Neuester Stand vom … – geprüft heute 14:05»,
+  «Update verfügbar» or «Nicht geprüft – keine Verbindung»; «Jetzt auf Updates prüfen».
+- **Mac: Verbalis puts itself into «Programme».** Started from «Downloads», the desktop, «Dokumente» or the
+  disk image, it offers once to move itself – into /Applications with administrator rights, otherwise into
+  the personal «Programme» folder – and starts again from there. No more «Verbalis 2», no read-only copy,
+  updates work without an administrator account. New: a **DMG** for the first download; the ZIP stays for
+  the automatic updates.
+
 ## 0.7.25 – 2026-10-14
 - **A track without any audio no longer blocks the transcription** (on all systems): recorded with the
   microphone only, the silent system audio track became an empty file and transcribing failed with «Format

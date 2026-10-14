@@ -289,6 +289,7 @@
   .card-id { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
   .card-text { color: var(--ink); }
   .card-body .update { color: var(--limmat); font-weight: 600; }
+  .card-body .current { color: var(--ink); }
   .card-body .link-button { justify-self: start; padding: 2px 0; }
   .card-body input[type=text] { margin-top: 4px; }
   .badge { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
@@ -616,6 +617,23 @@
   </div>
 </dialog>
 
+<dialog id="dlg-install" class="notes-dialog" aria-labelledby="install-title">
+  <div class="notes-body">
+    <h2 id="install-title">Verbalis in den Ordner «Programme» verschieben?</h2>
+    <p class="lead" id="install-reason"></p>
+    <p>Dort startet Verbalis normal, aktualisiert sich selbst und es gibt keine doppelten Kopien. Deine Aufnahmen,
+      Einstellungen und Modelle bleiben, wo sie sind.</p>
+    <p id="install-target"></p>
+  </div>
+  <div class="notes-foot">
+    <p class="note-line" id="install-line">Verbalis schliesst sich danach und startet am neuen Ort gleich wieder.</p>
+    <div class="dialog-buttons">
+      <button type="button" class="action" id="btn-install-later">Nicht jetzt</button>
+      <button type="button" class="action primary" id="btn-install-go">Verschieben</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dlg-news" class="notes-dialog" aria-labelledby="news-title">
   <div class="notes-body" id="news-body"></div>
   <div class="notes-foot">
@@ -675,6 +693,9 @@
           <div class="field">
             <span id="model-label">Modell</span>
             <div class="model-cards" id="model-cards" role="radiogroup" aria-labelledby="model-label"></div>
+            <div class="field-row">
+              <button type="button" class="link-button" id="btn-models-check">Jetzt auf Updates prüfen</button>
+            </div>
             <small id="model-status" aria-live="polite">Die gewählte Kachel wird mit «Einstellungen speichern» zum Standard.</small>
           </div>
         </div>
@@ -2138,13 +2159,21 @@ function modelCard(m, selected) {
   const radio = element("input", { type: "radio", name: "model_choice", value: m.id });
   radio.checked = selected;
   const details = [];
-  if (m.revision) details.push(element("span", {}, `Stand ${m.revision}, geladen am ${dateText(m.loaded)}`));
-  else if (m.local) details.push(element("span", {}, m.source === "Hugging Face" ? "Auf diesem PC" : `Auf diesem PC (${m.source})`));
+  const check = m.check;
   if (update) {
     details.push(element("span", { class: "update" },
-      `Update verfügbar: Stand ${update.revision} vom ${dateText(update.changed)}`
+      `Update verfügbar: Stand vom ${dateText(update.changed)}`
       + (state.settings.model_auto_update === "on" ? " – wird beim nächsten Transkribieren geladen" : "")));
+  } else if (check && check.state === "current") {
+    details.push(element("span", { class: "current" },
+      `✓ Neuester Stand${check.changed ? ` vom ${dateText(check.changed)}` : ""} – geprüft ${checkedText(check.checked)}`));
+  } else if (check && check.state === "failed") {
+    details.push(element("span", { class: "warning-text" }, `Nicht geprüft – keine Verbindung zu Hugging Face (${checkedText(check.checked)})`));
+  } else if (m.local && m.revision) {
+    details.push(element("span", {}, "Noch nicht auf Updates geprüft"));
   }
+  if (m.revision) details.push(element("span", { class: "card-id" }, `Stand ${m.revision}, auf diesem PC seit ${dateText(m.loaded)}`));
+  else if (m.local) details.push(element("span", {}, m.source === "Hugging Face" ? "Auf diesem PC" : `Auf diesem PC (${m.source})`));
   return element("label", { class: "model-card" },
     radio,
     element("span", { class: "card-body" },
@@ -2159,6 +2188,34 @@ function modelCard(m, selected) {
       modelActions(m, update),
     ),
   );
+}
+
+/* «heute 14:05», «gestern 09:12» or «12. Oktober 2026» */
+function checkedText(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || isNaN(d)) return "unbekannt";
+  const time = d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+  const day = new Date(d); day.setHours(0, 0, 0, 0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.round((today - day) / 86_400_000);
+  return days === 0 ? `heute ${time}` : days === 1 ? `gestern ${time}` : dateText(iso);
+}
+
+async function checkModelsNow() {
+  const button = $("btn-models-check");
+  button.disabled = true;
+  button.textContent = "Wird geprüft …";
+  try {
+    state.models = await call("check_models_now");
+    state.modelUpdates = await call("model_updates");
+    renderModelCardsKeep();
+    $("model-status").textContent = "Geprüft.";
+  } catch (e) {
+    $("model-status").textContent = e.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Jetzt auf Updates prüfen";
+  }
 }
 
 function modelActions(m, update) {
@@ -2442,6 +2499,32 @@ async function checkUpdateNow() {
   } catch (e) { result.textContent = e.message; }
 }
 
+/* macOS: started from «Downloads», «Schreibtisch» or the disk image – offer to move into «Programme». */
+async function offerInstall() {
+  let check;
+  try { check = await call("install_check"); } catch (_) { return; }
+  if (!check) return;
+  $("install-reason").textContent = check.reason;
+  $("install-target").textContent = `Ziel: ${check.target_name} – ${check.target}`;
+  $("dlg-install").showModal();
+}
+
+async function installToApplications() {
+  const go = $("btn-install-go");
+  go.disabled = true;
+  $("btn-install-later").disabled = true;
+  $("install-line").textContent = "Wird verschoben …";
+  try {
+    const r = await call("install_to_applications");
+    $("install-line").textContent = "Fertig – Verbalis startet gleich am neuen Ort."
+      + (r.left_behind ? ` Die alte Kopie in «${r.left_behind}» kann gelöscht werden.` : "");
+  } catch (e) {
+    $("install-line").textContent = e.message;
+    go.disabled = false;
+    $("btn-install-later").disabled = false;
+  }
+}
+
 async function showWhatsNew() {
   let sections;
   try { sections = await call("whats_new"); } catch (_) { return; }
@@ -2693,6 +2776,9 @@ async function init() {
   $("btn-diag-folder").addEventListener("click", () => call("open_data_folder").catch((e) => showMessage(e.message)));
   $("btn-message-close").addEventListener("click", () => showMessage(""));
   $("btn-plan").addEventListener("click", planRecording);
+  $("btn-install-go").addEventListener("click", installToApplications);
+  $("btn-install-later").addEventListener("click", () => { $("dlg-install").close(); showWhatsNew(); });
+  $("btn-models-check").addEventListener("click", checkModelsNow);
   $("btn-rec-notice-stop").addEventListener("click", () => { $("rec-notice").hidden = true; toggleRecording(); });
   $("btn-rec-notice-go").addEventListener("click", () => {
     $("rec-notice").hidden = true;
@@ -2740,7 +2826,8 @@ async function init() {
   await renderContent(true);
   updateRecordButton();
   setInterval(poll, 250);
-  showWhatsNew();
+  if (!document.querySelector("dialog[open]")) await offerInstall();
+  if (!$("dlg-install").open) showWhatsNew();
 }
 
 if (window.pywebview && window.pywebview.api) init();

@@ -112,6 +112,9 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   certificates in the bundled Python (certifi via SSL_CERT_FILE); blocksize is the hardware buffer (≤ 512);
   coreaudio waits forever for audio (`recorder._Reader`); App Translocation from «Downloads»; /Applications
   not writable without admin (use ~/Applications); WebKit refuses the clipboard after an await (pbcopy).
+- **Mac install place** (0.7.26): outside /Applications or ~/Applications the app offers to move itself
+  (`updates.move_to_applications`, relaunch script); /Applications only when writable (admin). The DMG is
+  for the first download, the ZIP for self-updates.
 - **Not notarized / Windows not signed** yet (SmartScreen and Gatekeeper warn on first install).
 
 ## How work is delivered (important pitfalls)

@@ -133,6 +133,9 @@ class Api:
     def spelling_add(self, word):
         return self._call(self._s.spelling_add, word)
 
+    def check_models_now(self):
+        return self._call(self._s.check_models_now)
+
     def model_updates(self):
         return self._call(self._s.model_updates)
 
@@ -183,6 +186,15 @@ class Api:
         if result["ok"] and self._window is not None:
             # give the UI a moment to show the message, then close so the installer can replace files
             threading.Timer(1.5, self._window.destroy).start()
+        return result
+
+    def install_check(self):
+        return self._call(self._s.install_check)
+
+    def install_to_applications(self):
+        result = self._call(self._s.install_to_applications)
+        if result["ok"] and self._window is not None:
+            threading.Timer(1.5, self._window.destroy).start()   # the moved app starts when this one is gone
         return result
 
     def whats_new(self):

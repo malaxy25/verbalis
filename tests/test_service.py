@@ -361,6 +361,8 @@ def _patch_models(monkeypatch, revisions, remote, downloads):
     monkeypatch.setattr(m, "is_local", lambda model: True)
     monkeypatch.setattr(m, "local_revision", lambda model: {"revision": revisions[0], "loaded": "2026-10-08T10:00"})
     monkeypatch.setattr(m, "check_update", remote)
+    monkeypatch.setattr(m, "check_revision", lambda model: {"update": remote(model),
+                                                           "current_changed": "2026-09-30T10:00+02:00"})
 
     def fake_download(model, progress=None):
         downloads.append(model)
@@ -676,3 +678,20 @@ def test_maximum_recording_time_warns_extends_and_ends_cleanly():
     assert "automatisch beendet" in s.state()["notice"]
     assert Settings.from_dict({"max_recording_min": ""}).max_recording_s is None
     assert Settings.from_dict({"max_recording_min": "abc"}).max_recording_min == "120"
+
+
+def test_model_tiles_say_whether_the_model_is_up_to_date(monkeypatch):
+    """0.7.26: «Stand 540fb2e, 8.10.2026» didn't say whether it is the newest – now the tile says so."""
+    _patch_models(monkeypatch, ["a" * 40], lambda model: None, [])
+    s = make_service()
+    assert all(m["check"] is None for m in s.models())                 # not checked yet
+    tiles = {m["id"]: m for m in s.check_models_now()}
+    check = tiles["large-v3"]["check"]
+    assert check["state"] == "current" and check["changed"].startswith("2026-09-30") and check["checked"]
+
+    from verbalis.transcription import models as m
+
+    def offline(model):
+        raise OSError("keine Verbindung")
+    monkeypatch.setattr(m, "check_revision", offline)
+    assert {t["id"]: t for t in s.check_models_now()}["large-v3"]["check"]["state"] == "failed"

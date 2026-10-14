@@ -149,6 +149,109 @@ def translocated(bundle: Path) -> bool:
     return "AppTranslocation" in bundle.parts or str(bundle).startswith(("/private/var/folders/", "/var/folders/"))
 
 
+# ---------------------------------------------------------------- macOS: install into «Programme»
+
+def application_folders(home: Path | None = None) -> tuple[Path, Path]:
+    """The shared «Programme» (/Applications) and the personal one (~/Applications)."""
+    return Path("/Applications"), (home or Path.home()) / "Applications"
+
+
+def install_place(bundle: Path, home: Path | None = None) -> str | None:
+    """Why the app should be moved – or None if it already lies in a «Programme» folder.
+
+    Elsewhere («Downloads», «Schreibtisch», «Dokumente», a disk image) macOS may run a read-only
+    copy (App Translocation), the app can't update itself, and copies pile up («Verbalis 2»).
+    """
+    if translocated(bundle):
+        return "Verbalis läuft aus einer schreibgeschützten Kopie (direkt aus «Downloads» gestartet)."
+    if bundle.parent in application_folders(home):
+        return None
+    if str(bundle).startswith("/Volumes/"):
+        return "Verbalis läuft direkt aus dem Installationsfenster (Disk-Image)."
+    return f"Verbalis liegt in «{bundle.parent.name}», nicht im Ordner «Programme»."
+
+
+def install_target(home: Path | None = None, writable: Callable[[Path], bool] | None = None) -> Path:
+    """/Applications when this user may write there (administrator), else ~/Applications."""
+    shared, personal = application_folders(home)
+    writable = writable or (lambda folder: os.access(folder, os.W_OK))
+    return shared if shared.exists() and writable(shared) else personal
+
+
+def bundle_version(bundle: Path) -> str | None:
+    import plistlib
+
+    try:
+        with open(bundle / "Contents" / "Info.plist", "rb") as f:
+            return plistlib.load(f).get("CFBundleShortVersionString")
+    except (OSError, ValueError):
+        return None
+
+
+def original_bundle(bundle: Path, home: Path | None = None) -> Path | None:
+    """For a translocated copy: the Verbalis.app it was started from (same version), if it is findable."""
+    if not translocated(bundle):
+        return bundle
+    version = bundle_version(bundle)
+    home = home or Path.home()
+    for folder in ("Downloads", "Desktop", "Documents"):
+        candidate = home / folder / "Verbalis.app"
+        if candidate.is_dir() and bundle_version(candidate) == version:
+            return candidate
+    return None
+
+
+def move_to_applications(bundle: Path, home: Path | None = None, writable: Callable[[Path], bool] | None = None,
+                         run: Callable = subprocess.run) -> tuple[Path, Path | None]:
+    """Put Verbalis into «Programme». Returns (new place, copy left behind that the user may delete).
+
+    Moves the app when it can (same disk: instant, no second copy); copies it from a disk image
+    or a translocated copy whose original isn't found. An older Verbalis at the target is replaced.
+    """
+    import shutil
+
+    target_folder = install_target(home, writable)
+    target_folder.mkdir(parents=True, exist_ok=True)
+    target = target_folder / "Verbalis.app"
+    source = original_bundle(bundle, home)
+    copy = source is None or str(source).startswith("/Volumes/")
+    source = source or bundle
+    if source.resolve() == target.resolve():
+        return target, None
+    old = target.with_name("Verbalis.app.old")
+    if old.exists():
+        shutil.rmtree(old)
+    if target.exists():
+        target.rename(old)
+    try:
+        if copy:
+            run(["ditto", str(source), str(target)], check=True)
+        else:
+            shutil.move(str(source), str(target))
+    except Exception:
+        if old.exists() and not target.exists():
+            old.rename(target)   # put the previous version back
+        raise
+    if old.exists():
+        shutil.rmtree(old, ignore_errors=True)
+    # downloaded files are «quarantined»: that is what makes macOS run a read-only copy
+    run(["xattr", "-dr", "com.apple.quarantine", str(target)], check=False)
+    left_behind = source if copy and not str(source).startswith("/Volumes/") and source != bundle else None
+    return target, left_behind
+
+
+def write_relaunch_script(app: Path, pid: int, script: Path) -> Path:
+    """Shell script: wait until this Verbalis has quit, then start the one at its new place."""
+    script.write_text(f"""#!/bin/sh
+# Written by Verbalis after moving itself into «Programme» – deletes itself when done.
+while kill -0 {pid} 2>/dev/null; do sleep 0.5; done
+open {shlex.quote(str(app))}
+rm -f "$0"
+""", encoding="utf-8")
+    script.chmod(0o755)
+    return script
+
+
 def unpack_mac_update(zip_path: Path, workdir: Path, extract: Callable | None = None) -> Path:
     """Unpack the downloaded zip and return the new Verbalis.app inside it.
 

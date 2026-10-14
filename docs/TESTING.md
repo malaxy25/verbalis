@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-220 tests in 22 files.
+225 tests in 22 files.
 
 ### `test_app.py` (7)
 
@@ -295,7 +295,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (36)
+### `test_service.py` (37)
 
 App flow without a window: recording → queue → transcript.
 
@@ -335,6 +335,7 @@ App flow without a window: recording → queue → transcript.
 - **Copy on macos goes through pbcopy** – 0.7.23.dev1 on macOS: «Diagnose kopieren» did nothing – WebKit refuses the clipboard after an await.
 - **Microphone only recording for a meeting in a room** – 0.7.26: «Keiner – nur Mikrofon» – no second track, no warning about it, nothing reported missing.
 - **Maximum recording time warns extends and ends cleanly** – 0.7.26: a forgotten recording ends after the maximum time (2 h by default) – as a complete recording.
+- **Model tiles say whether the model is up to date** – 0.7.26: «Stand 540fb2e, 8.10.2026» didn't say whether it is the newest – now the tile says so.
 
 ### `test_spelling.py` (5)
 
@@ -368,7 +369,7 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Short answer after a question stays a paragraph**
 - **Aside in markdown and json**
 
-### `test_updates.py` (19)
+### `test_updates.py` (23)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -391,6 +392,10 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **App started from downloads is recognised** – 0.7.21 on macOS: «Verbalis darf /private/var/folders/… nicht ändern» – the app had been started
 - **Mac app in a locked folder offers the download** – 0.7.22 on a Mac without admin rights: «Verbalis darf /Applications nicht ändern» – and no way on.
 - **Test build gets the real release as update** – A test build «0.7.23.dev1» (manual build, not released) must see the release 0.7.23 as newer.
+- **Where verbalis lies and where it goes** – 0.7.26: started from «Downloads», «Schreibtisch» or the disk image, Verbalis offers to move itself.
+- **Move into the personal programme folder** – Andrea's case: no administrator account, Verbalis on the desktop – it ends up in ~/Applications,
+- **Translocated copy moves its original from downloads**
+- **Relaunch script starts the moved app**
 
 ### `test_wasapi_fix.py` (5)
 

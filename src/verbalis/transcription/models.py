@@ -343,6 +343,17 @@ def check_update(model: str, timeout: float = 6.0) -> dict | None:
     card also creates one. So the content ids of the downloaded files are
     compared between our revision and the latest. Returns None if nothing to do.
     """
+    result = check_revision(model, timeout)
+    return result["update"] if result else None
+
+
+def _when(info) -> str | None:
+    return info.last_modified.astimezone().isoformat(timespec="minutes") if info.last_modified else None
+
+
+def check_revision(model: str, timeout: float = 6.0) -> dict | None:
+    """{"update": newer revision or None, "current_changed": when the model files on this computer were
+    published} – None for models that aren't downloaded from Hugging Face."""
     repo = repo_for(model)
     local = local_revision(model)
     if repo is None or local is None:
@@ -352,12 +363,11 @@ def check_update(model: str, timeout: float = 6.0) -> dict | None:
     api = HfApi()
     latest = api.model_info(repo, timeout=timeout, files_metadata=True)
     if latest.sha == local["revision"]:
-        return None
+        return {"update": None, "current_changed": _when(latest)}
     ours = api.model_info(repo, revision=local["revision"], timeout=timeout, files_metadata=True)
     if _model_files(latest, _patterns(model)) == _model_files(ours, _patterns(model)):
-        return None   # only documentation changed
-    changed = latest.last_modified.astimezone().isoformat(timespec="minutes") if latest.last_modified else None
-    return {"revision": latest.sha, "changed": changed}
+        return {"update": None, "current_changed": _when(ours)}   # only documentation changed
+    return {"update": {"revision": latest.sha, "changed": _when(latest)}, "current_changed": _when(ours)}
 
 
 def converted_models() -> list[str]:

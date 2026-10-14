@@ -216,10 +216,26 @@ jobs:
             "dist/Verbalis-${{ needs.version.outputs.version }}-macos-arm64.zip"
           ls -lh dist/*.zip
 
+      # For the first install: a disk image with Verbalis and a link to «Programme». The ZIP stays for
+      # the automatic updates. Users without administrator rights just open Verbalis from the image –
+      # it then offers to move itself into their personal «Programme» folder.
+      - name: Disk image for the first install
+        run: |
+          set -euo pipefail
+          staging="$RUNNER_TEMP/dmg"
+          mkdir -p "$staging"
+          ditto dist/Verbalis.app "$staging/Verbalis.app"
+          ln -s /Applications "$staging/Programme"
+          hdiutil create -volname "Verbalis" -srcfolder "$staging" -ov -format UDZO \
+            "dist/Verbalis-${{ needs.version.outputs.version }}-macos-arm64.dmg"
+          ls -lh dist/*.dmg
+
       - uses: actions/upload-artifact@v6
         with:
           name: Verbalis-${{ needs.version.outputs.version }}-macos
-          path: dist/Verbalis-*-macos-arm64.zip
+          path: |
+            dist/Verbalis-*-macos-arm64.zip
+            dist/Verbalis-*-macos-arm64.dmg
           if-no-files-found: error
 
   publish:
@@ -258,9 +274,10 @@ jobs:
           notes += ["", f"**Windows:** `Verbalis-{version}-setup.exe` herunterladen und ausführen. Ein Update "
                         "installiert man genauso – Einstellungen, Korrekturliste, Modelle und Aufnahmen bleiben erhalten."]
           if os.environ["MAC_RESULT"] == "success":
-              notes += ["", f"**Mac (experimentell, Apple Silicon):** `Verbalis-{version}-macos-arm64.zip` entpacken und "
-                            "Verbalis in «Programme» ziehen (ohne Administratorkonto: in den persönlichen Ordner "
-                            "«Programme» im Benutzerordner, dort aktualisiert es sich selbst). "
+              notes += ["", f"**Mac (experimentell, Apple Silicon):** `Verbalis-{version}-macos-arm64.dmg` öffnen und "
+                            "Verbalis auf «Programme» ziehen – oder Verbalis direkt öffnen: es bietet dann an, sich selbst "
+                            "in den Ordner «Programme» zu verschieben (ohne Administratorkonto in den persönlichen). "
+                            "Das ZIP ist für die automatischen Updates. "
                             "Beim ersten Öffnen blockiert macOS die nicht notarisierte App: "
                             "Systemeinstellungen → Datenschutz & Sicherheit → «Trotzdem öffnen». Ab macOS 14.2 nimmt "
                             "Verbalis den Ton der anderen selbst auf (Berechtigung «Audioaufnahme» erlauben); "

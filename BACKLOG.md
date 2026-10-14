@@ -4,48 +4,29 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.26 – planned and decided with Andrea (build once item 3 is measured)
+## 0.7.27 – planned and decided with Andrea (waiting for measurements)
 
-1. **Maximum recording time**: setting «Aufnahme automatisch beenden nach», default **2 hours** (decided),
-   empty = no limit. Notice 5 minutes before («Aufnahme endet in 5 Min.», button «+30 Min.»; Windows
-   notification when in the background). Ends cleanly as a complete recording; meta.json says why.
-2. **Ask to stop when the call is over**: only if a call was recognised when the recording started; when the
-   call app hasn't used the microphone for ~30 s: «Der Teams-Call ist zu Ende – Aufnahme beenden?»
-   («Beenden» / «Weiter aufnehmen»). Never stops by itself – the maximum time is the safety net.
-3. **Settings for recognition and speakers** – in plain words, few steps, values from measurements:
+Items 1, 2, 4, 5 of the 0.7.26 plan and the Mac self-install were released in 0.7.26.
+
+1. **Settings for recognition and speakers** – in plain words, few steps, values from measurements:
    - «Sprechertrennung»: eher weniger Personen / Standard / eher mehr Personen (`THRESHOLD`)
    - «Kurze Einwürfe am Rand zeigen» (on/off)
    - «Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD) – needs a `compare` option to measure
    **Waiting for measurements:** Andrea runs `verbalis speakers-test <folder> --track others|me
    --thresholds 0.5 0.6 0.7 0.8 0.9` on 2–3 real recordings (Teams with 3–4 people, room meeting with 2,
    1:1) and sends the numbers with the true number of people.
-4. **«Keiner – nur Mikrofon»** as a choice under «Ton der anderen kommt über» (proposed by Andrea, 14 Oct 2026):
-   for meetings in a room – only the microphone track is recorded, no system audio warning, speaker
-   diarization on the own track.
-5. **Is the model up to date?** Show «✓ Neuester Stand (geprüft heute 14:05)» / «Update verfügbar: Stand vom
-   …» / «Nicht geprüft – keine Internetverbindung», button «Jetzt prüfen»; the date is when the revision
-   was published, not when it was downloaded; the short id small below.
 
 ## Proposed (waiting for Andrea's OK)
 
-- **Mac: install into the right place by itself** (agreed with Andrea, 14 Oct 2026):
-  1. At start, if Verbalis runs from «Downloads», «Dokumente», a translocated copy or any other unsuitable
-     place, ask once «Verbalis in den Ordner Programme verschieben?» – move itself and restart. Target:
-     `/Applications` when writable (admin), else `~/Applications` (create it). This also fixes self-updates
-     without an admin account and the read-only copy from «Downloads».
-  2. A DMG for the first download (Verbalis + arrow to «Programme»); the ZIP stays for automatic updates.
-  Item 1 matters more (it also helps when someone forgets to move it). Test build first; needs Andrea's Mac. **[ux]**
 - **«Problem melden»** (Log tab, later also next to error messages): creates the log ZIP, opens a prepared
   e-mail to andrea@frehner.tech (version, system, short template) and shows the ZIP in Finder/Explorer to
   drag into the mail. Not as a GitHub issue (public repo). Could also attach «Diagnose kopieren». **[ux]**
-- **Remove the test branch `mac-audio`** on GitHub once 0.7.23 is confirmed on the Mac. **[ops]**
 
 ## Now
 
-- [ ] **Mac: confirm after the update 0.7.23 → 0.7.24** (14 Oct 2026): no new permission question and sound on
-  both tracks = the stable signature works. Found: the signature was fine («Authority=Verbalis Code
-  Signing»); 0.7.23 aborted recordings after 3 s without audio (permission question open / nothing playing),
-  fixed in 0.7.24. Then remove the test branch `mac-audio`. **[ops]**
+- [ ] **Mac: test 0.7.26** – self-install into «Programme» (from the desktop and from the DMG), and that an
+  update keeps the permissions (stable signature, «Authority=Verbalis Code Signing»). **[ops]**
+- [ ] **frehner.tech: Mac button → the DMG** (once a release has one). **[ops]**
 - [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
 - [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17/0.7.18 (safe way first). **[ux]**
 

@@ -144,6 +144,7 @@ class Service:
         self._update: dict | None = None        # result of the last update check
         self._notice: str | None = None         # neutral information for the UI, e.g. a model update
         self._model_updates: tuple[float, dict] | None = None   # (checked at, result) – cached
+        self._model_status: dict[str, dict] = {}   # model → {"state": current|update|failed, "changed", "checked"}
         self._model_updates_dismissed = False
         self._model_download: dict | None = None  # {"model", "progress"} while an update downloads
         self._transcriber_revision: str | None = None
@@ -254,7 +255,8 @@ class Service:
                      "previous": bool(local and previous_revision(model)), "update": cached.get(model),
                      "status": status, "local": local,
                      "size_gb": size, "label": f"{model} – {status}", "page": page_url(model),
-                     "revision": None, "loaded": None, "source": "Hugging Face"}
+                     "revision": None, "loaded": None, "source": "Hugging Face",
+                     "check": self._model_status.get(model) if local else None}
             if local:
                 rev = local_revision(model)
                 if rev:
@@ -264,23 +266,39 @@ class Service:
             result.append(entry)
         return result
 
-    def model_updates(self) -> dict:
-        """Newer revisions on Hugging Face for downloaded models (network; cached for 6 hours)."""
-        from .transcription.models import RECOMMENDED, check_update, is_local
+    def model_updates(self, force: bool = False) -> dict:
+        """Newer revisions on Hugging Face for downloaded models (network; cached for 6 hours).
 
-        if self._model_updates and time.monotonic() - self._model_updates[0] < 6 * 3600:
+        Also remembers per model whether it is up to date – shown on the model tiles.
+        """
+        from .transcription.models import RECOMMENDED, check_revision, is_local
+
+        if not force and self._model_updates and time.monotonic() - self._model_updates[0] < 6 * 3600:
             return self._model_updates[1]
         result = {}
+        checked = datetime.now().astimezone().isoformat(timespec="minutes")
         for model, _ in RECOMMENDED:
             try:
-                update = check_update(model) if is_local(model) else None
+                info = check_revision(model) if is_local(model) else None
             except Exception as e:  # offline – just no information
                 log.info("Model update check for %s failed: %s", model, e)
+                self._model_status[model] = {"state": "failed", "changed": None, "checked": checked}
                 continue
+            if info is None:
+                continue
+            update = info["update"]
             if update:
                 result[model] = {"revision": update["revision"][:7], "changed": update["changed"]}
+            self._model_status[model] = {"state": "update" if update else "current",
+                                         "changed": info["current_changed"], "checked": checked}
         self._model_updates = (time.monotonic(), result)
         return result
+
+    def check_models_now(self) -> list[dict]:
+        """«Jetzt prüfen» in the settings: ask Hugging Face again, then the tiles with the new state."""
+        self._model_updates_dismissed = False
+        self.model_updates(force=True)
+        return self.models()
 
     def open_model_page(self, model: str) -> None:
         from .transcription.models import HF_PAGE, page_url
@@ -1519,6 +1537,35 @@ class Service:
                     "nach dem Admin-Passwort). Tipp: Im persönlichen Ordner «Programme» (im Benutzerordner) "
                     "kann sich Verbalis künftig selbst aktualisieren.")
         return None
+
+    # ------------------------------------------------------------ macOS: install into «Programme»
+
+    def install_check(self) -> dict | None:
+        """On a Mac: should Verbalis move itself into «Programme»? None if not (or not a Mac app)."""
+        bundle = updates.app_bundle() if sys.platform == "darwin" else None
+        reason = updates.install_place(bundle) if bundle else None
+        if not reason:
+            return None
+        target = updates.install_target()
+        shared = target == updates.application_folders()[0]
+        return {"reason": reason, "target": str(target),
+                "target_name": "Programme" if shared else "Programme (in deinem Benutzerordner)"}
+
+    def install_to_applications(self) -> dict:
+        """Move (or copy) Verbalis into «Programme» and start it from there; this one quits (see app.py)."""
+        import tempfile
+
+        bundle = updates.app_bundle()
+        if bundle is None or sys.platform != "darwin":
+            raise RuntimeError("Nur in der Mac-App möglich.")
+        if self._rec is not None or self._job is not None:
+            raise RuntimeError("Bitte zuerst die Aufnahme beenden bzw. die Transkription abwarten.")
+        target, left_behind = updates.move_to_applications(bundle)
+        log.info("Moved Verbalis %s → %s", bundle, target)
+        script = updates.write_relaunch_script(target, os.getpid(),
+                                               Path(tempfile.gettempdir()) / "verbalis-relaunch.sh")
+        updates.start_swap(script)
+        return {"target": str(target), "left_behind": str(left_behind) if left_behind else None}
 
     def open_update_download(self) -> None:
         """Open the download of the update in the browser (only a file of a Verbalis release on GitHub)."""

@@ -249,3 +249,58 @@ def test_test_build_gets_the_real_release_as_update():
     assert updates.is_newer("0.7.23", "0.7.23.dev1")
     assert not updates.is_newer("0.7.23.dev1", "0.7.23")
     assert updates.is_newer("0.7.23.dev2", "0.7.23.dev1") and updates.is_newer("0.7.23.dev1", "0.7.22")
+
+
+# ---------------------------------------------------------------- macOS: install into «Programme»
+
+def _app(folder, version="0.7.26"):
+    import plistlib
+    app = folder / "Verbalis.app"
+    (app / "Contents").mkdir(parents=True)
+    with open(app / "Contents" / "Info.plist", "wb") as f:
+        plistlib.dump({"CFBundleShortVersionString": version}, f)
+    return app
+
+
+def test_where_verbalis_lies_and_where_it_goes(tmp_path):
+    """0.7.26: started from «Downloads», «Schreibtisch» or the disk image, Verbalis offers to move itself."""
+    from pathlib import PurePosixPath
+    home = tmp_path / "home"
+    assert updates.install_place(home / "Applications" / "Verbalis.app", home) is None
+    assert "Desktop" in updates.install_place(home / "Desktop" / "Verbalis.app", home)
+    assert "schreibgeschützt" in updates.install_place(
+        PurePosixPath("/private/var/folders/x/T/AppTranslocation/A/d/Verbalis.app"), home)
+    assert "Disk-Image" in updates.install_place(PurePosixPath("/Volumes/Verbalis/Verbalis.app"), home)
+    # without administrator rights: the personal «Programme» folder
+    assert updates.install_target(home, writable=lambda folder: False) == home / "Applications"
+
+
+def test_move_into_the_personal_programme_folder(tmp_path):
+    """Andrea's case: no administrator account, Verbalis on the desktop – it ends up in ~/Applications,
+    without a second copy, an older one there is replaced."""
+    home = tmp_path / "home"
+    desktop_app = _app(home / "Desktop")
+    _app(home / "Applications", version="0.7.20")             # an older one is already there
+    calls = []
+    target, left = updates.move_to_applications(desktop_app, home, writable=lambda f: False,
+                                                run=lambda cmd, check: calls.append(cmd[0]))
+    assert target == home / "Applications" / "Verbalis.app" and left is None
+    assert not desktop_app.exists() and updates.bundle_version(target) == "0.7.26"
+    assert not (home / "Applications" / "Verbalis.app.old").exists()
+    assert calls == ["xattr"]                                  # quarantine removed, nothing copied
+
+
+def test_translocated_copy_moves_its_original_from_downloads(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    original = _app(home / "Downloads")
+    running = _app(tmp_path / "AppTranslocation" / "d")        # the read-only copy macOS runs
+    monkeypatch.setattr(updates, "translocated", lambda bundle: "AppTranslocation" in str(bundle))
+    target, left = updates.move_to_applications(running, home, writable=lambda f: False,
+                                                run=lambda cmd, check: None)
+    assert target == home / "Applications" / "Verbalis.app" and not original.exists() and left is None
+
+
+def test_relaunch_script_starts_the_moved_app(tmp_path):
+    script = updates.write_relaunch_script(tmp_path / "Applications" / "Verbalis.app", 4242, tmp_path / "r.sh")
+    text = script.read_text(encoding="utf-8")
+    assert "kill -0 4242" in text and "open " in text and "Verbalis.app" in text
