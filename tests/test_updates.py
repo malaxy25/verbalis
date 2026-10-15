@@ -193,7 +193,7 @@ def test_check_reads_the_github_digest_and_name(monkeypatch):
     assert not updates.expected_name({**info, "installer_name": "Verbalis-98.0.0-setup.exe"})
 
 
-def test_mac_app_finds_certificates(monkeypatch):
+def test_mac_app_finds_certificates(monkeypatch, tmp_path):
     """0.7.19 bug on macOS: the update check failed with «CERTIFICATE_VERIFY_FAILED» – the Python
     inside the Mac app has no CA certificates. certifi's are used instead."""
     import os
@@ -206,9 +206,36 @@ def test_mac_app_finds_certificates(monkeypatch):
     assert "SSL_CERT_FILE" not in os.environ                 # Windows uses its own certificate store
     verbalis._certificates_on_macos("darwin")
     assert os.environ["SSL_CERT_FILE"] == certifi.where() and os.path.exists(certifi.where())
-    monkeypatch.setenv("SSL_CERT_FILE", "/company/ca.pem")
+    company = tmp_path / "ca.pem"
+    company.write_text("certificates")
+    monkeypatch.setenv("SSL_CERT_FILE", str(company))
+    monkeypatch.delenv(verbalis._OWN_CERT_MARK, raising=False)
     verbalis._certificates_on_macos("darwin")
-    assert os.environ["SSL_CERT_FILE"] == "/company/ca.pem"  # a certificate file set by IT wins
+    assert os.environ["SSL_CERT_FILE"] == str(company)       # a certificate file set by IT wins
+
+
+def test_certificate_path_inherited_from_the_moved_app_is_replaced(monkeypatch, tmp_path):
+    """0.7.28 on a new Mac: after Verbalis moved itself from the translocated copy into «Programme», the
+    restarted app inherited SSL_CERT_FILE pointing into the vanished copy – the model download failed with
+    «[Errno 2] No such file or directory»."""
+    import os
+
+    import certifi
+
+    import verbalis
+    monkeypatch.setenv("SSL_CERT_FILE", "/private/var/folders/x/AppTranslocation/y/d/Verbalis.app/certifi/cacert.pem")
+    monkeypatch.setenv(verbalis._OWN_CERT_MARK, "1")
+    verbalis._certificates_on_macos("darwin")
+    assert os.environ["SSL_CERT_FILE"] == certifi.where()
+    left_over = tmp_path / "old-copy-cacert.pem"     # set by an earlier Verbalis and still there: replaced too
+    left_over.write_text("old")
+    monkeypatch.setenv("SSL_CERT_FILE", str(left_over))
+    verbalis._certificates_on_macos("darwin")
+    assert os.environ["SSL_CERT_FILE"] == certifi.where()
+    monkeypatch.delenv(verbalis._OWN_CERT_MARK)
+    monkeypatch.setenv("SSL_CERT_FILE", "/nowhere/ca.pem")   # missing, whoever set it: replaced
+    verbalis._certificates_on_macos("darwin")
+    assert os.environ["SSL_CERT_FILE"] == certifi.where()
 
 
 def test_app_started_from_downloads_is_recognised():

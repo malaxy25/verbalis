@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-238 tests in 24 files.
+239 tests in 24 files.
 
 ### `test_app.py` (7)
 
@@ -389,7 +389,7 @@ The recording list in the UI: groups open and close. Runs the list functions of 
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
 
-### `test_updates.py` (26)
+### `test_updates.py` (27)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -409,6 +409,7 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Download checks sha256 and size**
 - **Check reads the github digest and name**
 - **Mac app finds certificates** – 0.7.19 bug on macOS: the update check failed with «CERTIFICATE_VERIFY_FAILED» – the Python
+- **Certificate path inherited from the moved app is replaced** – 0.7.28 on a new Mac: after Verbalis moved itself from the translocated copy into «Programme», the
 - **App started from downloads is recognised** – 0.7.21 on macOS: «Verbalis darf /private/var/folders/… nicht ändern» – the app had been started
 - **Mac app in a locked folder offers the download** – 0.7.22 on a Mac without admin rights: «Verbalis darf /Applications nicht ändern» – and no way on.
 - **Test build gets the real release as update** – A test build «0.7.23.dev1» (manual build, not released) must see the release 0.7.23 as newer.
