@@ -290,7 +290,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Complete recording is marked complete**
 - **Stop timeout is not treated as success**
 - **Device error keeps audio and marks incomplete**
-- **Single rescued track is transcribed and flagged**
+- **Single rescued track is transcribed and flagged** – Flaky on a slow macOS runner (0.7.28): transcript.json existed while the job was still finishing
 - **Interrupted recording is recovered at start**
 - **No recording without disk space**
 - **Low disk space warns and finally stops the recording**

@@ -98,10 +98,12 @@ def test_device_error_keeps_audio_and_marks_incomplete():
 
 
 def test_single_rescued_track_is_transcribed_and_flagged():
+    """Flaky on a slow macOS runner (0.7.28): transcript.json existed while the job was still finishing
+    (compressing the audio), so the second transcribe() was ignored. Now it waits until the job is done."""
     s = make_service()
     rid = s.start_recording(consent=True)
     s.stop_recording()
-    assert wait_until(lambda: (s._path(rid) / "transcript.json").exists())
+    assert wait_until(lambda: s.recordings()[0]["status"] == "done")
     folder = s._path(rid)
     for f in folder.glob("others.*"):
         f.unlink()                                   # the others track is lost
