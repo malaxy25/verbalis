@@ -4,19 +4,15 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.29 – planned and decided with Andrea (waiting for measurements)
+## 0.7.30 – planned and decided with Andrea (waiting for measurements)
 
+0.7.29 (15 Oct 2026): «Problem melden» (Google Sheet via Apps Script), Mac certificate path after the
+self-move, gcoli from our mirror.
 0.7.28 (15 Oct 2026): stricter update checks (SHA-256 required, Mac: same certificate), list groups fixed.
 0.7.27 (14 Oct 2026): a known number of people joins similar voices (`merge_to_count`) – on-site
 recordings with 2 and 4 people: 75 % / 90 % right instead of 56 % / 76 %. Per-turn re-assignment was
 tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hints when merging by hand.
 
-0. **«Problem melden»** (decided 15 Oct 2026, done in the working copy): dialog in Einstellungen → Log and
-   Diagnose – text, optional e-mail, log and diagnosis (names and device names removed). Sent to a Google
-   Apps Script (`tools/feedback/apps-script.js`: row in a Sheet, log ZIP in Drive, notice by e-mail) like
-   Klaxon's feedback. Address and token come from the GitHub secrets `VERBALIS_FEEDBACK_URL` /
-   `VERBALIS_FEEDBACK_TOKEN` into `feedback.json` in the bundle; without them only «Per E-Mail …».
-   **Andrea sets up** the Sheet, the script and the two secrets before the release.
 1. **Settings for recognition and speakers** – in plain words, few steps, values from measurements:
    - «Sprechertrennung»: eher weniger Personen / Standard / eher mehr Personen (`THRESHOLD`)
    - «Kurze Einwürfe am Rand zeigen» (on/off)
@@ -26,7 +22,7 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
    first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
 
-## After 0.7.28 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
+## After 0.7.30 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 
 - **Meeting notes must be generic, not tocco-specific** (Andrea, 15 Oct 2026 – how exactly is open): the
   instruction and the structure of the minutes are set in Einstellungen (e.g. several templates such as

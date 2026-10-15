@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.29 – 2026-10-15
+- **«Problem melden»** in Einstellungen → Log and Diagnose: a short text, optionally an e-mail address for
+  questions, the log and the diagnosis – sent directly to the developer with one click (names, device names
+  and paths removed; never recordings or transcripts). Without internet: «Per E-Mail …».
+- **Mac: the first model download failed after Verbalis had moved itself into «Programme»** («[Errno 2] No such
+  file or directory»): the restarted app had inherited a certificate path into the vanished temporary copy.
+- **The default model now comes from our own unchanged copy on Hugging Face**
+  (`malaxy/whisper-large-v3-turbo-swiss-german-ct2`), pinned to the tested version and compared monthly with
+  the original – it can't disappear or change unnoticed. Installations that already have it download it
+  once more (1.6 GB).
+- Licence of the default model checked (MIT including the training data); FHNW/i4ds credited in the README.
+
 ## 0.7.28 – 2026-10-15
 - **Updates are checked more strictly.** Without a SHA-256 from GitHub an update is no longer downloaded
   (until now the size alone was enough). On the Mac the downloaded app must be signed with the same
