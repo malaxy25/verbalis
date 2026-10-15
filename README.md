@@ -299,3 +299,11 @@ The UI can be viewed in a browser with sample data: `python tools/ui_preview.py`
 ## License
 
 MIT
+
+### Models
+
+- **Schweizerdeutsch turbo (default):** [gcoli/whisper-large-v3-turbo-swiss-german-mit](https://huggingface.co/gcoli/whisper-large-v3-turbo-swiss-german-mit),
+  MIT – a fine-tune of OpenAI's `whisper-large-v3-turbo` (MIT) on the Swiss Parliaments Corpus and the
+  Gemeinderat Zürich Audio Corpus by **FHNW/i4ds** (MIT), labels partly from `whisper-large-v3` (Apache 2.0).
+  Thanks to FHNW/i4ds for the corpora. Commercial use is permitted (checked 15 Oct 2026).
+- **Speaker diarization:** pyannote segmentation 3.0 (MIT) and 3D-Speaker ERes2Net (Apache 2.0) via sherpa-onnx.

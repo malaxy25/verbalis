@@ -65,7 +65,6 @@ code requirement (same certificate), checked in the release build with the real 
 
 - [ ] **Reading flow: check on real calls** – are interjections recognised well (≤ 3 words or ≤ 1 s while someone
   else speaks)? How much slower are word timestamps? **[quality]**
-- [ ] **License check of gcoli for tocco** (MIT chain incl. training data). **[tocco]**
 - [ ] **Standard German reference text** – second read-aloud text with reference, check that the Swiss German model does not get worse on Standard German. **[quality]**
 - [ ] **Remove the migration from «Mitschrift»** once no old installations remain (≥ 1.0). **[ops]**
 
@@ -124,6 +123,15 @@ Still open:
   the certificate makes macOS ask for the permissions once more. **[ops]**
 
 - [ ] Talk to IT and data protection: local processing, consent per recording, retention (audio deleted after N days).
-- [ ] Check the licence situation of the default model (gcoli since 0.7.17: MIT chain; Flix: Apache 2.0, trained under the Swiss TDM research exception).
+- [x] **Licence of the default model gcoli checked (15 Oct 2026):** model MIT; base `whisper-large-v3-turbo` MIT;
+  training data FHNW/i4ds Swiss Parliaments Corpus (Bern) and Gemeinderat Zürich corpus MIT (stated on
+  cs.technik.fhnw.ch/i4ds-datasets); pseudo-labels from `whisper-large-v3` (Apache 2.0); commercial use
+  permitted; attribution to FHNW/i4ds in the README. Remaining small risks: the dataset on Hugging Face
+  (i4ds/SPC) shows no licence tag – the MIT statement is only on the FHNW page (archive it, or ask FHNW for a
+  written confirmation if tocco wants certainty); gcoli is an individual account (created Sept 2026), so
+  the claims can't be verified further – Verbalis pins the revision. Flix (Apache 2.0) was trained under the
+  Swiss TDM research exception – not the default any more.
+- [ ] **Mirror the pinned gcoli revision** under `malaxy/` (MIT allows it, with licence and attribution), so
+  the default model can't disappear or change upstream. **[ops]**
 - [ ] Standard consent text for customer calls (German and English).
 - [ ] Decide on defaults for colleagues: retention, model, storage location (Verbalis warns about synced folders since 0.7.11).
