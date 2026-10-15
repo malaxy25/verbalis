@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import __version__, feedback, pipeline, updates
+from . import __version__, feedback, hardware, pipeline, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
@@ -447,6 +447,7 @@ class Service:
             "Verbalis": __version__ + ("" if updates.is_installed() else " (aus dem Quellcode)"),
             "System": f"{platform_module.system()} {platform_module.release()} ({platform_module.machine()})",
             "Python": platform_module.python_version(),
+            **hardware.describe(),
             "Daten": str(verbalis_home()),
             "Aufnahmen": str(self._s.recordings),
             "Freier Speicher": f"{free / 1000:.1f} GB" if free is not None else "unbekannt",

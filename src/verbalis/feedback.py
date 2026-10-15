@@ -16,6 +16,7 @@ import base64
 import json
 import os
 import platform
+import re
 import sys
 import tempfile
 import urllib.error
@@ -64,6 +65,13 @@ def build(message: str, contact: str = "", diagnosis: str = "", log_zip: bytes |
     message = (message or "").strip()
     if not message:
         raise ValueError("Bitte kurz beschreiben, was passiert ist.")
+    contact = (contact or "").strip()
+    if contact and not valid_contact(contact):
+        raise ValueError("Bitte eine gültige E-Mail-Adresse eingeben (z.B. name@firma.ch) – oder das Feld leer lassen.")
+    # The diagnosis lists the data folders; their path contains the Windows/Mac user name.
+    home = str(Path.home())
+    if len(home) > 3:
+        diagnosis = diagnosis.replace(home, "~")
     for secret in sorted({s for s in (redact or []) if s and len(s) >= 3}, key=len, reverse=True):
         diagnosis = diagnosis.replace(secret, "<entfernt>")
     report = {
@@ -71,7 +79,7 @@ def build(message: str, contact: str = "", diagnosis: str = "", log_zip: bytes |
         "version": __version__,
         "system": f"{platform.system()} {platform.release()} ({platform.machine()})",
         "message": message[:MAX_MESSAGE],
-        "contact": (contact or "").strip()[:200],
+        "contact": contact[:200],
         "diagnosis": diagnosis[:40000],
     }
     if log_zip:
@@ -81,6 +89,12 @@ def build(message: str, contact: str = "", diagnosis: str = "", log_zip: bytes |
         else:
             report["log_zip"] = base64.b64encode(log_zip).decode("ascii")
     return report
+
+
+
+def valid_contact(address: str) -> bool:
+    """A plain check like the browser's: something@something.tld, no spaces."""
+    return re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@.]{2,}", address or "") is not None
 
 
 def log_zip(settings: dict, redact: list[str]) -> bytes:

@@ -16,6 +16,8 @@
     --red-soft: #FBE7EA;
     --amber: #9A5B00;
     --amber-soft: #FCF1DC;
+    --green: #1E6B3A;
+    --green-soft: #E2F2E7;
     --font-mono: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace;
     --limmat: #2F6F8F;
     --limmat-soft: #E3EEF3;
@@ -36,6 +38,8 @@
       --red-soft: #3A1F24;
       --amber: #E3A33B;
       --amber-soft: #3A2E1A;
+      --green: #6CCB8A;
+      --green-soft: #1C3326;
       --limmat: #6BB0CF;
       --limmat-soft: #1F3440;
       --focus: #6BB0CF;
@@ -140,6 +144,10 @@
   .report-form textarea { min-height: 120px; resize: vertical; }
   .report-form .check { display: flex; gap: 8px; align-items: baseline; }
   .report-form small { color: var(--muted); font-size: 13px; }
+  .report-form input:invalid { border-color: var(--red); }
+  .report-done { display: flex; gap: 10px; align-items: center; margin-top: 12px; padding: 12px 14px;
+    border-radius: 8px; background: var(--green-soft); color: var(--green); font-weight: 600; }
+  .report-done[hidden], .report-form[hidden] { display: none; }
   .notes-foot { padding: 12px 26px 20px; display: grid; gap: 8px; border-top: 1px solid var(--line); }
   .notes-foot .dialog-buttons { padding-top: 0; }
   .notes-foot .note-line { margin: 0; color: var(--muted); font-size: 13px; }
@@ -633,12 +641,13 @@
       <label><span>Was ist passiert?</span>
         <textarea id="report-message" maxlength="5000" placeholder="z.B. Beim Beenden der Aufnahme kam die Meldung … – vorher hatte ich …"></textarea></label>
       <label><span>E-Mail für Rückfragen (freiwillig)</span>
-        <input type="email" id="report-contact" autocomplete="email"></label>
+        <input type="email" id="report-contact" autocomplete="email" placeholder="name@firma.ch"></label>
       <label class="check"><input type="checkbox" id="report-log" checked>
         <span>Log mitsenden <small>– technische Abläufe, ohne Gesprächsinhalte, Namen und Pfade</small></span></label>
       <label class="check"><input type="checkbox" id="report-diag" checked>
         <span>Diagnose mitsenden <small>– Version, System, Audiotest und Internet, ohne Gerätenamen</small></span></label>
     </div>
+    <div class="report-done" id="report-done" role="status" hidden>✓ Danke! Die Meldung ist angekommen.</div>
   </div>
   <div class="notes-foot">
     <p class="note-line" id="report-line"></p>
@@ -2002,6 +2011,7 @@ async function reloadDevices() {
 async function openReport() {
   let info = { can_send: false, contact: "" };
   try { info = await call("report_info"); } catch (_) { /* e-mail only */ }
+  showReportDone(false);
   $("btn-report-send").hidden = !info.can_send;
   $("report-log").disabled = $("report-diag").disabled = !info.can_send;
   $("report-line").textContent = info.can_send
@@ -2011,17 +2021,36 @@ async function openReport() {
   $("report-message").focus();
 }
 
+function validContact(address) {
+  return !address || /^[^\s@]+@[^\s@]+\.[^\s@.]{2,}$/.test(address);
+}
+
+/* After sending, the dialog stays open with a green confirmation – a toast behind the settings was not seen. */
+function showReportDone(done) {
+  document.querySelector("#dlg-report .report-form").hidden = done;
+  $("report-done").hidden = !done;
+  $("btn-report-send").hidden = $("btn-report-mail").hidden = done;
+  $("btn-report-cancel").textContent = done ? "Schliessen" : "Abbrechen";
+  if (done) $("report-line").textContent = "";
+}
+
 async function sendReport() {
   const message = $("report-message").value.trim();
   if (!message) { $("report-line").textContent = "Bitte kurz beschreiben, was passiert ist."; $("report-message").focus(); return; }
+  const contact = $("report-contact").value.trim();
+  if (!validContact(contact)) {
+    $("report-line").textContent = "Bitte eine gültige E-Mail-Adresse eingeben (z.B. name@firma.ch) – oder das Feld leer lassen.";
+    $("report-contact").focus();
+    return;
+  }
   const button = $("btn-report-send");
   button.disabled = true;
   $("report-line").textContent = "Wird gesendet …";
   try {
-    await call("report_problem", message, $("report-contact").value.trim(), $("report-log").checked, $("report-diag").checked);
+    await call("report_problem", message, contact, $("report-log").checked, $("report-diag").checked);
     $("report-message").value = "";
-    $("dlg-report").close();
-    showMessage("Danke! Die Meldung ist angekommen.");
+    showReportDone(true);
+    $("btn-report-cancel").focus();
   } catch (e) {
     $("report-line").textContent = `${e.message} Alternativ: «Per E-Mail …».`;
   } finally {

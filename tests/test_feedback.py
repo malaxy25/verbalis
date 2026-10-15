@@ -3,6 +3,7 @@
 import base64
 import io
 import json
+import os
 import zipfile
 
 import pytest
@@ -73,6 +74,25 @@ def test_refused_report_does_not_blame_the_internet():
     with pytest.raises(RuntimeError, match=r"abgelehnt \(HTTP 403\)") as error:
         feedback.send({}, {"url": "https://x"}, opener=refused)
     assert "Internet" not in str(error.value)
+
+
+def test_contact_must_look_like_an_email_address():
+    """Bug (0.7.29 test): «mail mail» was accepted as the e-mail for questions."""
+    with pytest.raises(ValueError, match="gültige E-Mail"):
+        feedback.build("x", contact="mail mail")
+    for wrong in ("name@firma", "name@@firma.ch", "@firma.ch", "name firma@x.ch", "name@firma.c"):
+        assert not feedback.valid_contact(wrong), wrong
+    assert feedback.build("x", contact=" name.vorname@firma.ch ")["contact"] == "name.vorname@firma.ch"
+    assert feedback.build("x", contact="")["contact"] == ""
+
+
+def test_diagnosis_does_not_show_the_user_name_in_paths():
+    """Bug (0.7.29 test): the diagnosis sent the data folder with the account name in its path."""
+    from pathlib import Path
+
+    home = str(Path.home())
+    report = feedback.build("x", diagnosis=f"Daten: {home}{os.sep}.verbalis")
+    assert home not in report["diagnosis"] and f"~{os.sep}.verbalis" in report["diagnosis"]
 
 def test_mail_link_goes_to_the_developer():
     link = feedback.mail_link("Ton fehlt")

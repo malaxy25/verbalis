@@ -3,7 +3,10 @@
 ## 0.7.29 – 2026-10-15
 - **«Problem melden»** in Einstellungen → Log and Diagnose: a short text, optionally an e-mail address for
   questions, the log and the diagnosis – sent directly to the developer with one click (names, device names
-  and paths removed; never recordings or transcripts). Without internet: «Per E-Mail …».
+  and paths removed; never recordings or transcripts). Without internet: «Per E-Mail …». The dialog confirms
+  in green when the report has arrived, and checks the e-mail address.
+- **The diagnosis shows processor, memory and graphics card** – transcription speed depends on them. The
+  user name in folder paths is replaced by `~` when a report is sent.
 - **Mac: the first model download failed after Verbalis had moved itself into «Programme»** («[Errno 2] No such
   file or directory»): the restarted app had inherited a certificate path into the vanished temporary copy.
 - **The default model now comes from our own unchanged copy on Hugging Face**

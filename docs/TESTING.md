@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-241 tests in 24 files.
+246 tests in 25 files.
 
 ### `test_app.py` (7)
 
@@ -194,7 +194,7 @@ Word error rate (WER) and loading references for model comparisons.
 - **Reference from corrected transcript**
 - **Reference from text file**
 
-### `test_feedback.py` (8)
+### `test_feedback.py` (10)
 
 «Problem melden»: building, sending and the e-mail fallback – without network.
 
@@ -203,9 +203,19 @@ Word error rate (WER) and loading references for model comparisons.
 - **Too large log is not sent**
 - **Send posts json with token and checks the answer**
 - **Refused report does not blame the internet** – Bug (0.7.29 test): an HTTP 403 from Google (web app not open to «Anyone») was shown as
+- **Contact must look like an email address** – Bug (0.7.29 test): «mail mail» was accepted as the e-mail for questions.
+- **Diagnosis does not show the user name in paths** – Bug (0.7.29 test): the diagnosis sent the data folder with the account name in its path.
 - **Mail link goes to the developer**
 - **Service sends log and diagnosis without names**
 - **Service without address offers mail only**
+
+### `test_hardware.py` (3)
+
+Processor, memory and graphics card in the diagnosis – with fake system commands.
+
+- **Mac shows chip memory and graphics in the chip**
+- **Failing commands give unknown instead of an error**
+- **Windows reads processor memory and graphics**
 
 ### `test_logs.py` (5)
 

@@ -54,3 +54,11 @@ def no_real_call_detection(monkeypatch):
     """Tests never read which apps use the microphone on the machine running them."""
     from verbalis.audio import call_detect
     monkeypatch.setattr(call_detect, "detect", lambda: [])
+
+
+@pytest.fixture(autouse=True)
+def no_real_hardware_query(monkeypatch):
+    """The diagnosis never starts PowerShell or sysctl in tests (slow); test_hardware.py tests the readers."""
+    from verbalis import hardware
+    monkeypatch.setattr(hardware, "describe", lambda *a, **k: {"Prozessor": "Test-CPU", "Arbeitsspeicher": "16 GB",
+                                                                "Grafikkarte": "Test-GPU"})
