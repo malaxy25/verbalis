@@ -132,6 +132,14 @@
   .notes-body ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
   .notes-body p { margin: 6px 0; }
   .notes-body code { font-family: var(--font-mono); font-size: 13px; }
+  .report-form { display: grid; gap: 12px; margin-top: 12px; }
+  .report-form label { display: grid; gap: 4px; }
+  .report-form label > span { font-weight: 600; font-size: 14px; }
+  .report-form textarea, .report-form input[type="email"] { padding: 6px 9px; border: 1px solid var(--line);
+    border-radius: 6px; background: var(--surface); font-size: 14px; }
+  .report-form textarea { min-height: 120px; resize: vertical; }
+  .report-form .check { display: flex; gap: 8px; align-items: baseline; }
+  .report-form small { color: var(--muted); font-size: 13px; }
   .notes-foot { padding: 12px 26px 20px; display: grid; gap: 8px; border-top: 1px solid var(--line); }
   .notes-foot .dialog-buttons { padding-top: 0; }
   .notes-foot .note-line { margin: 0; color: var(--muted); font-size: 13px; }
@@ -617,6 +625,31 @@
   </div>
 </dialog>
 
+<dialog id="dlg-report" class="notes-dialog" aria-labelledby="report-title">
+  <div class="notes-body">
+    <h2 id="report-title">Problem melden</h2>
+    <p class="lead">Geht an Andrea Frehner, der Verbalis entwickelt. Aufnahmen und Transkripte werden nie gesendet.</p>
+    <div class="report-form">
+      <label><span>Was ist passiert?</span>
+        <textarea id="report-message" maxlength="5000" placeholder="z.B. Beim Beenden der Aufnahme kam die Meldung … – vorher hatte ich …"></textarea></label>
+      <label><span>E-Mail für Rückfragen (freiwillig)</span>
+        <input type="email" id="report-contact" autocomplete="email"></label>
+      <label class="check"><input type="checkbox" id="report-log" checked>
+        <span>Log mitsenden <small>– technische Abläufe, ohne Gesprächsinhalte, Namen und Pfade</small></span></label>
+      <label class="check"><input type="checkbox" id="report-diag" checked>
+        <span>Diagnose mitsenden <small>– Version, System, Audiotest und Internet, ohne Gerätenamen</small></span></label>
+    </div>
+  </div>
+  <div class="notes-foot">
+    <p class="note-line" id="report-line"></p>
+    <div class="dialog-buttons">
+      <button type="button" class="action" id="btn-report-mail">Per E-Mail …</button>
+      <button type="button" class="action" id="btn-report-cancel">Abbrechen</button>
+      <button type="button" class="action primary" id="btn-report-send">Senden</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dlg-install" class="notes-dialog" aria-labelledby="install-title">
   <div class="notes-body">
     <h2 id="install-title">Verbalis in den Ordner «Programme» verschieben?</h2>
@@ -762,6 +795,7 @@
           <label><input type="checkbox" id="chk-log-errors"> Nur Warnungen und Fehler</label>
           <button type="button" class="action" id="btn-log-refresh">Aktualisieren</button>
           <button type="button" class="action" id="btn-log-export">Log exportieren …</button>
+          <button type="button" class="action" data-report>Problem melden …</button>
         </div>
         <ol class="log-list" id="log-list"></ol>
         <p class="log-result" id="log-result">Das Log enthält keine Gesprächsinhalte. Der Export ist für Fehlermeldungen gedacht und lässt Namen und Pfade weg.</p>
@@ -774,6 +808,7 @@
           <button type="button" class="action" id="btn-diag-network">Internet prüfen</button>
           <button type="button" class="action" id="btn-diag-copy">Diagnose kopieren</button>
           <button type="button" class="action" id="btn-diag-folder">Datenordner öffnen</button>
+          <button type="button" class="action" data-report>Problem melden …</button>
         </div>
         <p class="log-result" id="diag-result">Der Audiotest liest die gewählten Geräte etwa 15 Sekunden lang – Schritt für
           Schritt wie bei einer Aufnahme. «Diagnose kopieren» enthält Gerätenamen, aber keine Gesprächsinhalte.</p>
@@ -1962,6 +1997,42 @@ async function reloadDevices() {
   button.disabled = state.running;
 }
 
+/* ---------- «Problem melden» ---------- */
+
+async function openReport() {
+  let info = { can_send: false, contact: "" };
+  try { info = await call("report_info"); } catch (_) { /* e-mail only */ }
+  $("btn-report-send").hidden = !info.can_send;
+  $("report-log").disabled = $("report-diag").disabled = !info.can_send;
+  $("report-line").textContent = info.can_send
+    ? "Wird direkt gesendet. Ohne Internet: «Per E-Mail …» – das Log dann über «Log exportieren …» anhängen."
+    : `Diese Version sendet nicht direkt: «Per E-Mail …» öffnet eine E-Mail an ${info.contact}.`;
+  $("dlg-report").showModal();
+  $("report-message").focus();
+}
+
+async function sendReport() {
+  const message = $("report-message").value.trim();
+  if (!message) { $("report-line").textContent = "Bitte kurz beschreiben, was passiert ist."; $("report-message").focus(); return; }
+  const button = $("btn-report-send");
+  button.disabled = true;
+  $("report-line").textContent = "Wird gesendet …";
+  try {
+    await call("report_problem", message, $("report-contact").value.trim(), $("report-log").checked, $("report-diag").checked);
+    $("report-message").value = "";
+    $("dlg-report").close();
+    showMessage("Danke! Die Meldung ist angekommen.");
+  } catch (e) {
+    $("report-line").textContent = `${e.message} Alternativ: «Per E-Mail …».`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function reportByMail() {
+  try { await call("report_by_mail", $("report-message").value.trim()); } catch (e) { $("report-line").textContent = e.message; }
+}
+
 /* ---------- Log ---------- */
 
 const TABS = ["general", "transcription", "speakers", "retention", "updates", "log", "diagnose"];
@@ -2776,6 +2847,10 @@ async function init() {
   $("btn-log-refresh").addEventListener("click", loadLog);
   $("chk-log-errors").addEventListener("change", loadLog);
   $("btn-log-export").addEventListener("click", exportLog);
+  document.querySelectorAll("[data-report]").forEach((b) => b.addEventListener("click", openReport));
+  $("btn-report-send").addEventListener("click", sendReport);
+  $("btn-report-mail").addEventListener("click", reportByMail);
+  $("btn-report-cancel").addEventListener("click", () => $("dlg-report").close());
   $("btn-diag-audio").addEventListener("click", runAudioTest);
   $("btn-diag-network").addEventListener("click", checkNetwork);
   $("btn-diag-copy").addEventListener("click", copyDiagnosis);

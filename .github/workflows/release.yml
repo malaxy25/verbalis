@@ -87,6 +87,14 @@ jobs:
           pip install -c packaging/requirements-build.txt -e ".[build]"
           if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
+      - name: Address for «Problem melden» (from secrets)
+        env:
+          VERBALIS_FEEDBACK_URL: ${{ secrets.VERBALIS_FEEDBACK_URL }}
+          VERBALIS_FEEDBACK_TOKEN: ${{ secrets.VERBALIS_FEEDBACK_TOKEN }}
+        run: |
+          python tools/feedback/write_config.py
+          if ($LASTEXITCODE -ne 0) { throw "feedback config failed" }
+
       - name: Bundle with PyInstaller
         run: |
           pyinstaller packaging/verbalis.spec --noconfirm
@@ -152,6 +160,12 @@ jobs:
           swiftc -O -swift-version 5 -target arm64-apple-macos14.2 \
             -o tools/macos/build/verbalis-audiotap tools/macos/audiotap.swift
           tools/macos/build/verbalis-audiotap --version
+
+      - name: Address for «Problem melden» (from secrets)
+        env:
+          VERBALIS_FEEDBACK_URL: ${{ secrets.VERBALIS_FEEDBACK_URL }}
+          VERBALIS_FEEDBACK_TOKEN: ${{ secrets.VERBALIS_FEEDBACK_TOKEN }}
+        run: python tools/feedback/write_config.py
 
       - name: Bundle with PyInstaller
         run: |

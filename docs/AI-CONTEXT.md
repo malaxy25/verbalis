@@ -116,6 +116,9 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
 - **Mac install place** (0.7.26): outside /Applications or ~/Applications the app offers to move itself
   (`updates.move_to_applications`, relaunch script); /Applications only when writable (admin). The DMG is
   for the first download, the ZIP for self-updates.
+- **«Problem melden»** (`feedback.py`, 0.7.29): POST to a Google Apps Script web app; URL and token from GitHub
+  secrets → `packaging/feedback.json` (gitignored, bundled by the spec) or env `VERBALIS_FEEDBACK_URL/TOKEN`.
+  Never recordings or transcripts; names and device names are removed. Script: `tools/feedback/apps-script.js`.
 - **Not notarized / Windows not signed** yet (SmartScreen and Gatekeeper warn on first install).
 
 ## How work is delivered (important pitfalls)

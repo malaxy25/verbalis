@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-231 tests in 23 files.
+238 tests in 24 files.
 
 ### `test_app.py` (7)
 
@@ -193,6 +193,18 @@ Word error rate (WER) and loading references for model comparisons.
 - **Empty hypothesis**
 - **Reference from corrected transcript**
 - **Reference from text file**
+
+### `test_feedback.py` (7)
+
+«Problem melden»: building, sending and the e-mail fallback – without network.
+
+- **Config from environment or bundled file**
+- **Report needs a text and leaves out device names**
+- **Too large log is not sent**
+- **Send posts json with token and checks the answer**
+- **Mail link goes to the developer**
+- **Service sends log and diagnosis without names**
+- **Service without address offers mail only**
 
 ### `test_logs.py` (5)
 

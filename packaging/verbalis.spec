@@ -19,6 +19,8 @@ EXT = ".exe" if sys.platform == "win32" else ""
 
 datas = [(str(ROOT / "src" / "verbalis" / "ui"), "verbalis/ui"),
          (str(ROOT / "CHANGELOG.md"), ".")]          # for «Was ist neu» after an update
+if (ROOT / "packaging" / "feedback.json").exists():   # «Problem melden» – written from GitHub secrets
+    datas.append((str(ROOT / "packaging" / "feedback.json"), "."))
 datas += collect_data_files("faster_whisper")   # Silero VAD model for the silence filter
 datas += collect_data_files("soundcard")        # C headers that soundcard reads at runtime (cffi)
 binaries = collect_dynamic_libs("ctranslate2") + collect_dynamic_libs("soxr") + collect_dynamic_libs("sherpa_onnx")

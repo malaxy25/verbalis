@@ -15,3 +15,5 @@ comparison*.md
 *.flac
 tools/ui-preview/preview.html
 tools/macos/build/
+# «Problem melden» address, written in the release build from GitHub secrets
+packaging/feedback.json

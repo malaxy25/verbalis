@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import __version__, pipeline, updates
+from . import __version__, feedback, pipeline, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
@@ -553,6 +553,31 @@ class Service:
             if diagnosis.get("error"):
                 lines.append(f"  Fehler: {diagnosis['error']}")
         return "\n".join(lines) + "\n"
+
+    # ------------------------------------------------------------ «Problem melden»
+
+    def report_info(self) -> dict:
+        return {"can_send": feedback.config() is not None, "contact": feedback.CONTACT}
+
+    def report_problem(self, message: str, contact: str = "", with_log: bool = True,
+                       with_diagnosis: bool = True) -> dict:
+        """Send a problem report (see feedback.py). Names and device names are removed."""
+        target = feedback.config()
+        if target is None:
+            raise RuntimeError("Diese Version kann Meldungen nicht direkt senden – bitte «Per E-Mail» wählen.")
+        redact = self.device_names_for_redaction() + [self._s.name, self._s.others]
+        report = feedback.build(message, contact,
+                                diagnosis=self.diagnose_report() if with_diagnosis else "",
+                                log_zip=feedback.log_zip(self.settings(), redact) if with_log else None,
+                                redact=redact)
+        feedback.send(report, target)
+        log.info("Problem report sent (log: %s, diagnosis: %s)", "log_zip" in report, bool(report["diagnosis"]))
+        return {"sent": True}
+
+    def report_by_mail(self, message: str) -> None:
+        import webbrowser
+
+        webbrowser.open(feedback.mail_link(message))
 
     # ------------------------------------------------------------ levels before recording
 

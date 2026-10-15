@@ -11,6 +11,12 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 recordings with 2 and 4 people: 75 % / 90 % right instead of 56 % / 76 %. Per-turn re-assignment was
 tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hints when merging by hand.
 
+0. **«Problem melden»** (decided 15 Oct 2026, done in the working copy): dialog in Einstellungen → Log and
+   Diagnose – text, optional e-mail, log and diagnosis (names and device names removed). Sent to a Google
+   Apps Script (`tools/feedback/apps-script.js`: row in a Sheet, log ZIP in Drive, notice by e-mail) like
+   Klaxon's feedback. Address and token come from the GitHub secrets `VERBALIS_FEEDBACK_URL` /
+   `VERBALIS_FEEDBACK_TOKEN` into `feedback.json` in the bundle; without them only «Per E-Mail …».
+   **Andrea sets up** the Sheet, the script and the two secrets before the release.
 1. **Settings for recognition and speakers** – in plain words, few steps, values from measurements:
    - «Sprechertrennung»: eher weniger Personen / Standard / eher mehr Personen (`THRESHOLD`)
    - «Kurze Einwürfe am Rand zeigen» (on/off)
@@ -49,9 +55,7 @@ code requirement (same certificate), checked in the release build with the real 
 
 ## Proposed (waiting for Andrea's OK)
 
-- **«Problem melden»** (Log tab, later also next to error messages): creates the log ZIP, opens a prepared
-  e-mail to andrea@frehner.tech (version, system, short template) and shows the ZIP in Finder/Explorer to
-  drag into the mail. Not as a GitHub issue (public repo). Could also attach «Diagnose kopieren». **[ux]**
+- **«Problem melden» next to error messages** too (the dialog exists since 0.7.29). **[ux]**
 
 ## Now
 

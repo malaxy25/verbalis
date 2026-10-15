@@ -223,6 +223,15 @@ class Api:
     def diagnose_report(self):
         return self._call(self._s.diagnose_report)
 
+    def report_info(self):
+        return self._call(self._s.report_info)
+
+    def report_problem(self, message, contact="", with_log=True, with_diagnosis=True):
+        return self._call(self._s.report_problem, message or "", contact or "", bool(with_log), bool(with_diagnosis))
+
+    def report_by_mail(self, message):
+        return self._call(self._s.report_by_mail, message or "")
+
     def open_data_folder(self):
         from .transcription.models import verbalis_home
         from .service import open_in_file_manager
