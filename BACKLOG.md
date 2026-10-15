@@ -18,12 +18,7 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    people and a 1:1 Teams call, transcribed without a number and every speaker named correctly; Claude
    measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
    first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
-2. **«Transkript kopieren» with an instruction** (decided 15 Oct 2026): Einstellungen → Allgemein gets a
-   text field «Anweisung beim Kopieren» (empty = copy as today). If set, the button copies the instruction,
-   then the recording details (title, project, date, participants, notes), then the transcript – Andrea's
-   meeting notes with Claude Code become one paste. Small hint under the button. Andrea sends his current
-   notes instruction as the starting text.
-3. **Done in the working copy** (for the 0.7.28 CHANGELOG):
+2. **Done in the working copy** (for the 0.7.28 CHANGELOG):
    - The list groups open and close reliably: «Diese Woche» could be closed but not opened again, and
      «Heute» could not be closed while its recording was selected (`toggleGroup` read localStorage, which
      the app does not keep). First UI test that runs index.html code in Node.js (`tests/test_ui_list.py`).
@@ -31,6 +26,10 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
 
 ## After 0.7.28 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 
+- **Meeting notes must be generic, not tocco-specific** (Andrea, 15 Oct 2026 – how exactly is open): the
+  instruction and the structure of the minutes are set in Einstellungen (e.g. several templates such as
+  «Protokoll», «Kurznotiz», each with instruction + sections). Used both for «Transkript kopieren» (copy with
+  the template, for Claude Code) and later for «Notizen erstellen». Not built yet – design with Andrea first.
 - **Test a local model first:** e.g. Qwen 3 8B (Apache 2.0) via llama.cpp on 2–3 of Andrea's transcripts,
   long ones split into parts and joined; Andrea compares with his Claude notes (are decisions and to-dos
   with owner right?). Measure time on his PC (CPU) and on the Mac.
