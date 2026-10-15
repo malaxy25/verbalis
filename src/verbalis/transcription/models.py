@@ -36,17 +36,21 @@ DISPLAY_NAMES = {
     "large-v3-turbo": "Whisper large-v3 turbo",
 }
 
-# Models that only exist in Transformers format upstream are provided ready for
-# faster-whisper (CTranslate2) in our own Hugging Face repo, so nobody has to
-# convert them. Flix is Apache 2.0, redistribution with attribution is allowed.
+# Models downloaded from our own Hugging Face repo instead of the original:
+# - Flix only exists in Transformers format upstream; our copy is converted for faster-whisper
+#   (CTranslate2). Apache 2.0, redistribution with attribution is allowed.
+# - gcoli (the default) is mirrored unchanged (its ct2/ folder, MIT) with tools/mirror_model.py, so it
+#   can't vanish or change under us (since 0.7.29; before, it came from gcoli directly).
 DOWNLOAD_REPO = {
     "Flix-AI/flix-swissgerman-full": "malaxy/flix-swissgerman-ct2",
+    "gcoli/whisper-large-v3-turbo-swiss-german-mit": "malaxy/whisper-large-v3-turbo-swiss-german-ct2",
 }
-# Revision of the original our converted copy was made from. A monthly GitHub
-# Action (.github/workflows/model-check.yml) compares it with the original and
-# opens an issue when Flix-AI publishes a newer version.
+# Revision of the original our copy was made from. A monthly GitHub Action
+# (.github/workflows/model-check.yml) compares it with the original and opens an issue
+# when the original gets a newer version.
 UPSTREAM_REVISIONS = {
     "Flix-AI/flix-swissgerman-full": "a9c347a904af5d31b28c537ac732e0618aed6136",
+    "gcoli/whisper-large-v3-turbo-swiss-german-mit": "540fb2e7a9135048963c5de9822579c96f8962e5",
 }
 HF_PAGE = "https://huggingface.co/"
 # Approximate download size in GB (float16 CTranslate2), shown before downloading
@@ -58,10 +62,9 @@ SIZE_GB = {
 }
 # Same files faster-whisper downloads
 FILES = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
-# Repos that keep the CTranslate2 version in a subfolder (the root holds the Transformers format)
-SUBFOLDER = {
-    "gcoli/whisper-large-v3-turbo-swiss-german-mit": "ct2",
-}
+# Models whose download repo keeps the CTranslate2 version in a subfolder (the root holds the
+# Transformers format). gcoli did until 0.7.28; our mirror has the files at the root.
+SUBFOLDER: dict[str, str] = {}
 
 
 def _patterns(model: str) -> list[str]:

@@ -183,6 +183,7 @@ def test_upstream_check_script_reads_pins():
             return {"revision": rev, "changed": "2026-11-02", "files": files_by_revision[rev]}
         return fetch
 
+    pinned = dict(list(pinned.items())[:1])     # one model is enough for the logic
     ours = next(iter(pinned.values()))
     same = {ours: {"model.safetensors": "m1"}}
     assert check.report(pinned, fetch=fake(same, ours)) == []
@@ -219,12 +220,22 @@ def test_check_update_ignores_documentation_only_changes(monkeypatch):
 
 
 
+def test_gcoli_comes_from_our_mirror():
+    """0.7.29: the default model is downloaded from our unchanged copy (files at the root), pinned and
+    checked monthly against the original – it can't vanish or change under us."""
+    gcoli = "gcoli/whisper-large-v3-turbo-swiss-german-mit"
+    assert models.repo_for(gcoli) == "malaxy/whisper-large-v3-turbo-swiss-german-ct2"
+    assert gcoli in models.UPSTREAM_REVISIONS and models._patterns(gcoli)[0] == "config.json"
+
+
 def test_subfolder_model(tmp_path, monkeypatch):
-    """gcoli keeps the CTranslate2 version in ct2/ – Verbalis must load that, not the repo root."""
+    """gcoli kept the CTranslate2 version in ct2/ (until 0.7.28) – Verbalis must load that, not the repo root."""
     import huggingface_hub
     import huggingface_hub.constants as c
     monkeypatch.setattr(c, "HF_HUB_CACHE", str(tmp_path))
     gcoli = "gcoli/whisper-large-v3-turbo-swiss-german-mit"
+    monkeypatch.setattr(models, "SUBFOLDER", {gcoli: "ct2"})
+    monkeypatch.setattr(models, "DOWNLOAD_REPO", {})
     assert models.repo_for(gcoli) == gcoli and models._patterns(gcoli)[0] == "ct2/config.json"
     assert not models.is_local(gcoli)
 

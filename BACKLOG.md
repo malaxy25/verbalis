@@ -135,7 +135,8 @@ Still open:
   written confirmation if tocco wants certainty); gcoli is an individual account (created Sept 2026), so
   the claims can't be verified further – Verbalis pins the revision. Flix (Apache 2.0) was trained under the
   Swiss TDM research exception – not the default any more.
-- [ ] **Mirror the pinned gcoli revision** under `malaxy/` (MIT allows it, with licence and attribution), so
-  the default model can't disappear or change upstream. **[ops]**
+- [x] **gcoli mirrored** (15 Oct 2026) to `malaxy/whisper-large-v3-turbo-swiss-german-ct2` with
+  `tools/mirror_model.py` (revision 540fb2e, ct2 files at the root, licence, original card, provenance);
+  Verbalis downloads from there since 0.7.29, the monthly check watches the original.
 - [ ] Standard consent text for customer calls (German and English).
 - [ ] Decide on defaults for colleagues: retention, model, storage location (Verbalis warns about synced folders since 0.7.11).
