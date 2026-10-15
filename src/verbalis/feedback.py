@@ -18,6 +18,7 @@ import os
 import platform
 import sys
 import tempfile
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -97,6 +98,10 @@ def send(report: dict, target: dict, opener: Callable = urllib.request.urlopen, 
     try:
         with opener(request, timeout=timeout) as response:
             answer = response.read(200).decode("utf-8", errors="replace").strip()
+    except urllib.error.HTTPError as e:
+        # The server answered, so the internet works – the address refuses (e.g. the web app is not open
+        # to «Anyone»). Asking about the internet misled the first test (0.7.29).
+        raise RuntimeError(f"Die Meldung wurde vom Empfänger abgelehnt (HTTP {e.code}).") from e
     except OSError as e:
         raise RuntimeError(f"Die Meldung konnte nicht gesendet werden ({e}). Ist das Internet verfügbar?") from e
     if answer != "ok":

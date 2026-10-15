@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-240 tests in 24 files.
+241 tests in 24 files.
 
 ### `test_app.py` (7)
 
@@ -194,7 +194,7 @@ Word error rate (WER) and loading references for model comparisons.
 - **Reference from corrected transcript**
 - **Reference from text file**
 
-### `test_feedback.py` (7)
+### `test_feedback.py` (8)
 
 «Problem melden»: building, sending and the e-mail fallback – without network.
 
@@ -202,6 +202,7 @@ Word error rate (WER) and loading references for model comparisons.
 - **Report needs a text and leaves out device names**
 - **Too large log is not sent**
 - **Send posts json with token and checks the answer**
+- **Refused report does not blame the internet** – Bug (0.7.29 test): an HTTP 403 from Google (web app not open to «Anyone») was shown as
 - **Mail link goes to the developer**
 - **Service sends log and diagnosis without names**
 - **Service without address offers mail only**

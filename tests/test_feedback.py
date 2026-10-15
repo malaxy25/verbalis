@@ -62,6 +62,18 @@ def test_send_posts_json_with_token_and_checks_the_answer():
         feedback.send({}, {"url": "https://x"}, opener=offline)
 
 
+
+def test_refused_report_does_not_blame_the_internet():
+    """Bug (0.7.29 test): an HTTP 403 from Google (web app not open to «Anyone») was shown as
+    «Ist das Internet verfügbar?» – the internet worked, the address refused."""
+    import urllib.error
+
+    def refused(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, None)
+    with pytest.raises(RuntimeError, match=r"abgelehnt \(HTTP 403\)") as error:
+        feedback.send({}, {"url": "https://x"}, opener=refused)
+    assert "Internet" not in str(error.value)
+
 def test_mail_link_goes_to_the_developer():
     link = feedback.mail_link("Ton fehlt")
     assert link.startswith("mailto:andrea@frehner.tech?") and "Ton%20fehlt" in link
