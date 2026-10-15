@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.28 – 2026-10-15
+- **Updates are checked more strictly.** Without a SHA-256 from GitHub an update is no longer downloaded
+  (until now the size alone was enough). On the Mac the downloaded app must be signed with the same
+  certificate as the installed one – so a compromised GitHub account alone cannot ship an update. The
+  release build checks this with the real `codesign`.
+- **The groups in the list open and close reliably:** «Diese Woche» could be closed but not opened again,
+  and «Heute» could not be closed while its recording was selected.
+- **Release notes on GitHub completely in English** (the install hints were German).
+
 ## 0.7.27 – 2026-10-14
 - **A known number of people now helps instead of hurting.** Until now «2 Personen» was handed straight
   to the speaker clustering – in an on-site meeting it put nearly everything into one speaker and a few

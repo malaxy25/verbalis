@@ -216,6 +216,33 @@ jobs:
             "dist/Verbalis-${{ needs.version.outputs.version }}-macos-arm64.zip"
           ls -lh dist/*.zip
 
+      # The installed app refuses an update that is not signed with the same certificate
+      # (updates.check_same_signer). Check it here with the real codesign: the packed update must pass,
+      # a re-signed copy must not.
+      - name: Update signature check
+        run: |
+          set -euo pipefail
+          check="$RUNNER_TEMP/update-check"
+          rm -rf "$check" && mkdir -p "$check/ok" "$check/foreign"
+          ditto -x -k "dist/Verbalis-${{ needs.version.outputs.version }}-macos-arm64.zip" "$check/ok"
+          ditto "$check/ok/Verbalis.app" "$check/foreign/Verbalis.app"
+          codesign --force --deep --sign - "$check/foreign/Verbalis.app"
+          python - "$check" <<'PY'
+          import sys
+          from pathlib import Path
+          from verbalis import updates
+          check, running = Path(sys.argv[1]), Path("dist/Verbalis.app")
+          updates.check_same_signer(check / "ok" / "Verbalis.app", running)
+          try:
+              updates.check_same_signer(check / "foreign" / "Verbalis.app", running)
+          except RuntimeError as e:
+              print("re-signed copy refused as expected:", e)
+          else:
+              raise SystemExit("a re-signed copy was accepted")
+          print("update signature check ok")
+          PY
+          rm -rf "$check"
+
       # For the first install: a disk image with Verbalis and a link to «Programme». The ZIP stays for
       # the automatic updates. Users without administrator rights just open Verbalis from the image –
       # it then offers to move itself into their personal «Programme» folder.

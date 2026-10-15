@@ -4,8 +4,9 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.28 – planned and decided with Andrea (waiting for measurements)
+## 0.7.29 – planned and decided with Andrea (waiting for measurements)
 
+0.7.28 (15 Oct 2026): stricter update checks (SHA-256 required, Mac: same certificate), list groups fixed.
 0.7.27 (14 Oct 2026): a known number of people joins similar voices (`merge_to_count`) – on-site
 recordings with 2 and 4 people: 75 % / 90 % right instead of 56 % / 76 %. Per-turn re-assignment was
 tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hints when merging by hand.
@@ -18,11 +19,6 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    people and a 1:1 Teams call, transcribed without a number and every speaker named correctly; Claude
    measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
    first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
-2. **Done in the working copy** (for the 0.7.28 CHANGELOG):
-   - The list groups open and close reliably: «Diese Woche» could be closed but not opened again, and
-     «Heute» could not be closed while its recording was selected (`toggleGroup` read localStorage, which
-     the app does not keep). First UI test that runs index.html code in Node.js (`tests/test_ui_list.py`).
-   - GitHub release notes completely English (the install hints were German).
 
 ## After 0.7.28 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 
@@ -38,6 +34,19 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
   wann) · offene Fragen, saved as `notes.md`, editable. Cloud (Claude API) at most as an explicit opt-in:
   real conversations would leave the computer. **[ux] [privacy]**
 
+## Security (from the review on 15 Oct 2026)
+
+Done in 0.7.28: an update needs a SHA-256 from GitHub; on the Mac the new app must satisfy the running app's
+code requirement (same certificate), checked in the release build with the real `codesign`.
+
+- [ ] **GitHub account and repo** **[ops]**: two-factor / passkey on the account; protect `main` (no force
+  push, no deletion); signing secrets only in a GitHub «Environment» used by the release job; pin
+  third-party actions (`softprops/action-gh-release`, ideally all) to a commit SHA – Dependabot updates them.
+- [ ] **Windows: check the update's signature before running it** – only possible once Windows is signed
+  (see «Code signing»). **[ops]**
+- [ ] **Recordings at rest** are not encrypted: rely on BitLocker/FileVault (document for users and tocco IT);
+  later maybe «Audio nach N Tagen löschen». **[privacy]**
+
 ## Proposed (waiting for Andrea's OK)
 
 - **«Problem melden»** (Log tab, later also next to error messages): creates the log ZIP, opens a prepared
@@ -46,16 +55,14 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
 
 ## Now
 
-- [ ] **Mac: test 0.7.26** – self-install into «Programme» (from the desktop and from the DMG), and that an
-  update keeps the permissions (stable signature, «Authority=Verbalis Code Signing»). **[ops]**
-- [ ] **Teams call tests** – record real calls: quality of the compressed remote track, several remote speakers, Swiss German vs. Standard German speakers. **[quality]**
+- [ ] **Mac: test 0.7.26–0.7.28** – self-install into «Programme» (from the desktop and from the DMG), and that
+  the update to 0.7.28 works (now checks the certificate) and keeps the permissions. **[ops]**
+- [ ] **Teams call quality** – compressed remote track, Swiss German vs. Standard German speakers
+  (speaker measurements: see the 0.7.29 plan). **[quality]**
 - [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17/0.7.18 (safe way first). **[ux]**
 
 ## Next
 
-- [ ] **Speaker diarization: test with real calls** – since 0.7.18 short-only speakers and small speakers are
-  merged (`refine`) and the number of people can be given. Check with 2–4 people on Teams and with similar
-  voices; tune `THRESHOLD`, `MIN_TURN_S`, `SMALL_SPEAKER_S`, `MERGE_DISTANCE` with `verbalis speakers-test`. **[quality]**
 - [ ] **Reading flow: check on real calls** – are interjections recognised well (≤ 3 words or ≤ 1 s while someone
   else speaks)? How much slower are word timestamps? **[quality]**
 - [ ] **License check of gcoli for tocco** (MIT chain incl. training data). **[tocco]**
@@ -65,7 +72,6 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
 ## Later
 
 - [ ] **Recognize speakers across calls** – voice fingerprints. Biometric data under the Swiss revDSG: opt-in only, consent of the people concerned, deletable. **[privacy]** **[tocco]**
-- [ ] **Summary and action items** via LLM – optional and off by default; local model or a provider approved by tocco. **[tocco]**
 - [ ] **Convert models from the UI** instead of the terminal. **[ux]**
 - [ ] **Search across transcripts.** **[ux]**
 - [ ] **Export** to Word/PDF (copy as Markdown exists). **[ux]**
@@ -77,8 +83,6 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
 - [ ] **Ubuntu test** – PipeWire monitor source, pywebview with GTK or Qt. **[ops]**
 - [ ] **Call detection on macOS** – via the Swift helper (any call app using the microphone). **[ux]**
 - [ ] **Planned recordings from the Outlook calendar.** **[ux]**
-- [ ] **Test the Mac version on Andrea's Mac** – install, both permission prompts, recording with «Systemton» (Core Audio tap via the Swift helper), transcription, update to the next version. **[ops]**
-
 - [ ] **Intel Macs** – only Apple Silicon is built; add an Intel build if needed. **[ops]**
 
 ## Before using it at tocco **[tocco]**
@@ -100,9 +104,10 @@ Done in the code (0.7.11):
 - [x] Log export without names and device names
 
 Still open:
-- [ ] Installers signed, signature checked before running (needs SignPath / Apple, see «Code signing») **[ops]**
+- [ ] Installers signed, signature checked before running (needs SignPath / Apple, see «Code signing»). Mac
+  updates check the own certificate since 0.7.28. **[ops]**
 - [x] Windows install and update tested on a second PC (9 Oct 2026, 0.7.11 → 0.7.12). Found two device bugs: no default microphone (fixed in 0.7.12) and devices whose format soundcard can't read (fixed in 0.7.13)
-- [ ] macOS system audio tested on real hardware **[ops]**
+- [x] macOS system audio tested on real hardware (Andrea's Mac, 14 Oct 2026, 0.7.24)
 - [ ] Consent and information process approved by tocco's data protection **[tocco]**
 - [ ] Disk encryption, backups, leaving employees and device replacement arranged by tocco IT **[tocco]**
 - [ ] Pilot with a few colleagues, results documented **[tocco]**
@@ -112,7 +117,11 @@ Still open:
 - [ ] **Installer test, part 2** – on the second PC: a full recording with transcription (after the 0.7.13 device fix), and uninstall. **[ops]**
 - [ ] **Offline use** – the spelling dictionary is downloaded on first use like the models; for machines without internet provide both on an internal share. **[ops]**
 - [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
-- [ ] **Code signing** – Windows: SignPath Foundation offers free certificates for open-source projects (fully automated build required, each release approved by hand; SmartScreen reputation still builds up over time). macOS: Apple Developer Program (99 USD/year) for signing and notarization. **[ops]**
+- [ ] **Code signing** – Windows: SignPath Foundation offers free certificates for open-source projects (fully automated build required, each release approved by hand; SmartScreen reputation still builds up over time). macOS: Apple Developer Program (99 USD/year) for signing and notarization. Alternative for Windows: Certum «Open
+  Source Code Signing» (about 50–100 EUR/year, cloud key usable from CI). Notarization needs more than the
+  certificate: hardened runtime (`--options runtime`), `--timestamp`, every binary in the PyInstaller bundle
+  signed on its own instead of `--deep`, entitlements for audio input (maybe more for Python). Changing
+  the certificate makes macOS ask for the permissions once more. **[ops]**
 
 - [ ] Talk to IT and data protection: local processing, consent per recording, retention (audio deleted after N days).
 - [ ] Check the licence situation of the default model (gcoli since 0.7.17: MIT chain; Flix: Apache 2.0, trained under the Swiss TDM research exception).

@@ -9,7 +9,7 @@ holds the agreed plan for the next version, if there is one).
 - Answer Andrea in **German** (Swiss spelling: «ss», never «ß»). He programs in Python, not in other
   languages; explain changes in plain words, not only in code.
 - Before larger UI changes: show a screenshot or describe the layout and wait for his OK.
-- **Push only when Andrea asks for it.** Commit with messages like `v0.7.28: …`.
+- **Push only when Andrea asks for it.** Commit with messages like `v0.7.29: …`.
 
 ## Environment (Windows, PowerShell)
 

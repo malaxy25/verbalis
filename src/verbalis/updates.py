@@ -97,10 +97,14 @@ def download_installer(url: str, target: Path, progress: Callable[[float], None]
 
     Checks size and SHA-256 (from the GitHub release) before the file is used; a
     mismatch deletes it. This catches damaged and swapped downloads. It does not
-    protect against a compromised GitHub account – only code signing does.
+    protect against a compromised GitHub account – only code signing does (on the Mac
+    `check_same_signer`). Without a SHA-256 nothing is downloaded (until 0.7.27 the size alone was enough).
     """
     import hashlib
 
+    if not sha256:
+        raise RuntimeError("Das Update wurde nicht geladen: GitHub nennt keine Prüfsumme dafür. "
+                           "Bitte die neue Version von der Release-Seite laden.")
     request = urllib.request.Request(url, headers={"User-Agent": f"Verbalis/{__version__}"})
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".part")
@@ -250,6 +254,28 @@ rm -f "$0"
 """, encoding="utf-8")
     script.chmod(0o755)
     return script
+
+
+def check_same_signer(new_app: Path, running_app: Path, run: Callable = subprocess.run) -> None:
+    """Raise unless the new app is signed with the same certificate as the running one.
+
+    The running app's «designated requirement» names its identifier and certificate; `codesign` checks
+    that the downloaded app satisfies it and that its signature is intact. So an update can only come
+    from whoever holds the Verbalis certificate – a compromised GitHub account alone is not enough.
+    """
+    shown = run(["codesign", "--display", "--requirements", "-", str(running_app)],
+                capture_output=True, text=True)
+    requirement = next((line.split("=>", 1)[1].strip() for line in (shown.stdout + shown.stderr).splitlines()
+                        if line.startswith("designated =>")), "")
+    if "certificate" not in requirement:   # ad-hoc or unsigned: nothing to compare with
+        raise RuntimeError("Diese Verbalis-Installation ist nicht signiert, darum lässt sich das Update nicht "
+                           "prüfen. Bitte die neue Version von der Release-Seite laden.")
+    checked = run(["codesign", "--verify", "--deep", "--strict", f"-R={requirement}", str(new_app)],
+                  capture_output=True, text=True)
+    if checked.returncode != 0:
+        detail = (checked.stderr or checked.stdout or "").strip()
+        raise RuntimeError("Das heruntergeladene Update ist nicht mit dem Verbalis-Zertifikat signiert und wurde "
+                           f"nicht installiert. ({detail[-200:]})")
 
 
 def unpack_mac_update(zip_path: Path, workdir: Path, extract: Callable | None = None) -> Path:

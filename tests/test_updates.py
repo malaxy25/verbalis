@@ -56,9 +56,11 @@ def test_check_same_version_is_not_available():
 
 
 def test_download_installer(tmp_path):
+    import hashlib
     seen = []
     target = updates.download_installer("https://dl/x.exe", tmp_path / "setup.exe", seen.append,
-                                        opener=fake_opener(b"x" * 3_000_000))
+                                        opener=fake_opener(b"x" * 3_000_000),
+                                        sha256=hashlib.sha256(b"x" * 3_000_000).hexdigest())
     assert target.read_bytes() == b"x" * 3_000_000 and seen[-1] == 1.0
 
 
@@ -177,7 +179,7 @@ def test_download_checks_sha256_and_size(tmp_path):
                                    opener=fake_opener(payload), sha256="0" * 64, size=len(payload))
     with pytest.raises(RuntimeError, match="unvollständig"):
         updates.download_installer("https://dl/x.exe", tmp_path / "short.exe", None,
-                                   opener=fake_opener(payload[:100]), size=len(payload))
+                                   opener=fake_opener(payload[:100]), sha256=good, size=len(payload))
     assert not (tmp_path / "bad.exe").exists() and not list(tmp_path.glob("*.part"))   # nothing left to run
 
 
@@ -305,3 +307,50 @@ def test_relaunch_script_starts_the_moved_app(tmp_path):
     script = updates.write_relaunch_script(tmp_path / "Applications" / "Verbalis.app", 4242, tmp_path / "r.sh")
     text = script.read_text(encoding="utf-8")
     assert "kill -0 4242" in text and "open " in text and "Verbalis.app" in text
+
+
+def test_update_without_checksum_is_not_downloaded(tmp_path):
+    """0.7.28: without a SHA-256 from GitHub the size alone was enough to run a downloaded installer."""
+    opened = []
+    with pytest.raises(RuntimeError, match="keine Prüfsumme"):
+        updates.download_installer("https://dl/x.exe", tmp_path / "x.exe", None,
+                                   opener=lambda *a, **k: opened.append(a), size=5)
+    assert not opened and not list(tmp_path.iterdir())
+
+
+class FakeCodesign:
+    """codesign as on a Mac: the running app's requirement, and whether the new app satisfies it."""
+
+    def __init__(self, requirement, new_app_ok=True):
+        self.requirement, self.new_app_ok, self.calls = requirement, new_app_ok, []
+
+    def __call__(self, args, **kwargs):
+        import subprocess
+        self.calls.append(args)
+        if "--display" in args:
+            return subprocess.CompletedProcess(args, 0, stdout=f"designated => {self.requirement}\n",
+                                               stderr="Executable=/Applications/Verbalis.app/Contents/MacOS/Verbalis\n")
+        return subprocess.CompletedProcess(args, 0 if self.new_app_ok else 3, stdout="",
+                                           stderr="" if self.new_app_ok else "test-requirement: code failed to satisfy")
+
+
+SIGNED = 'identifier "ch.frehner.verbalis" and certificate leaf = H"0123abcd"'
+
+
+def test_mac_update_must_be_signed_like_the_running_app(tmp_path):
+    """0.7.28: a downloaded Mac update was installed without checking who signed it – a compromised GitHub
+    account could have shipped any app. Now it must satisfy the running app's requirement (same certificate)."""
+    codesign = FakeCodesign(SIGNED)
+    updates.check_same_signer(tmp_path / "new.app", tmp_path / "Verbalis.app", run=codesign)
+    verify = codesign.calls[-1]
+    assert verify[:4] == ["codesign", "--verify", "--deep", "--strict"]
+    assert verify[4] == f"-R={SIGNED}" and verify[5] == str(tmp_path / "new.app")
+    with pytest.raises(RuntimeError, match="nicht mit dem Verbalis-Zertifikat"):
+        updates.check_same_signer(tmp_path / "new.app", tmp_path / "Verbalis.app",
+                                  run=FakeCodesign(SIGNED, new_app_ok=False))
+
+
+def test_mac_update_refused_when_the_running_app_is_not_signed(tmp_path):
+    with pytest.raises(RuntimeError, match="nicht signiert"):
+        updates.check_same_signer(tmp_path / "new.app", tmp_path / "Verbalis.app",
+                                  run=FakeCodesign('cdhash H"abc"'))

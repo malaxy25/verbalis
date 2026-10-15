@@ -1611,11 +1611,10 @@ class Service:
         try:
             updates.download_installer(info["installer_url"], target, progress,
                                        sha256=info.get("installer_sha256"), size=info.get("installer_size"))
-            if not info.get("installer_sha256"):
-                log.warning("Release asset has no SHA-256 from GitHub – size checked only")
             if bundle is not None:
                 # unpack next to the running app (same disk, so the final move is instant)
                 new_app = updates.unpack_mac_update(target, bundle.parent / ".verbalis-update")
+                updates.check_same_signer(new_app, bundle)
                 script = updates.write_swap_script(bundle, new_app, os.getpid(),
                                                    Path(tempfile.gettempdir()) / "verbalis-update.sh")
                 log.info("Swapping app bundle %s → %s", new_app, bundle)

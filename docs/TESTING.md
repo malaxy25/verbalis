@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-228 tests in 23 files.
+231 tests in 23 files.
 
 ### `test_app.py` (7)
 
@@ -377,7 +377,7 @@ The recording list in the UI: groups open and close. Runs the list functions of 
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
 
-### `test_updates.py` (23)
+### `test_updates.py` (26)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -404,6 +404,9 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Move into the personal programme folder** – Andrea's case: no administrator account, Verbalis on the desktop – it ends up in ~/Applications,
 - **Translocated copy moves its original from downloads**
 - **Relaunch script starts the moved app**
+- **Update without checksum is not downloaded** – 0.7.28: without a SHA-256 from GitHub the size alone was enough to run a downloaded installer.
+- **Mac update must be signed like the running app** – 0.7.28: a downloaded Mac update was installed without checking who signed it – a compromised GitHub
+- **Mac update refused when the running app is not signed**
 
 ### `test_wasapi_fix.py` (5)
 
