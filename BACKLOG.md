@@ -21,7 +21,7 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    people and a 1:1 Teams call, transcribed without a number and every speaker named correctly; Claude
    measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
    first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
-2. **Track and speaker names** (decided 16 Oct 2026 – on site the others are on the «Ich» track too):
+2. **Track and speaker names** – built 16 Oct 2026, committed locally (decided the same day – on site the others are on the «Ich» track too):
    tracks are called «Mikrofon» and «Systemton» everywhere (level meters, settings, «Personen am …»);
    a single voice stays «Ich» (or the name from the settings) / «Gegenüber»; several voices on the
    microphone become «Person 1, 2, …» instead of «Ich 1, 2, …», on the Systemton «Gegenüber 1, 2, …».

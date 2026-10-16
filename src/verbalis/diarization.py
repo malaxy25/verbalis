@@ -34,7 +34,7 @@ import urllib.request
 from dataclasses import replace
 from pathlib import Path
 
-from .transcript import is_default_name
+from .transcript import MIC_GROUP, is_default_name
 from .transcription.base import Segment
 from .transcription.models import verbalis_home
 
@@ -343,9 +343,11 @@ def assign(segments: list[Segment], turns: list[tuple[float, float, int]], track
     """Give every transcribed segment the speaker who talks most during it.
 
     Speakers are numbered in order of first appearance. With only one speaker the
-    track's display name stays as it is («Gegenüber»); with several they become
-    «Gegenüber 1», «Gegenüber 2», … – ready to be renamed in the app.
+    track's display name stays as it is («Andrea», «Gegenüber»); with several they become
+    «Gegenüber 1», «Gegenüber 2», … – on the microphone «Person 1», «Person 2», …, because there the
+    others in the room speak too – ready to be renamed in the app.
     """
+    group = MIC_GROUP if track == "me" else base_name
     order: dict[int, int] = {}
     for _, _, speaker in turns:
         order.setdefault(speaker, len(order) + 1)
@@ -365,6 +367,6 @@ def assign(segments: list[Segment], turns: list[tuple[float, float, int]], track
             speaker = last
         last = speaker
         number = order.get(speaker, 1)
-        name = f"{base_name} {number}" if several else base_name
+        name = f"{group} {number}" if several else base_name
         result.append(replace(s, speaker=name, track=track, speaker_id=f"{track}-{number}"))
     return result

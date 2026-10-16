@@ -138,9 +138,17 @@ def save(folder: Path, filename: str, paragraphs: list[Segment], title: str, hea
     return md
 
 
+# Several voices on the microphone are «Person 1, 2, …» (0.7.30): in a meeting on site the others speak into the
+# same microphone, so «Ich 1, Ich 2» was wrong. One voice keeps the user's name, the Systemton «Gegenüber 1, 2, …».
+MIC_GROUP = "Person"
+
+
 def is_default_name(name: str, track_name: str) -> bool:
-    """Is this the name diarization gave («Gegenüber 2»), not one the user typed?"""
-    return bool(track_name) and re.fullmatch(re.escape(track_name) + r"( \d+)?", name or "") is not None
+    """Is this the name diarization gave («Gegenüber 2», «Person 3»), not one the user typed?"""
+    name = name or ""
+    if re.fullmatch(MIC_GROUP + r" \d+", name):
+        return True
+    return bool(track_name) and re.fullmatch(re.escape(track_name) + r"( \d+)?", name) is not None
 
 
 def speakers_of(paragraphs: list[Segment]) -> dict[str, dict]:

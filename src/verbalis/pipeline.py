@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 TRACKS = ("me", "others")
+TRACK_LABELS = {"me": "Mikrofon", "others": "Systemton"}   # what the user reads for the two tracks
 AUDIO_EXTENSIONS = (".flac", ".wav")
 ARCHIVE_SAMPLERATE = 16_000  # what the models use anyway
 Progress = Callable[[str, float], None]  # (display name of the current track, fraction of all 0..1)
@@ -471,9 +472,11 @@ def _diarize(segments, path, until_s, track, display_name, phase, problems, peop
     """
     from . import diarization
 
+    label = TRACK_LABELS.get(track, display_name)
+
     def progress(fraction):
         if phase:
-            phase(f"Sprecher in «{display_name}» werden erkannt: {fraction:.0%}")
+            phase(f"Sprecher im {label} werden erkannt: {fraction:.0%}")
 
     try:
         if not diarization.models_ready():
@@ -486,7 +489,7 @@ def _diarize(segments, path, until_s, track, display_name, phase, problems, peop
     except Exception as e:
         log.exception("Diarization of %s failed", track)
         if problems is not None:
-            problems.append(f"Sprechererkennung für «{display_name}» nicht möglich: {e}")
+            problems.append(f"Sprechererkennung im {label} nicht möglich: {e}")
         return segments
 
 

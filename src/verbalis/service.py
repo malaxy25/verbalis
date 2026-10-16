@@ -514,7 +514,7 @@ class Service:
         try:
             found = self._list_devices() or {}
             info["Mikrofone"] = ", ".join(found.get("microphones", [])) or "keine"
-            info["Ausgabe / Ton der anderen"] = ", ".join(found.get("speakers", [])) or "keine"
+            info["Systemton (Ausgabe)"] = ", ".join(found.get("speakers", [])) or "keine"
         except Exception as e:
             info["Geräte"] = f"Fehler: {e}"
         return info
@@ -571,9 +571,9 @@ class Service:
                 step("Wie beim Aufnahmestart: öffnen …", [mic], 2)
                 step("… schliessen und sofort neu öffnen", [mic], 3)
                 return
-            others = ("Ton der anderen", chosen.loopback)
+            others = ("Systemton", chosen.loopback)
             step("Nur Mikrofon", [mic], 3)
-            step("Nur Ton der anderen", [others], 3)
+            step("Nur Systemton", [others], 3)
             step("Beide zusammen", [mic, others], 3)
             step("Wie beim Aufnahmestart: beide öffnen …", [mic, others], 2)
             step("… schliessen und sofort neu öffnen", [mic, others], 3)
@@ -859,7 +859,7 @@ class Service:
         if not silent:
             return
         info["no_data_reported"] = True
-        names = {"me": "Mikrofon", "others": "Ton der anderen"}
+        names = pipeline.TRACK_LABELS
         devices = ", ".join(f"{names.get(t, t)} «{info['devices'].get(t, '?')}»" for t in silent)
         log.warning("No audio data after %.0f s from: %s", rec.active_seconds(), devices)
         hint = (" Unter macOS: eine offene Frage nach der Berechtigung beantworten bzw. in Systemeinstellungen → "
@@ -1141,6 +1141,7 @@ class Service:
                 corrections = CorrectionList.load()
                 tr.keywords = self._keywords(s.keywords, corrections) or None
                 names = {"me": s.name, "others": s.others}
+                labels = {s.name: "Mikrofon", s.others: "Systemton"}   # the phase names the track, not the person
                 with self._lock:
                     self._job["start"] = time.monotonic()
                     self._job["phase"] = "Transkription beginnt"
@@ -1148,7 +1149,7 @@ class Service:
                 def progress(name: str, fraction: float):
                     with self._lock:
                         if self._job:
-                            self._job["phase"] = f"Spur «{name}» wird transkribiert"
+                            self._job["phase"] = f"{labels.get(name, name)} wird transkribiert"
                             self._job["progress"] = fraction
                     self._wait_while_paused()
 

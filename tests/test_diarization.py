@@ -39,9 +39,22 @@ def test_one_speaker_keeps_the_track_name():
 
 def test_segment_goes_to_the_speaker_who_talks_most_or_the_nearest():
     turns = [(0.0, 2.0, 0), (2.0, 10.0, 1)]
-    out = diarization.assign(segs((1.5, 6.0), (20.0, 21.0)), turns, "me", "Raum")
+    out = diarization.assign(segs((1.5, 6.0), (20.0, 21.0)), turns, "others", "Raum")
     assert out[0].speaker == "Raum 2"                                # 0.5 s vs 4 s overlap
     assert out[1].speaker == "Raum 2"                                # no overlap: nearest turn
+
+
+def test_several_voices_on_the_microphone_are_persons():
+    """0.7.30 (Andrea): on site the others speak into the same microphone – «Andrea 1, Andrea 2» was wrong.
+    Several voices there are «Person 1, 2, …»; one voice keeps the user's name."""
+    turns = [(0.0, 2.0, 0), (2.0, 10.0, 1)]
+    out = diarization.assign(segs((0.2, 1.8), (3.0, 6.0)), turns, "me", "Andrea")
+    assert [s.speaker for s in out] == ["Person 1", "Person 2"] and out[1].speaker_id == "me-2"
+    alone = diarization.assign(segs((0, 2), (3, 4)), [(0.0, 5.0, 0)], "me", "Andrea")
+    assert {s.speaker for s in alone} == {"Andrea"}
+    from verbalis.transcript import is_default_name
+    assert is_default_name("Person 3", "Andrea") and is_default_name("Andrea 2", "Andrea")   # old transcripts too
+    assert not is_default_name("Basil", "Andrea") and not is_default_name("Personal", "Andrea")
 
 
 # ---------------------------------------------------------------- model download

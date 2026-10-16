@@ -602,10 +602,10 @@
 
     <div class="tracks">
       <div class="time" aria-live="off"><span id="time">00:00</span><span class="paused-label" id="paused-label" hidden>pausiert</span></div>
-      <span class="track-name me" id="name-me">Ich</span>
+      <span class="track-name me" id="name-me">Mikrofon</span>
       <div class="lane me"><div class="fill" id="level-me"></div></div>
       <span class="db" id="db-me"></span>
-      <span class="track-name others" id="name-others">Gegenüber</span>
+      <span class="track-name others" id="name-others">Systemton</span>
       <div class="lane others"><div class="fill" id="level-others"></div></div>
       <span class="db" id="db-others"></span>
     </div>
@@ -614,7 +614,7 @@
       <label>Mikrofon
         <select id="sel-microphone"></select>
       </label>
-      <label>Ton der anderen kommt über
+      <label>Systemton kommt über
         <select id="sel-speakers"></select>
       </label>
       <button type="button" class="link-button" id="btn-reload-devices">Geräte neu laden</button>
@@ -744,11 +744,11 @@
         <div class="column">
           <label class="field"><span>Dein Name</span>
             <input type="text" name="name" autocomplete="off">
-            <small>für die Mikrofonspur</small>
+            <small>für deine Stimme am Mikrofon</small>
           </label>
           <label class="field"><span>Die anderen</span>
             <input type="text" name="others" autocomplete="off">
-            <small>für die Spur aus Teams</small>
+            <small>für die Stimme im Systemton, z.B. aus Teams</small>
           </label>
         </div>
         <div class="column">
@@ -817,8 +817,8 @@
       <section class="tab-panel" id="panel-speakers" role="tabpanel" aria-labelledby="tab-speakers" hidden>
         <div class="field">
           <span>Sprechererkennung</span>
-          <label class="consent-like"><input type="checkbox" name="diarize_others"> Gegenüber: verschiedene Personen unterscheiden (Teams-Calls mit mehreren Teilnehmenden)</label>
-          <label class="consent-like"><input type="checkbox" name="diarize_me"> Eigene Spur: verschiedene Personen unterscheiden (Besprechung vor Ort, alle am selben Mikrofon)</label>
+          <label class="consent-like"><input type="checkbox" name="diarize_others"> Systemton: verschiedene Personen unterscheiden (Teams-Calls mit mehreren Teilnehmenden – «Gegenüber 1, 2, …»)</label>
+          <label class="consent-like"><input type="checkbox" name="diarize_me"> Mikrofon: verschiedene Personen unterscheiden (Besprechung vor Ort, alle am selben Mikrofon – «Person 1, 2, …»)</label>
           <small>Die Stimmen werden nur innerhalb einer Aufnahme verglichen und nicht gespeichert. Beim ersten Gebrauch werden dafür zwei Modelle geladen (ca. 46 MB). Namen vergibst du im Transkript unter «Sprecher».</small>
         </div>
       </section>
@@ -972,6 +972,8 @@ function longDate(a) {
   return d.toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
     + ", " + d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }) + " Uhr";
 }
+
+const TRACK_LABELS = { me: "Mikrofon", others: "Systemton" };   // the two tracks as the user reads them
 
 const STATUS_TEXT = {
   planned: "Geplant",
@@ -1201,12 +1203,12 @@ const STATE_TEXT = {
 };
 
 function problemBox(a) {
-  const missing = (a.missing_tracks || []).map((t) => t === "me" ? (state.settings.name || "Ich") : (state.settings.others || "Gegenüber"));
+  const missing = (a.missing_tracks || []).map((t) => TRACK_LABELS[t] || t);
   if (!STATE_TEXT[a.state] && !missing.length) return null;
   return element("div", { class: "problem-box", role: "note" },
     element("strong", {}, STATE_TEXT[a.state] || "Diese Aufnahme ist unvollständig."),
     a.problem ? element("span", {}, a.problem + " ") : null,
-    missing.length ? element("span", {}, `Es fehlt die Spur von: ${missing.join(", ")}.`) : null,
+    missing.length ? element("span", {}, `Es fehlt die Spur: ${missing.join(", ")}.`) : null,
   );
 }
 
@@ -1261,8 +1263,8 @@ function detailsPanel(a, open = false) {
   const more = element("details", { class: "details-more" },
     element("summary", {}, "Teilnehmende und Notizen"),
     element("div", { class: "details-grid" },
-      participants("me", `Am Mikrofon (${state.settings.name || "Ich"})`),
-      participants("others", "Im Call"),
+      participants("me", "Am Mikrofon"),
+      participants("others", "Im Systemton (Call)"),
       area("Notizen", a.notes || "", (value) => save({ notes: value }), 4)),
     element("small", { class: "edit-hint" }, "Ein Name pro Zeile. Die Namen lassen sich später in der Sprecherbox auswählen."));
   if (open || a.status === "planned") more.open = true;
@@ -1286,12 +1288,12 @@ function peopleFields(a) {
     field.value = known[track] ? String(known[track]) : listed ? String(listed) : "";
     return field;
   };
-  const me = input("me", "Personen auf deiner Spur");
-  const others = input("others", "Personen auf der Spur der anderen");
+  const me = input("me", "Personen am Mikrofon");
+  const others = input("others", "Personen im Systemton");
   const box = element("div", { class: "people-fields" },
-    element("label", {}, element("span", {}, `Personen am Mikrofon (${state.settings.name || "Ich"})`), me,
+    element("label", {}, element("span", {}, "Personen am Mikrofon"), me,
       element("small", {}, "z.B. 2 bei einer Besprechung vor Ort")),
-    element("label", {}, element("span", {}, `Personen über «${state.settings.others || "Gegenüber"}»`), others,
+    element("label", {}, element("span", {}, "Personen im Systemton"), others,
       element("small", {}, "die anderen im Teams-Call")),
   );
   return { box, values: () => ({ me: me.value.trim(), others: others.value.trim() }) };
@@ -1481,9 +1483,8 @@ function speakerCountRows(a, t, talk) {
   const tracks = [...new Set(Object.values(t.speakers || {}).map((info) => info.track))];
   return tracks.map((track) => {
     const current = Object.entries(t.speakers).filter(([id, info]) => info.track === track && talk[id]).length;
-    const name = (t.tracks || {})[track] || track;
     const input = element("input", { type: "number", min: "1", max: "30", value: String(Math.max(current, 1)),
-      "aria-label": `Anzahl Personen auf der Spur ${name}`, inputmode: "numeric" });
+      "aria-label": `Anzahl Personen im ${TRACK_LABELS[track] || track}`, inputmode: "numeric" });
     const note = element("small", {}, a.audio
       ? "Erkennt die Personen dieser Spur neu, ohne neu zu transkribieren. Korrekturen und vergebene Namen bleiben erhalten. Läuft im Hintergrund und kann einige Minuten dauern."
       : "Das Audio dieser Aufnahme wurde gelöscht – neu zuordnen ist nicht mehr möglich.");
@@ -1865,7 +1866,7 @@ function showSilentHint(recording) {
   hint.hidden = !silent;
   if (silent) {
     hint.textContent = `Seit ${Math.floor(recording.others_silent_s / 60)} Min. kommt kein Ton über «${recording.others_device}». `
-      + "Falls Teams den Ton über ein anderes Gerät ausgibt: Aufnahme beenden, unter «Ton der anderen kommt über» das richtige Gerät wählen und neu starten.";
+      + "Falls Teams den Ton über ein anderes Gerät ausgibt: Aufnahme beenden, unter «Systemton kommt über» das richtige Gerät wählen und neu starten.";
   }
 }
 
@@ -2279,7 +2280,7 @@ async function loadDevices() {
     const hint = $("device-hint");
     const notes = [...(g.problems || [])];
     if (g.platform === "darwin" && !g.virtual_device) {
-      notes.push("Für den Ton der anderen braucht dieser Mac macOS 14.2 oder neuer – oder ein virtuelles "
+      notes.push("Für den Systemton (die anderen im Call) braucht dieser Mac macOS 14.2 oder neuer – oder ein virtuelles "
         + "Audiogerät wie BlackHole (kostenlos), hier gewählt. Anleitung im README.");
     }
     hint.hidden = !notes.length;
@@ -2287,11 +2288,6 @@ async function loadDevices() {
   } catch (e) {
     showMessage("Audiogeräte konnten nicht gelesen werden: " + e.message);
   }
-}
-
-function setNames() {
-  $("name-me").textContent = state.settings.name;
-  $("name-others").textContent = state.settings.others;
 }
 
 const CUSTOM = "__custom__";
@@ -2887,7 +2883,6 @@ async function saveSettings(event) {
   if (!data.model) { showTab("transcription"); $("model-status").textContent = "Bitte ein Modell angeben."; return false; }
   try {
     state.settings = await call("save_settings", data);
-    setNames();
     $("dlg-settings").close();
     state.listSignature = "";
     await loadList();
@@ -2989,7 +2984,7 @@ const TOUR_STEPS = [
     leave: async () => {
       const name = ($("tour-name") || {}).value || "";
       if (name.trim() && name.trim() !== state.settings.name) {
-        try { state.settings = await call("save_settings", { name: name.trim() }); setNames(); } catch (e) { showMessage(e.message); }
+        try { state.settings = await call("save_settings", { name: name.trim() }); } catch (e) { showMessage(e.message); }
       }
       call("prepare_model").catch(() => {});   // the model loads while we go on
     },
@@ -2998,7 +2993,7 @@ const TOUR_STEPS = [
     title: "Dein Mikrofon",
     targets: () => [$("sel-microphone").closest("label"), $("name-me"), $("level-me").parentElement, ...tourDeviceExtras()],
     body: () => [
-      tourParagraph(`Wähle dein Mikrofon und sag etwas. Bewegt sich der Balken bei «${state.settings.name}», hört Verbalis dich.`),
+      tourParagraph("Wähle dein Mikrofon und sag etwas. Bewegt sich der Balken bei «Mikrofon», hört Verbalis dich."),
       tourCheck(tour.heard.me, "Dein Mikrofon funktioniert.",
         "Noch nichts gehört … Kein Ausschlag? Ein anderes Mikrofon wählen oder «Geräte neu laden»."),
     ],
@@ -3009,8 +3004,8 @@ const TOUR_STEPS = [
     title: "Der Ton deines Computers",
     targets: () => [$("sel-speakers").closest("label"), $("name-others"), $("level-others").parentElement, ...tourDeviceExtras()],
     body: () => [
-      tourParagraph(`Im Teams-Call kommen die anderen über den Lautsprecher oder das Headset. Verbalis nimmt diesen `
-        + `Ton direkt ab – als zweite Spur «${state.settings.others}».`),
+      tourParagraph("Im Teams-Call kommen die anderen über den Lautsprecher oder das Headset. Verbalis nimmt diesen "
+        + "Ton direkt ab – als zweite Spur «Systemton»."),
       element("div", { class: "field-row" }, element("button", { type: "button", class: "action", onclick: playTestTone }, "Testton abspielen")),
       tourCheck(tour.heard.others, "Verbalis hört den Ton deines Computers.",
         "Spiel den Testton ab. Bewegt sich der Balken nicht: oben das Gerät wählen, über das du Teams hörst."),
@@ -3086,7 +3081,8 @@ const TOUR_STEPS = [
     body: () => [
       tourParagraph("Verbalis unterscheidet die Stimmen. Bei einem Teams-Call mit mehreren Personen heissen sie zuerst "
         + "«Gegenüber 1», «Gegenüber 2» … – im Transkript gibst du ihnen Namen."),
-      tourParagraph("Für eine Besprechung vor Ort, bei der alle am selben Mikrofon sind, schaltest du «Eigene Spur» ein."),
+      tourParagraph("Für eine Besprechung vor Ort, bei der alle am selben Mikrofon sind, schaltest du «Mikrofon: verschiedene "
+        + "Personen unterscheiden» ein – die Stimmen heissen dann «Person 1», «Person 2» …"),
     ],
   },
   {
@@ -3362,7 +3358,6 @@ async function init() {
     state.settings = await call("settings");
     $("version").textContent = "Version " + (await call("version"));
   } catch (e) { showMessage(e.message); }
-  setNames();
   await loadDevices();
   await loadList();
   await renderContent(true);

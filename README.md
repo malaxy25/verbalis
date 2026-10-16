@@ -67,7 +67,7 @@ built and self-tested automatically; tests on a real Mac are in progress.
 3. On the first recording macOS asks twice: for the **microphone** and for **recording
    audio** (the others' voices). Allow both.
 
-From **macOS 14.2** Verbalis records the system audio itself – «Ton der anderen kommt über:
+From **macOS 14.2** Verbalis records the system audio itself – «Systemton kommt über:
 Systemton (alle Programme)», preselected, like loopback on Windows. You keep hearing the call.
 
 Older Macs need the free virtual audio device **BlackHole 2ch** instead: install it, create a

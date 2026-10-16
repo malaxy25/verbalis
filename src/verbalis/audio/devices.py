@@ -75,8 +75,8 @@ def loopback_for(sc, speakers):
 
 
 VIRTUAL_DEVICES = ("blackhole", "loopback", "soundflower", "vb-cable")
-MAC_HINT = ("Für den Ton der anderen braucht dieser Mac macOS 14.2 oder neuer – oder ein virtuelles "
-            "Audiogerät wie BlackHole, unter «Ton der anderen kommt über» gewählt. Anleitung im README.")
+MAC_HINT = ("Für den Systemton (die anderen im Call) braucht dieser Mac macOS 14.2 oder neuer – oder ein "
+            "virtuelles Audiogerät wie BlackHole, unter «Systemton kommt über» gewählt. Anleitung im README.")
 
 
 def _is_virtual(name: str) -> bool:
@@ -159,7 +159,7 @@ def select(microphone: str | None = None, speakers: str | None = None) -> Device
         if others is None:
             raise ValueError(MAC_HINT)
         if others.name == mic.name:
-            raise ValueError("Mikrofon und «Ton der anderen» sind dasselbe Gerät. Für den Ton der anderen "
+            raise ValueError("Mikrofon und Systemton sind dasselbe Gerät. Für den Systemton "
                              "das virtuelle Audiogerät (z.B. BlackHole) wählen.")
         return DeviceSelection(microphone=mic, speakers=others, loopback=others)
     speaker_list = sc.all_speakers()

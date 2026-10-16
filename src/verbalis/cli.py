@@ -92,8 +92,8 @@ def cmd_record(args) -> int:
             me, others = tracks["me"], tracks.get("others", tracks["me"])
             mm, ss = divmod(int(elapsed), 60)
             sys.stdout.write(
-                f"\r● {mm:02d}:{ss:02d}   Ich {_level_bar(me.level_rms)}"
-                f"   Gegenüber {_level_bar(others.level_rms)}  "
+                f"\r● {mm:02d}:{ss:02d}   Mikrofon {_level_bar(me.level_rms)}"
+                f"   Systemton {_level_bar(others.level_rms)}  "
             )
             sys.stdout.flush()
             time.sleep(0.2)
@@ -164,7 +164,7 @@ def cmd_audio_test(args) -> int:
         return 1
     problems = 0
     for track, label, device in (("me", "Mikrofon", selection.microphone),
-                                 ("others", "Ton der anderen", selection.loopback)):
+                                 ("others", "Systemton", selection.loopback)):
         print(f"{label}: «{getattr(device, 'name', '?')}» – {args.seconds:.0f} s lang lesen …")
         stop = threading.Event()
         meter = MeterTrack(track, device, stop)
@@ -535,9 +535,9 @@ def main(argv: list[str] | None = None) -> int:
                                         "testdata/reference_standard_german.txt")
     p.set_defaults(func=cmd_compare, until=180)  # default: first 3 minutes, 0 = everything
 
-    p = sub.add_parser("audio-test", help="Prüfen, ob Mikrofon und Ton der anderen Audio liefern (nichts wird gespeichert)")
+    p = sub.add_parser("audio-test", help="Prüfen, ob Mikrofon und Systemton Audio liefern (nichts wird gespeichert)")
     p.add_argument("--microphone", help="Mikrofon (Namensteil), Standard: wie in der App")
-    p.add_argument("--speakers", help="Ton der anderen (Namensteil), Standard: wie in der App")
+    p.add_argument("--speakers", help="Systemton: Ausgabegerät (Namensteil), Standard: wie in der App")
     p.add_argument("--seconds", type=float, default=4.0, help="Wie lange pro Gerät (Standard: 4)")
     p.set_defaults(func=cmd_audio_test)
 

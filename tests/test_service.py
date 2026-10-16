@@ -615,7 +615,7 @@ def test_track_without_any_audio_is_reported_while_recording():
     s.start_recording(consent=True)
     message = s.state()["recording_error"]
     assert "Mikrofon «Mic»" in message and "keine Audiodaten" in message
-    assert "Ton der anderen" not in message                 # that track delivers
+    assert "Systemton" not in message                 # that track delivers
     s.stop_recording()
 
 
@@ -633,8 +633,8 @@ def test_diagnosis_runs_the_steps_of_a_recording_start(monkeypatch):
     s = make_service()
     s.start_diagnosis("Mic", "")
     assert wait_until(lambda: not s.diagnosis()["running"])
-    assert seen == [["Mikrofon"], ["Ton der anderen"], ["Mikrofon", "Ton der anderen"],
-                    ["Mikrofon", "Ton der anderen"], ["Mikrofon", "Ton der anderen"]]
+    assert seen == [["Mikrofon"], ["Systemton"], ["Mikrofon", "Systemton"],
+                    ["Mikrofon", "Systemton"], ["Mikrofon", "Systemton"]]
     report = s.diagnose_report()
     assert "Verbalis:" in report and "Nur Mikrofon" in report and "Mic: OK – erste Daten nach 0.2 s" in report
     assert s.preview_levels("Mic", "") is not None             # level meters work again afterwards
