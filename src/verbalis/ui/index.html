@@ -543,6 +543,32 @@
     .paragraph { grid-template-columns: 1fr; }
     .asides { grid-column: 1; }
   }
+
+  /* Introduction: a spotlight on the explained part (its huge shadow darkens the rest) and a card next to it.
+     Nothing blocks the window – the user clicks the real buttons (record, consent, devices). */
+  .tour { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+  .tour[hidden] { display: none; }
+  .tour-spot { position: fixed; border-radius: 10px; box-shadow: 0 0 0 200vmax rgb(21 27 34 / 0.55);
+    outline: 2px solid var(--limmat); transition: all 0.2s ease; }
+  .tour-spot.none { outline: none; }
+  .tour-card { position: fixed; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+    pointer-events: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px 18px 14px; box-shadow: 0 12px 36px rgb(0 0 0 / 0.28);
+    display: grid; gap: 10px; transition: top 0.2s ease, left 0.2s ease; }
+  .tour-card h2 { margin: 0; font-size: 17px; font-weight: 600; }
+  .tour-body { display: grid; gap: 10px; }
+  .tour-card p { margin: 0; line-height: 1.45; }
+  .tour-card .tour-count { color: var(--muted); font-size: 12px; }
+  .tour-card label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+  .tour-card input[type="text"] { padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--surface); color: var(--ink); font: inherit; font-weight: 400; }
+  .tour-card blockquote { margin: 0; padding: 10px 12px; border-left: 3px solid var(--limmat);
+    background: var(--limmat-soft); border-radius: 6px; font-family: var(--font-text); font-size: 16px; line-height: 1.5; }
+  .tour-check { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 14px; }
+  .tour-check.ok { background: var(--green-soft); color: var(--green); font-weight: 600; }
+  .tour-check.bad { background: var(--red-soft); color: var(--red); }
+  .tour-buttons { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
+  .tour-buttons .link-button { margin-right: auto; }
 </style>
 </head>
 <body>
@@ -621,6 +647,20 @@
 
   <section class="content" id="content" aria-live="polite"></section>
 </main>
+
+<div class="tour" id="tour" hidden>
+  <div class="tour-spot" id="tour-spot"></div>
+  <section class="tour-card" id="tour-card" role="dialog" aria-labelledby="tour-title" aria-live="polite">
+    <span class="tour-count" id="tour-count"></span>
+    <h2 id="tour-title"></h2>
+    <div class="tour-body" id="tour-body"></div>
+    <div class="tour-buttons">
+      <button type="button" class="link-button" id="btn-tour-end">Einführung beenden</button>
+      <button type="button" class="action" id="btn-tour-back">Zurück</button>
+      <button type="button" class="action primary" id="btn-tour-next">Weiter</button>
+    </div>
+  </section>
+</div>
 
 <dialog id="dlg-update" class="notes-dialog" aria-labelledby="update-title">
   <div class="notes-body" id="update-body"></div>
@@ -727,6 +767,11 @@
             <span>Calls erkennen</span>
             <label class="consent-like"><input type="checkbox" name="call_detection"> Aufnahme vorschlagen, wenn Teams, Zoom, Webex, Slack oder ein Browser das Mikrofon benutzt</label>
             <small>Verbalis schlägt nur vor – aufgenommen wird erst, wenn du die Zustimmung bestätigst und startest. Ist Verbalis im Hintergrund, kommt eine Windows-Benachrichtigung.</small>
+          </div>
+          <div class="field">
+            <span>Einführung</span>
+            <div class="field-row"><button type="button" class="action" id="btn-tour">Einführung zeigen</button></div>
+            <small>Mikrofon und Systemton prüfen, eine kurze Probeaufnahme machen und die wichtigsten Stellen kennenlernen.</small>
           </div>
         </div>
       </section>
@@ -859,6 +904,7 @@ const state = {
   running: false,
   shown: "",        // what the content area currently shows (id + status)
   busy: false,
+  levels: { me: -90, others: -90 },   // last shown level per track (dB)
 };
 
 async function call(name, ...args) {
@@ -1719,6 +1765,7 @@ function updateRecordButton() {
 
 function setLevel(track, db) {
   const progress = Math.min(1, Math.max(0, (db + 60) / 60));
+  state.levels[track] = db;   // the introduction checks whether the devices deliver sound
   const fill = $(`level-${track}`);
   fill.style.width = `${(progress * 100).toFixed(1)}%`;
   fill.classList.toggle("loud", db > -3);
@@ -2324,6 +2371,10 @@ async function checkModelsNow() {
   }
 }
 
+function downloadText(download) {   // an update, or the first download started by the introduction
+  return `${download.kind === "download" ? "Wird geladen" : "Update wird geladen"} … ${Math.round((download.progress || 0) * 100)} %`;
+}
+
 function modelActions(m, update) {
   const downloading = state.lastState && state.lastState.model_download;
   const busy = downloading && downloading.model === m.id;
@@ -2332,7 +2383,7 @@ function modelActions(m, update) {
     onclick: async (event) => { event.preventDefault(); await handler(); } }, label);
   if (busy) {
     actions.append(element("span", { class: "update", "data-model-progress": m.id },
-      `Update wird geladen … ${Math.round((downloading.progress || 0) * 100)} %`));
+      downloadText(downloading)));
   } else if (update) {
     actions.append(act(`Update laden (Stand ${update.revision})`, async () => {
       try { await call("update_model", m.id); await poll(); renderModelCardsKeep(); } catch (e) { $("model-status").textContent = e.message; }
@@ -2369,7 +2420,7 @@ function showModelBanner(z) {
   if (state.wasDownloading && !z.model_download && $("dlg-settings").open) refreshModels();
   if (z.model_download && $("dlg-settings").open) {
     const label = document.querySelector(`[data-model-progress="${CSS.escape(z.model_download.model)}"]`);
-    if (label) label.textContent = `Update wird geladen … ${Math.round((z.model_download.progress || 0) * 100)} %`;
+    if (label) label.textContent = downloadText(z.model_download);
     else renderModelCardsKeep();
   }
   state.wasDownloading = !!z.model_download;
@@ -2848,6 +2899,356 @@ async function saveSettings(event) {
   }
 }
 
+/* ---------- Introduction ---------- */
+
+/* Shown once on the first start (no recordings yet) and via Einstellungen → Allgemein → «Einführung zeigen».
+   It checks microphone and Systemton with the real level meters, makes a short test recording and
+   transcribes it, explaining list, settings and «Problem melden» while the model loads. */
+const TOUR_TEXT = "Grüezi, das ist meine erste Aufnahme mit Verbalis. Heute besprechen wir das Projekt, "
+  + "die nächsten Schritte und wer bis wann was erledigt. Am Schluss schreibe ich ein kurzes Protokoll.";
+const TOUR_HEARD_DB = { me: -42, others: -48 };   // a level above this counts as «Verbalis hears it»
+const tour = { active: false, index: 0, heard: {}, recordingId: null, wasRunning: false, timer: null, key: "" };
+
+const tourParagraph = (text) => element("p", {}, text);
+
+function tourCheck(ok, okText, waitText, bad = false) {
+  return element("p", { class: `tour-check${ok ? " ok" : bad ? " bad" : ""}` }, ok ? `✓ ${okText}` : waitText);
+}
+
+function tourRecording() {
+  return tour.recordingId ? state.recordings.find((r) => r.id === tour.recordingId) : null;
+}
+
+/* How far the test recording is: model download, transcription, done or failed. */
+function tourProgress() {
+  const z = state.lastState || {};
+  const a = tourRecording();
+  if (z.model_download && z.model_download.kind === "download") {
+    return { text: `Das Modell wird geladen: ${Math.round(z.model_download.progress * 100)} % – beim ersten Mal `
+      + "etwa 1,6 GB, je nach Internet ein paar Minuten." };
+  }
+  if (z.job && z.job.id === tour.recordingId) return { text: `${z.job.phase} – ${Math.round(z.job.progress * 100)} %` };
+  if (!a) return { text: "" };
+  if (a.status === "done") return { done: true, text: "Das Transkript der Probeaufnahme ist fertig." };
+  if (a.status === "error") return { failed: true, text: `Das hat nicht geklappt: ${a.error || "unbekannter Fehler"}` };
+  return { text: STATUS_TEXT[a.status] || "Wird vorbereitet …" };
+}
+
+function tourProgressLine() {
+  if (!tour.recordingId) return null;
+  const p = tourProgress();
+  return p.text ? tourCheck(p.done, p.text, p.text, p.failed) : null;
+}
+
+/* A short rising tone through the computer's output – Verbalis records it as Systemton. */
+function playTestTone() {
+  const Context = window.AudioContext || window.webkitAudioContext;
+  if (!Context) return;
+  const audio = new Context();
+  [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5].forEach((frequency, i) => {
+    const tone = audio.createOscillator();
+    const gain = audio.createGain();
+    const at = audio.currentTime + i * 0.3;
+    tone.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.25, at + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
+    tone.connect(gain).connect(audio.destination);
+    tone.start(at);
+    tone.stop(at + 0.3);
+  });
+  setTimeout(() => audio.close(), 2500);
+}
+
+function openTourSettings(tab) {
+  if (!$("dlg-settings").open) openSettings(tab);
+  else showTab(tab);
+}
+
+function closeTourSettings() {
+  if ($("dlg-settings").open) $("dlg-settings").close();   // nothing changed – the introduction only shows
+}
+
+const TOUR_STEPS = [
+  {
+    title: "Willkommen bei Verbalis",
+    body: () => [
+      tourParagraph("Verbalis nimmt Teams-Calls und Besprechungen auf und schreibt sie mit – alles hier auf deinem "
+        + "Computer, nichts geht ins Internet."),
+      tourParagraph("In ein paar Minuten prüfen wir zusammen Mikrofon und Ton, machen eine kurze Probeaufnahme und "
+        + "schauen die wichtigsten Stellen an."),
+      element("label", {}, "Wie heisst du?", element("input", { type: "text", id: "tour-name", autocomplete: "off",
+        placeholder: "z.B. Andrea", value: state.settings.name && state.settings.name !== "Ich" ? state.settings.name : "" })),
+      element("small", {}, "Dein Name steht im Transkript bei allem, was du sagst. Leer lassen heisst «Ich»."),
+    ],
+    next: "Los geht's",
+    leave: async () => {
+      const name = ($("tour-name") || {}).value || "";
+      if (name.trim() && name.trim() !== state.settings.name) {
+        try { state.settings = await call("save_settings", { name: name.trim() }); setNames(); } catch (e) { showMessage(e.message); }
+      }
+      call("prepare_model").catch(() => {});   // the model loads while we go on
+    },
+  },
+  {
+    title: "Dein Mikrofon",
+    targets: () => [$("sel-microphone").closest("label"), $("name-me"), $("level-me").parentElement],
+    body: () => [
+      tourParagraph(`Wähle dein Mikrofon und sag etwas. Bewegt sich der Balken bei «${state.settings.name}», hört Verbalis dich.`),
+      tourCheck(tour.heard.me, "Dein Mikrofon funktioniert.",
+        "Noch nichts gehört … Kein Ausschlag? Ein anderes Mikrofon wählen oder «Geräte neu laden»."),
+    ],
+    next: () => tour.heard.me ? "Weiter" : "Weiter ohne Ton",
+    key: () => String(!!tour.heard.me),
+  },
+  {
+    title: "Der Ton deines Computers",
+    targets: () => [$("sel-speakers").closest("label"), $("name-others"), $("level-others").parentElement],
+    body: () => [
+      tourParagraph(`Im Teams-Call kommen die anderen über den Lautsprecher oder das Headset. Verbalis nimmt diesen `
+        + `Ton direkt ab – als zweite Spur «${state.settings.others}».`),
+      element("div", { class: "field-row" }, element("button", { type: "button", class: "action", onclick: playTestTone }, "Testton abspielen")),
+      tourCheck(tour.heard.others, "Verbalis hört den Ton deines Computers.",
+        "Spiel den Testton ab. Bewegt sich der Balken nicht: oben das Gerät wählen, über das du Teams hörst."),
+    ],
+    next: () => tour.heard.others ? "Weiter" : "Überspringen",
+    key: () => String(!!tour.heard.others),
+  },
+  {
+    title: "Eine kurze Probeaufnahme",
+    targets: () => state.running ? [$("btn-record")] : [$("btn-record"), $("chk-consent").closest("label")],
+    body: () => state.running ? [
+      tourParagraph("Lies diesen Text vor – auf Schweizerdeutsch oder Hochdeutsch:"),
+      element("blockquote", {}, TOUR_TEXT),
+      tourParagraph("Danach den Knopf nochmals drücken, um die Aufnahme zu beenden."),
+    ] : [
+      tourParagraph("Hake die Zustimmung an – bei der Probe nimmst du nur dich selbst auf – und drück den roten Knopf. "
+        + "Danach erscheint hier ein kurzer Text zum Vorlesen."),
+      tourParagraph("Bei echten Gesprächen gilt: Ohne Zustimmung aller Teilnehmenden ist Aufnehmen in der Schweiz strafbar."),
+    ],
+    next: null,   // goes on by itself when the recording is stopped
+    skip: "Ohne Probeaufnahme weiter",
+    key: () => String(state.running),
+    tick: async () => {
+      if (state.running && !tour.wasRunning) tour.recordingId = state.selected;
+      const stopped = tour.wasRunning && !state.running;
+      tour.wasRunning = state.running;
+      if (!stopped || !tour.recordingId) return;
+      try {
+        await call("update_details", tour.recordingId, { title: "Probeaufnahme" });
+        await call("transcribe", tour.recordingId, { me: 1, others: 1 });
+      } catch (e) { showMessage(e.message); }
+      state.listSignature = "";
+      await loadList();
+      tourGo(1);
+    },
+  },
+  {
+    title: "Deine Aufnahmen",
+    targets: () => [$("list")],
+    body: () => [
+      tourParagraph("Links steht jede Aufnahme, nach Tagen und Wochen gruppiert – auch deine Probeaufnahme. "
+        + "Ein Klick öffnet sie. Mit «+» oben planst du eine Aufnahme schon vor dem Meeting."),
+      tourProgressLine(),
+      tourParagraph("Während das läuft, schauen wir die Einstellungen an."),
+    ],
+    key: () => tourProgress().text,
+  },
+  {
+    title: "Die Einstellungen",
+    tab: "general",
+    targets: () => [$("panel-general")],
+    body: () => [
+      tourParagraph("Unter «Allgemein»: dein Name, der Aufnahmeordner, wie lange eine Aufnahme höchstens dauert und "
+        + "ob Verbalis eine Aufnahme vorschlägt, wenn ein Teams-Call beginnt. Hier startest du auch diese Einführung wieder."),
+    ],
+  },
+  {
+    title: "Das Modell",
+    tab: "transcription",
+    targets: () => [$("model-cards")],
+    body: () => [
+      tourParagraph("Das Modell erkennt die Sprache. «Schweizerdeutsch turbo» ist der Standard und schreibt "
+        + "Schweizerdeutsch als Hochdeutsch. Gibt es eine neue Version, meldet Verbalis das selbst."),
+      tourParagraph("Daneben: Stichworte und die Korrekturliste – Namen und Fachbegriffe, die Verbalis künftig richtig schreibt."),
+      tourProgressLine(),
+    ],
+    key: () => tourProgress().text,
+  },
+  {
+    title: "Wer spricht?",
+    tab: "speakers",
+    targets: () => [$("panel-speakers").querySelector(".field")],
+    body: () => [
+      tourParagraph("Verbalis unterscheidet die Stimmen. Bei einem Teams-Call mit mehreren Personen heissen sie zuerst "
+        + "«Gegenüber 1», «Gegenüber 2» … – im Transkript gibst du ihnen Namen."),
+      tourParagraph("Für eine Besprechung vor Ort, bei der alle am selben Mikrofon sind, schaltest du «Eigene Spur» ein."),
+    ],
+  },
+  {
+    title: "Wenn etwas nicht klappt",
+    tab: "log",
+    targets: () => [$("panel-log").querySelector("[data-report]")],
+    body: () => [
+      tourParagraph("«Problem melden …» schickt eine kurze Nachricht mit dem Log an Andrea – ohne Aufnahmen und Transkripte. "
+        + "Den Knopf gibt es auch unter «Diagnose», dort kannst du zudem Mikrofon und Ton testen."),
+    ],
+    leave: async () => closeTourSettings(),
+  },
+  {
+    title: "Dein Transkript",
+    when: () => !!tour.recordingId,
+    targets: () => [$("content")],
+    enter: () => {
+      if (state.selected !== tour.recordingId) { state.selected = tour.recordingId; renderList(); renderContent(true); }
+    },
+    body: () => {
+      const p = tourProgress();
+      if (p.failed) {
+        return [tourCheck(false, "", p.text, true),
+          element("div", { class: "field-row" }, element("button", { type: "button", class: "action", onclick: openReport }, "Problem melden …"))];
+      }
+      if (!p.done) return [tourParagraph("Gleich fertig – hier erscheint dann der Text."), tourProgressLine()];
+      return [
+        tourParagraph("Das ist deine Probeaufnahme. Stimmt der Text ungefähr mit dem Vorgelesenen überein?"),
+        tourParagraph("Einen Absatz anklicken, um ihn zu korrigieren – Verbalis merkt sich die Korrektur für die "
+          + "nächsten Transkripte. «Transkript kopieren» holt den Text für deine Notizen; unter «Sprecher» vergibst du Namen."),
+      ];
+    },
+    key: () => JSON.stringify(tourProgress()),
+  },
+  {
+    title: "Fertig!",
+    body: () => [
+      tourParagraph("Du kannst jetzt aufnehmen. Vor jedem Gespräch: alle fragen, Zustimmung anhaken, roter Knopf."),
+      tourParagraph("Die Einführung findest du wieder unter Einstellungen → Allgemein."),
+      tour.recordingId ? element("div", { class: "field-row" }, element("button", { type: "button", class: "action",
+        onclick: async () => {
+          try {
+            await call("delete_recording", tour.recordingId);
+            tour.recordingId = null;
+            state.selected = null;
+            state.listSignature = "";
+            await loadList();
+            await renderContent(true);
+          } catch (e) { showMessage(e.message); }
+          renderTour();
+        } }, "Probeaufnahme löschen")) : null,
+    ],
+    next: "Fertig",
+    key: () => String(!!tour.recordingId),
+  },
+];
+
+function tourVisibleSteps() {
+  return TOUR_STEPS.filter((step) => !step.when || step.when());
+}
+
+function startTour() {
+  closeTourSettings();
+  Object.assign(tour, { active: true, index: 0, heard: {}, recordingId: null, wasRunning: state.running, key: "" });
+  $("tour").hidden = false;
+  enterTourStep();
+  clearInterval(tour.timer);
+  tour.timer = setInterval(tickTour, 250);
+}
+
+async function endTour() {
+  tour.active = false;
+  clearInterval(tour.timer);
+  $("tour").hidden = true;
+  document.body.append($("tour"));
+  closeTourSettings();
+  try { state.settings = await call("save_settings", { tour: "done" }); } catch (_) { /* asked again next time */ }
+}
+
+async function tourGo(direction) {
+  const steps = tourVisibleSteps();
+  const step = steps[tour.index];
+  if (direction > 0 && step && step.leave) await step.leave();
+  const next = tour.index + direction;
+  if (next >= steps.length) { await endTour(); return; }
+  tour.index = Math.max(0, next);
+  enterTourStep();
+}
+
+function enterTourStep() {
+  const step = tourVisibleSteps()[tour.index];
+  if (step.tab) openTourSettings(step.tab);
+  else closeTourSettings();
+  if (step.enter) step.enter();
+  tour.key = "";
+  renderTour();
+}
+
+async function tickTour() {
+  if (!tour.active) return;
+  for (const track of ["me", "others"]) {
+    if (state.levels[track] > TOUR_HEARD_DB[track]) tour.heard[track] = true;
+  }
+  const step = tourVisibleSteps()[tour.index];
+  if (step && step.tick) await step.tick();
+  if (!tour.active) return;
+  const current = tourVisibleSteps()[tour.index];
+  const key = `${tour.index}:${current.key ? current.key() : ""}`;
+  if (key !== tour.key) renderTour();
+  else placeTour();
+}
+
+function renderTour() {
+  const steps = tourVisibleSteps();
+  const step = steps[tour.index];
+  if (!step) return;
+  tour.key = `${tour.index}:${step.key ? step.key() : ""}`;
+  $("tour-count").textContent = `Schritt ${tour.index + 1} von ${steps.length}`;
+  $("tour-title").textContent = step.title;
+  const focused = document.activeElement && document.activeElement.id === "tour-name";
+  if (!focused) $("tour-body").replaceChildren(...step.body().filter(Boolean));
+  const label = typeof step.next === "function" ? step.next() : step.next;
+  $("btn-tour-next").hidden = step.next === null;
+  $("btn-tour-next").textContent = label || "Weiter";
+  $("btn-tour-back").hidden = tour.index === 0;
+  $("btn-tour-end").textContent = step.skip || "Einführung beenden";
+  $("btn-tour-end").dataset.skip = step.skip ? "1" : "";
+  placeTour();
+}
+
+/* The spotlight around the explained part, the card next to it – inside an open dialog (the settings),
+   because a modal dialog makes everything outside it unclickable. */
+function placeTour() {
+  const open = [...document.querySelectorAll("dialog[open]")];
+  const host = open.find((d) => d.id === "dlg-report") || open.find((d) => d.id === "dlg-settings") || open[0] || document.body;
+  if ($("tour").parentElement !== host) host.append($("tour"));
+  const step = tourVisibleSteps()[tour.index];
+  const targets = (step.targets ? step.targets() : []).filter((el) => el && el.getClientRects().length);
+  const spot = $("tour-spot");
+  const card = $("tour-card");
+  const vw = window.innerWidth, vh = window.innerHeight, gap = 14, margin = 16;
+  const cw = card.offsetWidth, ch = card.offsetHeight;
+  if (!targets.length) {
+    spot.classList.add("none");
+    Object.assign(spot.style, { left: `${vw / 2}px`, top: `${vh / 2}px`, width: "0px", height: "0px" });
+    Object.assign(card.style, { left: `${(vw - cw) / 2}px`, top: `${Math.max(margin, (vh - ch) / 2)}px` });
+    return;
+  }
+  const rects = targets.map((el) => el.getBoundingClientRect());
+  const r = { left: Math.min(...rects.map((x) => x.left)) - 6, top: Math.min(...rects.map((x) => x.top)) - 6,
+              right: Math.max(...rects.map((x) => x.right)) + 6, bottom: Math.max(...rects.map((x) => x.bottom)) + 6 };
+  r.top = Math.max(r.top, 4); r.left = Math.max(r.left, 4);
+  r.bottom = Math.min(r.bottom, vh - 4); r.right = Math.min(r.right, vw - 4);
+  spot.classList.remove("none");
+  Object.assign(spot.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.right - r.left}px`, height: `${r.bottom - r.top}px` });
+  let left, top;
+  if (r.right + gap + cw <= vw - margin) { left = r.right + gap; top = r.top; }               // right of it
+  else if (r.bottom + gap + ch <= vh - margin) { left = r.left; top = r.bottom + gap; }       // below
+  else if (r.top - gap - ch >= margin) { left = r.left; top = r.top - gap - ch; }             // above
+  else if (r.left - gap - cw >= margin) { left = r.left - gap - cw; top = r.top; }            // left of it
+  else { left = vw - cw - margin; top = vh - ch - margin; }                                   // corner, over it
+  left = Math.min(Math.max(left, margin), vw - cw - margin);
+  top = Math.min(Math.max(top, margin), vh - ch - margin);
+  Object.assign(card.style, { left: `${left}px`, top: `${top}px` });
+}
+
 /* ---------- Start ---------- */
 
 async function init() {
@@ -2923,6 +3324,11 @@ async function init() {
     });
   }
   $("btn-cancel").addEventListener("click", () => $("dlg-settings").close());
+  $("btn-tour").addEventListener("click", startTour);
+  $("btn-tour-next").addEventListener("click", () => tourGo(1));
+  $("btn-tour-back").addEventListener("click", () => tourGo(-1));
+  $("btn-tour-end").addEventListener("click", () => ($("btn-tour-end").dataset.skip ? tourGo(1) : endTour()));
+  window.addEventListener("resize", () => { if (tour.active) placeTour(); });
   $("form-settings").addEventListener("submit", saveSettings);
   $("model-cards").addEventListener("change", markChosen);
 
@@ -2937,7 +3343,14 @@ async function init() {
   updateRecordButton();
   setInterval(poll, 250);
   if (!document.querySelector("dialog[open]")) await offerInstall();
-  if (!$("dlg-install").open) showWhatsNew();
+  if ($("dlg-install").open) return;
+  // the very first start (nothing recorded yet): the introduction instead of «what's new»
+  if (state.settings.tour !== "done" && !state.recordings.length) {
+    call("whats_new").catch(() => {});   // remembers this version as seen
+    startTour();
+  } else {
+    showWhatsNew();
+  }
 }
 
 if (window.pywebview && window.pywebview.api) init();

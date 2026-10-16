@@ -449,6 +449,44 @@ def test_model_update_on_request_and_state(monkeypatch):
     assert downloads == ["large-v3"] and "aktualisiert" in s.state()["notice"]
 
 
+
+def test_introduction_downloads_a_missing_model_ahead(monkeypatch):
+    """Introduction: the model download starts at the welcome step, not only after the test recording."""
+    import threading
+
+    from verbalis.transcription import models as m
+    release, downloads = threading.Event(), []
+    monkeypatch.setattr(m, "repo_for", lambda model: "org/repo")
+    monkeypatch.setattr(m, "is_local", lambda model: False)
+
+    def slow_download(model, progress=None):
+        downloads.append(model)
+        progress(400_000_000)
+        release.wait(5)
+    monkeypatch.setattr(m, "download", slow_download)
+    monkeypatch.setattr(m, "SIZE_GB", {"test-model": 1.6})
+    s = make_service()
+    assert s.prepare_model()["downloading"] is True
+    assert wait_until(lambda: (s.state()["model_download"] or {}).get("progress", 0) > 0.2)
+    assert s.state()["model_download"]["kind"] == "download"
+    s.prepare_model()                                    # a second click starts no second download
+    s._job = {"phase": "", "progress": 0.0}
+    waiter = threading.Thread(target=s._wait_for_prefetch, args=("test-model",))
+    waiter.start()
+    assert wait_until(lambda: "heruntergeladen: 25 %" in s._job["phase"])   # the transcription shows it
+    release.set()
+    waiter.join(5)
+    s._job = None
+    assert not waiter.is_alive() and downloads == ["test-model"] and s.state()["model_download"] is None
+
+
+def test_introduction_skips_the_download_when_the_model_is_here(monkeypatch):
+    from verbalis.transcription import models as m
+    monkeypatch.setattr(m, "repo_for", lambda model: "org/repo")
+    monkeypatch.setattr(m, "is_local", lambda model: True)
+    s = make_service()
+    assert s.prepare_model() == {"downloading": False} and s.state()["model_download"] is None
+
 def test_model_rollback_from_settings(monkeypatch):
     from verbalis.transcription import models as m
     monkeypatch.setattr(m, "rollback", lambda model: "a" * 40)

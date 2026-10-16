@@ -320,6 +320,7 @@ class Service:
         """
         from .transcription.models import SIZE_GB, check_update, download, is_local, local_revision, repo_for
 
+        self._wait_for_prefetch(model)
         try:
             if repo_for(model) is None:
                 return
@@ -357,6 +358,57 @@ class Service:
             self._notice = (f"Das Modell {model} wurde aktualisiert (neuer Stand {after['revision'][:7]}). "
                             "Details auf der Modellseite in den Einstellungen.")
             log.info("Model %s updated %s → %s", model, before["revision"][:7], after["revision"][:7])
+
+    def prepare_model(self) -> dict:
+        """Introduction: download the chosen model now, in the background – by the time the test
+        recording is made, the 1.6 GB are (mostly) there. Nothing happens if it is already here."""
+        from .transcription.models import SIZE_GB, is_local, repo_for
+
+        model = self._s.model
+        try:
+            if repo_for(model) is None or is_local(model):
+                return {"downloading": False}
+        except Exception:
+            return {"downloading": False}   # can't tell – the transcription downloads it
+        with self._lock:
+            if self._model_download is None:
+                self._model_download = {"model": model, "progress": 0.0, "kind": "download"}
+                threading.Thread(target=self._prefetch_model, args=(model,), name="model-prefetch",
+                                 daemon=True).start()
+        return {"downloading": True, "size_gb": SIZE_GB.get(model)}
+
+    def _prefetch_model(self, model: str) -> None:
+        from .transcription.models import SIZE_GB, download
+
+        size = SIZE_GB.get(model)
+
+        def progress(done: int) -> None:
+            with self._lock:
+                if self._model_download is not None and size:
+                    self._model_download["progress"] = min(done / 1e9 / size, 0.99)
+
+        log.info("Downloading model %s ahead (introduction)", model)
+        try:
+            download(model, progress)
+        except Exception as e:   # the transcription tries again and shows the error
+            log.warning("Downloading %s ahead failed: %s", model, e)
+        finally:
+            with self._lock:
+                self._model_download = None
+
+    def _wait_for_prefetch(self, model: str) -> None:
+        """A transcription waits for a running download of the same model instead of starting a
+        second one – showing its progress."""
+        while True:
+            with self._lock:
+                d = self._model_download
+                if not d or d.get("kind") != "download" or d.get("model") != model:
+                    return
+                if self._job:
+                    self._job["phase"] = f"Modell wird heruntergeladen: {round(d['progress'] * 100)} %"
+                    self._job["progress"] = d["progress"]
+            if self._stopping.wait(0.5):
+                return
 
     # ------------------------------------------------------------ recognising calls
 

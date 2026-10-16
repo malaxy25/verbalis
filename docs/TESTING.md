@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-246 tests in 25 files.
+248 tests in 25 files.
 
 ### `test_app.py` (7)
 
@@ -321,7 +321,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (37)
+### `test_service.py` (39)
 
 App flow without a window: recording → queue → transcript.
 
@@ -349,6 +349,8 @@ App flow without a window: recording → queue → transcript.
 - **Models have readable names**
 - **Model updates wait for approval by default**
 - **Model update on request and state**
+- **Introduction downloads a missing model ahead** – Introduction: the model download starts at the welcome step, not only after the test recording.
+- **Introduction skips the download when the model is here**
 - **Model rollback from settings**
 - **Recordings in a synced folder are flagged**
 - **Levels before recording open and close the devices** – 0.7.17: level meters while choosing devices – without recording, closed again when not needed.

@@ -163,6 +163,9 @@ class Api:
     def speaker_sample(self, recording_id, speaker_id):
         return self._call(self._s.speaker_sample, recording_id, speaker_id)
 
+    def prepare_model(self):
+        return self._call(self._s.prepare_model)
+
     def update_model(self, model):
         return self._call(self._s.update_model, model)
 

@@ -33,6 +33,7 @@ class Settings:
     auto_transcribe: str = "off"      # "on" = transcribe right after recording; "off" = start it by hand
                                       # (after entering the number of people)
     last_seen_version: str = ""       # version whose «what's new» was shown last
+    tour: str = ""                    # "done" once the introduction was finished or closed
 
     @property
     def recordings(self) -> Path:
