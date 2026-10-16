@@ -26,6 +26,11 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    a single voice stays «Ich» (or the name from the settings) / «Gegenüber»; several voices on the
    microphone become «Person 1, 2, …» instead of «Ich 1, 2, …», on the Systemton «Gegenüber 1, 2, …».
    Old transcripts keep their names; `is_default_name` must know «Person N».
+3. **Introduction for new users** – built and accepted by Andrea (16 Oct 2026, committed locally): overlay with
+   11 steps – name, microphone and Systemton checked with the real level meters (test tone), a test recording
+   that is transcribed while settings, model, speakers and «Problem melden» are shown; the model download
+   starts at the welcome step (`prepare_model`). Shown on the first start without recordings, again via
+   Einstellungen → Allgemein → «Einführung zeigen». Still to check on the Mac.
 
 ## After 0.7.30 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 
@@ -57,16 +62,6 @@ code requirement (same certificate), checked in the release build with the real 
 ## Proposed (waiting for Andrea's OK)
 
 - **«Problem melden» next to error messages** too (the dialog exists since 0.7.29). **[ux]**
-- **Short tour for new users with a real test recording** (Andrea, 16 Oct 2026: record together, then mic and
-  transcription are known to work) – overlay, shown once on first start, again via «Einführung zeigen»:
-  1. welcome, «Dein Name»; the model download (1.6 GB) starts right away in the background;
-  2. microphone: choose it, «Sag etwas» – ticked when the level moves;
-  3. Systemton: «Spiel kurz etwas ab» – ticked when the level moves (can be skipped);
-  4. test recording: read a short text shown on screen (~20 s), stop;
-  5. while the model loads and transcribes: list, settings, models (with progress);
-  6. the transcript: rename speakers, copy, corrections; does the text match what was read?
-  7. «Problem melden» if something didn't work; keep or delete the test recording.
-  About 1–1.5 days; show the layout to Andrea first. **[ux]**
 
 ## Now
 
