@@ -52,11 +52,18 @@ code requirement (same certificate), checked in the release build with the real 
 ## Proposed (waiting for Andrea's OK)
 
 - **«Problem melden» next to error messages** too (the dialog exists since 0.7.29). **[ux]**
+- **Track and speaker names** (Andrea, 16 Oct 2026: on site the others are on the «Ich» track too): tracks
+  are called «Mikrofon» and «Systemton» everywhere (level meters, settings, «Personen am …»); speaker names
+  stay «Ich» / «Gegenüber» for a single voice, several voices on the microphone become «Person 1, 2, …»
+  instead of «Ich 1, 2, …». Old transcripts keep their names; `is_default_name` must know «Person N».
+  Proposed for 0.7.30 (speaker topic). **[ux]**
+- **Short tour for new users** – an overlay with 6–8 steps (record, devices and levels, list, transcript and
+  speakers, models, settings, «Problem melden»), shown once on first start, again via «Einführung zeigen».
+  Transcript steps use a built-in example recording (text only, no audio). About half a day, with the
+  example about a day; show the layout to Andrea first. **[ux]**
 
 ## Now
 
-- [ ] **Mac: test 0.7.26–0.7.28** – self-install into «Programme» (from the desktop and from the DMG), and that
-  the update to 0.7.28 works (now checks the certificate) and keeps the permissions. **[ops]**
 - [ ] **Teams call quality** – compressed remote track, Swiss German vs. Standard German speakers
   (speaker measurements: see the 0.7.29 plan). **[quality]**
 - [ ] **Correct while transcribing** – edit finished parts while a long transcription still runs; edits must survive the final diarization and correction pass. Decided against for 0.7.17/0.7.18 (safe way first). **[ux]**
