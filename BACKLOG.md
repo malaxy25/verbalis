@@ -21,6 +21,11 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    people and a 1:1 Teams call, transcribed without a number and every speaker named correctly; Claude
    measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
    first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
+2. **Track and speaker names** (decided 16 Oct 2026 – on site the others are on the «Ich» track too):
+   tracks are called «Mikrofon» and «Systemton» everywhere (level meters, settings, «Personen am …»);
+   a single voice stays «Ich» (or the name from the settings) / «Gegenüber»; several voices on the
+   microphone become «Person 1, 2, …» instead of «Ich 1, 2, …», on the Systemton «Gegenüber 1, 2, …».
+   Old transcripts keep their names; `is_default_name` must know «Person N».
 
 ## After 0.7.30 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 
@@ -52,15 +57,16 @@ code requirement (same certificate), checked in the release build with the real 
 ## Proposed (waiting for Andrea's OK)
 
 - **«Problem melden» next to error messages** too (the dialog exists since 0.7.29). **[ux]**
-- **Track and speaker names** (Andrea, 16 Oct 2026: on site the others are on the «Ich» track too): tracks
-  are called «Mikrofon» and «Systemton» everywhere (level meters, settings, «Personen am …»); speaker names
-  stay «Ich» / «Gegenüber» for a single voice, several voices on the microphone become «Person 1, 2, …»
-  instead of «Ich 1, 2, …». Old transcripts keep their names; `is_default_name` must know «Person N».
-  Proposed for 0.7.30 (speaker topic). **[ux]**
-- **Short tour for new users** – an overlay with 6–8 steps (record, devices and levels, list, transcript and
-  speakers, models, settings, «Problem melden»), shown once on first start, again via «Einführung zeigen».
-  Transcript steps use a built-in example recording (text only, no audio). About half a day, with the
-  example about a day; show the layout to Andrea first. **[ux]**
+- **Short tour for new users with a real test recording** (Andrea, 16 Oct 2026: record together, then mic and
+  transcription are known to work) – overlay, shown once on first start, again via «Einführung zeigen»:
+  1. welcome, «Dein Name»; the model download (1.6 GB) starts right away in the background;
+  2. microphone: choose it, «Sag etwas» – ticked when the level moves;
+  3. Systemton: «Spiel kurz etwas ab» – ticked when the level moves (can be skipped);
+  4. test recording: read a short text shown on screen (~20 s), stop;
+  5. while the model loads and transcribes: list, settings, models (with progress);
+  6. the transcript: rename speakers, copy, corrections; does the text match what was read?
+  7. «Problem melden» if something didn't work; keep or delete the test recording.
+  About 1–1.5 days; show the layout to Andrea first. **[ux]**
 
 ## Now
 
