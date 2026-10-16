@@ -2915,6 +2915,10 @@ function tourCheck(ok, okText, waitText, bad = false) {
   return element("p", { class: `tour-check${ok ? " ok" : bad ? " bad" : ""}` }, ok ? `✓ ${okText}` : waitText);
 }
 
+function tourDeviceExtras() {   // «Geräte neu laden» and the device hint belong to both device steps
+  return [$("btn-reload-devices"), $("device-hint")].filter((el) => !el.hidden);
+}
+
 function tourRecording() {
   return tour.recordingId ? state.recordings.find((r) => r.id === tour.recordingId) : null;
 }
@@ -2992,7 +2996,7 @@ const TOUR_STEPS = [
   },
   {
     title: "Dein Mikrofon",
-    targets: () => [$("sel-microphone").closest("label"), $("name-me"), $("level-me").parentElement],
+    targets: () => [$("sel-microphone").closest("label"), $("name-me"), $("level-me").parentElement, ...tourDeviceExtras()],
     body: () => [
       tourParagraph(`Wähle dein Mikrofon und sag etwas. Bewegt sich der Balken bei «${state.settings.name}», hört Verbalis dich.`),
       tourCheck(tour.heard.me, "Dein Mikrofon funktioniert.",
@@ -3003,7 +3007,7 @@ const TOUR_STEPS = [
   },
   {
     title: "Der Ton deines Computers",
-    targets: () => [$("sel-speakers").closest("label"), $("name-others"), $("level-others").parentElement],
+    targets: () => [$("sel-speakers").closest("label"), $("name-others"), $("level-others").parentElement, ...tourDeviceExtras()],
     body: () => [
       tourParagraph(`Im Teams-Call kommen die anderen über den Lautsprecher oder das Headset. Verbalis nimmt diesen `
         + `Ton direkt ab – als zweite Spur «${state.settings.others}».`),
@@ -3100,7 +3104,7 @@ const TOUR_STEPS = [
     when: () => !!tour.recordingId,
     targets: () => [$("content")],
     enter: () => {
-      if (state.selected !== tour.recordingId) { state.selected = tour.recordingId; renderList(); renderContent(true); }
+      if (!tour.deleted && state.selected !== tour.recordingId) { state.selected = tour.recordingId; renderList(); renderContent(true); }
     },
     body: () => {
       const p = tourProgress();
@@ -3122,23 +3126,44 @@ const TOUR_STEPS = [
     body: () => [
       tourParagraph("Du kannst jetzt aufnehmen. Vor jedem Gespräch: alle fragen, Zustimmung anhaken, roter Knopf."),
       tourParagraph("Die Einführung findest du wieder unter Einstellungen → Allgemein."),
-      tour.recordingId ? element("div", { class: "field-row" }, element("button", { type: "button", class: "action",
-        onclick: async () => {
-          try {
-            await call("delete_recording", tour.recordingId);
-            tour.recordingId = null;
-            state.selected = null;
-            state.listSignature = "";
-            await loadList();
-            await renderContent(true);
-          } catch (e) { showMessage(e.message); }
-          renderTour();
-        } }, "Probeaufnahme löschen")) : null,
+      tourDeleteLine(),
     ],
     next: "Fertig",
-    key: () => String(!!tour.recordingId),
+    key: () => `${tour.deleted}:${tour.deleteError || ""}:${tour.deleting}`,
   },
 ];
+
+/* Step 11: «Probeaufnahme löschen» – once; afterwards a confirmation instead of the button.
+   The recording id is kept, so the transcript step (and with it the step count) stays. */
+function tourDeleteLine() {
+  if (!tour.recordingId) return null;
+  if (tour.deleted) return tourCheck(true, "Die Probeaufnahme ist gelöscht.", "");
+  const button = element("button", { type: "button", class: "action", onclick: deleteTourRecording },
+    tour.deleting ? "Wird gelöscht …" : "Probeaufnahme löschen");
+  button.disabled = !!tour.deleting;
+  return element("div", { class: "tour-body" }, element("div", { class: "field-row" }, button),
+    tour.deleteError ? tourCheck(false, "", tour.deleteError, true) : null);
+}
+
+async function deleteTourRecording() {
+  if (tour.deleting || tour.deleted) return;
+  tour.deleting = true;
+  tour.deleteError = "";
+  renderTour();
+  try {
+    await call("delete_recording", tour.recordingId);
+    tour.deleted = true;
+    if (state.selected === tour.recordingId) state.selected = null;
+    state.listSignature = "";
+    await loadList();
+    await renderContent(true);
+  } catch (e) {
+    tour.deleteError = e.message;
+  } finally {
+    tour.deleting = false;
+    renderTour();
+  }
+}
 
 function tourVisibleSteps() {
   return TOUR_STEPS.filter((step) => !step.when || step.when());
@@ -3146,7 +3171,8 @@ function tourVisibleSteps() {
 
 function startTour() {
   closeTourSettings();
-  Object.assign(tour, { active: true, index: 0, heard: {}, recordingId: null, wasRunning: state.running, key: "" });
+  Object.assign(tour, { active: true, index: 0, heard: {}, recordingId: null, wasRunning: state.running, key: "",
+                        deleted: false, deleting: false, deleteError: "" });
   $("tour").hidden = false;
   enterTourStep();
   clearInterval(tour.timer);
@@ -3197,8 +3223,8 @@ async function tickTour() {
 
 function renderTour() {
   const steps = tourVisibleSteps();
+  tour.index = Math.min(tour.index, steps.length - 1);   // never point past the last step
   const step = steps[tour.index];
-  if (!step) return;
   tour.key = `${tour.index}:${step.key ? step.key() : ""}`;
   $("tour-count").textContent = `Schritt ${tour.index + 1} von ${steps.length}`;
   $("tour-title").textContent = step.title;

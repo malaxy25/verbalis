@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-248 tests in 25 files.
+249 tests in 26 files.
 
 ### `test_app.py` (7)
 
@@ -402,6 +402,12 @@ Merging both tracks into paragraphs and the Markdown output.
 The recording list in the UI: groups open and close. Runs the list functions of index.html in Node.js.
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
+
+### `test_ui_tour.py` (1)
+
+The introduction in the UI: its last step. Runs the tour functions of index.html in Node.js.
+
+- **Test recording is deleted once and the step stays** – 0.7.30 draft: after «Probeaufnahme löschen» the button stayed (the step count shrank and the card was
 
 ### `test_updates.py` (27)
 

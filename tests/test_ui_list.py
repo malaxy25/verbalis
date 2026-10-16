@@ -16,7 +16,7 @@ def functions(*names):
     source = INDEX.read_text(encoding="utf-8").replace("\r\n", "\n")
     found = []
     for name in names:
-        match = re.search(rf"^function {name}\(.*?^}}\n", source, re.S | re.M)
+        match = re.search(rf"^(?:async )?function {name}\(.*?^}}\n", source, re.S | re.M)
         assert match, name
         found.append(match.group(0))
     return "\n".join(found)
