@@ -3,7 +3,7 @@ name: 2 · Build & Release
 run-name: >-
   Build & Release: ${{ github.event.workflow_run.head_commit.message || format('manual build of {0}', github.ref_name) }}
 
-# Builds Verbalis for Windows (installer) and macOS (app, experimental) and publishes it.
+# Builds Verbalis for Windows (installer) and macOS (app) and publishes it.
 #
 # Automatic: runs when the «Tests» workflow has finished for a push to main.
 #   - Tests not all green           → nothing happens.
@@ -134,7 +134,7 @@ jobs:
           if-no-files-found: error
 
   macos:
-    # Experimental. System audio via the Swift helper (Core Audio tap, macOS 14.2+).
+    # System audio via the Swift helper (Core Audio tap, macOS 14.2+).
     needs: version
     if: needs.version.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest      # Apple Silicon (arm64)
@@ -281,7 +281,7 @@ jobs:
 
   publish:
     needs: [version, windows, macos]
-    # publish whenever Windows succeeded – with or without the experimental Mac build
+    # publish whenever Windows succeeded – with or without the Mac build (a failed Mac build is fixed in the next version)
     if: always() && needs.version.outputs.release == 'true' && needs.windows.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -315,12 +315,12 @@ jobs:
           notes += ["", f"**Windows:** download and run `Verbalis-{version}-setup.exe`. An update is installed the "
                         "same way – settings, correction list, models and recordings are kept."]
           if os.environ["MAC_RESULT"] == "success":
-              notes += ["", f"**Mac (experimental, Apple Silicon):** open `Verbalis-{version}-macos-arm64.dmg` and drag "
+              notes += ["", f"**Mac (Apple Silicon):** open `Verbalis-{version}-macos-arm64.dmg` and drag "
                             "Verbalis onto «Programme» (Applications) – or just open Verbalis: it offers to move itself "
                             "there (into the personal Applications folder without an administrator account). "
                             "The ZIP is for the automatic updates. "
-                            "On the first start macOS blocks the app because it is not notarized: "
-                            "System Settings → Privacy & Security → «Open Anyway». From macOS 14.2 Verbalis records the "
+                            "On the first start macOS blocks the app because it is not notarized yet: close the message, then "
+                            "System Settings → Privacy & Security → «Open Anyway» (once; updates keep it). From macOS 14.2 Verbalis records the "
                             "others' audio itself (allow the «Audio Recording» permission); "
                             "only older Macs need BlackHole, see the README."]
           open("release-notes.md", "w", encoding="utf-8").write("\n".join(notes) + "\n")

@@ -97,7 +97,7 @@ about changes made on GitHub in the meantime (e.g. merged Dependabot PRs).
 2. `pytest -q`, commit, **push** – no tag.
 3. GitHub runs **1 · Tests**. Only if all jobs are green, **2 · Build & Release**
    starts by itself: it sees that `vX.Y.Z` doesn't exist yet, builds exactly the tested commit
-   (`Verbalis-X.Y.Z-setup.exe`, experimental `Verbalis-X.Y.Z-macos-arm64.zip`), self-tests both,
+   (`Verbalis-X.Y.Z-setup.exe`, `Verbalis-X.Y.Z-macos-arm64.dmg` and `.zip`), self-tests both,
    creates the tag `vX.Y.Z` and publishes the release with the changelog section.
 4. Afterwards `git pull` fetches the new tag.
 

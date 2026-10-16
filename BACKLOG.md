@@ -31,6 +31,9 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    that is transcribed while settings, model, speakers and «Problem melden» are shown; the model download
    starts at the welcome step (`prepare_model`). Shown on the first start without recordings, again via
    Einstellungen → Allgemein → «Einführung zeigen». Still to check on the Mac.
+4. **Mac no longer experimental** (Andrea, 16 Oct 2026): README, release notes, docs and frehner.tech say so and
+   explain «Dennoch öffnen» on the first start (frehner.tech v1.4.3 committed locally, not deployed). Mention in
+   the 0.7.30 CHANGELOG.
 
 ## After 0.7.30 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 

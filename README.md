@@ -56,16 +56,21 @@ Ubuntu additionally needs PipeWire with `pipewire-pulse` (default on Ubuntu) and
 GTK or Qt for the window, e.g. `sudo apt install python3-gi gir1.2-webkit2-4.1`
 or `pip install pywebview[qt]`.
 
-## Mac (experimental)
+## Mac
 
-Releases contain `Verbalis-X.Y.Z-macos-arm64.zip` for Macs with Apple Silicon. It is
-built and self-tested automatically; tests on a real Mac are in progress.
+For Macs with Apple Silicon (M1 or newer). Tested on real Macs since 0.7.24.
 
-1. Unzip and drag **Verbalis** into «Programme».
-2. First start: the app isn't signed, so macOS blocks it. Open System Settings →
-   Privacy & Security → «Open anyway».
-3. On the first recording macOS asks twice: for the **microphone** and for **recording
-   audio** (the others' voices). Allow both.
+1. Open `Verbalis-X.Y.Z-macos-arm64.dmg` and drag **Verbalis** onto «Programme» – or just open
+   Verbalis: it offers to move itself there (into the personal «Programme» folder without an
+   administrator account) and starts again from there.
+2. **First start: macOS blocks the app**, because it is not notarized by Apple yet («Verbalis»
+   kann nicht geöffnet werden). Close the message, then open Systemeinstellungen → Datenschutz &
+   Sicherheit, scroll down to the notice about Verbalis and click **«Dennoch öffnen»**, confirm with
+   your password. This is needed once; updates keep it.
+3. On the first recording macOS asks twice: for the **Mikrofon** and for **audio recording**
+   (Bildschirm- & Systemaudioaufnahme – the others' voices). Allow both. If you clicked «Nicht
+   erlauben»: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon or Bildschirm- &
+   Systemaudioaufnahme, switch Verbalis on, restart Verbalis.
 
 From **macOS 14.2** Verbalis records the system audio itself – «Systemton kommt über:
 Systemton (alle Programme)», preselected, like loopback on Windows. You keep hearing the call.
@@ -261,7 +266,7 @@ When the **Tests** workflow is green for that push and the version has no tag ye
    (app, no console) and `verbalis-cli.exe` (command line),
 2. runs `verbalis-cli selftest` on the bundle,
 3. builds `Verbalis-<version>-setup.exe` with Inno Setup (`packaging/verbalis.iss`),
-4. builds `Verbalis.app` for macOS in parallel (experimental, self-tested on a GitHub Mac),
+4. builds `Verbalis.app` for macOS in parallel (self-tested on a GitHub Mac, DMG and ZIP),
 5. publishes one GitHub Release with both files and the matching CHANGELOG section – a failing
    Mac build doesn't block the Windows release.
 

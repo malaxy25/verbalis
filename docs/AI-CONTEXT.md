@@ -11,7 +11,7 @@ Standard German text, also from Swiss German. Built for Andrea Frehner, possibly
 at tocco AG later. Everything runs on the user's computer; nothing is uploaded.
 
 - Repo: https://github.com/malaxy25/verbalis (public, MIT)
-- Releases: Windows installer + experimental macOS app, built by GitHub Actions
+- Releases: Windows installer + macOS app (Apple Silicon, DMG + ZIP for updates), built by GitHub Actions
 - Flix model copy: https://huggingface.co/malaxy/flix-swissgerman-ct2
 
 ## Language rule
