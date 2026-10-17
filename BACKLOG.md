@@ -4,14 +4,15 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.30 – planned and decided with Andrea (waiting for measurements)
+## 0.7.31 – planned and decided with Andrea (waiting for measurements)
 
-**Status 16 Oct 2026:** items 2–4 are built and committed locally on `main`, **not pushed** (Andrea pushes after
-item 1). Next session (Mon 19 Oct): Andrea gives the folder paths of the two Teams recordings → measure the
-thresholds (labels and timings only, never content) → build item 1 → CHANGELOG section 0.7.30 (incl. items 2–4,
-Mac no longer experimental) and version bump → push only when Andrea says so → Andrea tests the
-introduction on the Mac (button name «Dennoch öffnen» to confirm).
+**Status 17 Oct 2026:** 0.7.30 released (introduction, track names «Mikrofon»/«Systemton», Mac no longer
+experimental). Next session (Mon 19 Oct): Andrea gives the folder paths of the two Teams recordings → measure
+the thresholds (labels and timings only, never content) → build item 1 → Andrea tests the introduction on
+the Mac (button name «Dennoch öffnen» to confirm).
 
+0.7.30 (17 Oct 2026): introduction for new users, tracks «Mikrofon»/«Systemton», «Person 1, 2, …» on the
+microphone, Mac no longer experimental.
 0.7.29 (15 Oct 2026): «Problem melden» (Google Sheet via Apps Script), Mac certificate path after the
 self-move, gcoli from our mirror.
 0.7.28 (15 Oct 2026): stricter update checks (SHA-256 required, Mac: same certificate), list groups fixed.
@@ -27,21 +28,8 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    people and a 1:1 Teams call, transcribed without a number and every speaker named correctly; Claude
    measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
    first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
-2. **Track and speaker names** – built 16 Oct 2026, committed locally (decided the same day – on site the others are on the «Ich» track too):
-   tracks are called «Mikrofon» and «Systemton» everywhere (level meters, settings, «Personen am …»);
-   a single voice stays «Ich» (or the name from the settings) / «Gegenüber»; several voices on the
-   microphone become «Person 1, 2, …» instead of «Ich 1, 2, …», on the Systemton «Gegenüber 1, 2, …».
-   Old transcripts keep their names; `is_default_name` must know «Person N».
-3. **Introduction for new users** – built and accepted by Andrea (16 Oct 2026, committed locally): overlay with
-   11 steps – name, microphone and Systemton checked with the real level meters (test tone), a test recording
-   that is transcribed while settings, model, speakers and «Problem melden» are shown; the model download
-   starts at the welcome step (`prepare_model`). Shown on the first start without recordings, again via
-   Einstellungen → Allgemein → «Einführung zeigen». Still to check on the Mac.
-4. **Mac no longer experimental** (Andrea, 16 Oct 2026): README, release notes, docs and frehner.tech say so and
-   explain «Dennoch öffnen» on the first start (frehner.tech v1.4.3 deployed 16 Oct 2026). Mention in
-   the 0.7.30 CHANGELOG.
 
-## After 0.7.30 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
+## After 0.7.31 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 
 - **Meeting notes must be generic, not tocco-specific** (Andrea, 15 Oct 2026 – how exactly is open): the
   instruction and the structure of the minutes are set in Einstellungen (e.g. several templates such as

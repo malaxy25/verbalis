@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.30 – 2026-10-17
+- **Introduction for new users:** on the first start without recordings a short guided tour in 11 steps –
+  your name, microphone and Systemton checked with the real level meters (test tone), a test recording that
+  is transcribed while the settings, the model, the speakers and «Problem melden» are explained. The model
+  download starts right at the welcome step. The test recording is deleted afterwards (with a confirmation).
+  Shown again via Einstellungen → Allgemein → «Einführung zeigen».
+- **Clearer track and speaker names:** the two tracks are called «Mikrofon» and «Systemton» everywhere
+  (level meters, settings, «Personen am …»). A single voice stays «Ich» (or the name from the settings) /
+  «Gegenüber»; several voices on the microphone – e.g. on site – become «Person 1, 2, …» instead of
+  «Ich 1, 2, …», on the Systemton «Gegenüber 1, 2, …». Existing transcripts keep their names.
+- **The Mac version is no longer experimental.** README and release notes explain the first start
+  («Dennoch öffnen»).
+
 ## 0.7.29 – 2026-10-15
 - **«Problem melden»** in Einstellungen → Log and Diagnose: a short text, optionally an e-mail address for
   questions, the log and the diagnosis – sent directly to the developer with one click (names, device names
