@@ -7,8 +7,8 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 ## 0.7.31 – planned and decided with Andrea
 
 **Status 19 Oct 2026:** thresholds measured on all four recordings (below); «Sprechertrennung» built and
-committed locally (not pushed). Next: Andrea tests the introduction on the Mac (button name «Dennoch öffnen»
-to confirm); «Kurze Einwürfe am Rand zeigen» and «Leise oder undeutliche Stellen» are still open.
+committed locally (not pushed). Introduction tested on the Mac by Andrea – works. Still open: the switch
+«Kurze Einwürfe am Rand zeigen» (asides themselves exist since 0.7.18) and «Leise oder undeutliche Stellen».
 
 0.7.30 (17 Oct 2026): introduction for new users, tracks «Mikrofon»/«Systemton», «Person 1, 2, …» on the
 microphone, Mac no longer experimental.
