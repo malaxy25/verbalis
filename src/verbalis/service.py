@@ -1173,7 +1173,7 @@ class Service:
                 _, compute, duration = pipeline.create_transcript(
                     self._path(recording_id), tr, s.model, names, progress, paused_time, corrections,
                     diarize=diarize, phase=phase, people={t: n for t, n in people.items() if n and n > 1},
-                    threshold=threshold_for(s.speaker_split))
+                    threshold=threshold_for(s.speaker_split), asides=s.asides == "on")
                 if duration > 0 and compute > 0:
                     self._remember_factor(key, compute / duration)
             except ShuttingDown:

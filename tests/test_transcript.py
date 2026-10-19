@@ -61,6 +61,13 @@ def test_interjection_while_someone_speaks_is_an_aside():
     assert [(a.speaker, a.text) for a in asides] == [("Andrea", "Ja genau.")]
 
 
+def test_asides_switched_off_are_paragraphs():
+    """«Kurze Einwürfe am Rand zeigen» off: an interjection is a normal paragraph where it was said."""
+    long = _seg(0.0, "Das Budget liegt bei fünfundzwanzigtausend Franken und reicht wenn wir den Umfang halten.")
+    paragraphs = merge({"Gegenüber": [long], "Andrea": [_seg(2.0, "Ja genau.", 0.3)]}, asides=False)
+    assert [(p.speaker, p.aside) for p in paragraphs] == [("Gegenüber", False), ("Andrea", False)]
+
+
 def test_short_answer_after_a_question_stays_a_paragraph():
     question = _seg(0.0, "Kommst du morgen auch an die Sitzung im Büro?")
     paragraphs = merge({"Gegenüber": [question], "Andrea": [_seg(4.2, "Ja.")]})

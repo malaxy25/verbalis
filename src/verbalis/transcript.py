@@ -10,7 +10,8 @@ interleave them. Reading flow:
 - Short interjections («ja», «genau», «mhm») said *while someone else is
   speaking* become asides (`aside=True`): they don't interrupt the paragraph and
   the app shows them in a narrow column next to it. A short «Ja.» as a real
-  answer – when nobody else is speaking – stays a normal paragraph.
+  answer – when nobody else is speaking – stays a normal paragraph. The setting
+  «Kurze Einwürfe am Rand zeigen» switches this off (`merge(…, asides=False)`).
 - Consecutive sentences of the same person become one paragraph.
 """
 
@@ -66,12 +67,16 @@ def mark_asides(units: list[Segment]) -> list[Segment]:
     return result
 
 
-def merge(tracks: dict[str, list[Segment]]) -> list[Segment]:
-    """tracks: display name → segments. Returns paragraphs and asides, sorted by start."""
+def merge(tracks: dict[str, list[Segment]], asides: bool = True) -> list[Segment]:
+    """tracks: display name → segments. Returns paragraphs and asides, sorted by start.
+
+    asides=False: interjections are normal paragraphs where they were said.
+    """
     # a speaker set by diarization stays; otherwise the track's display name
     units = [replace(s, speaker=s.speaker or name) for name, segments in tracks.items() for s in sentences(segments)]
     units.sort(key=lambda s: (s.start, s.end))
-    units = mark_asides(units)
+    if asides:
+        units = mark_asides(units)
 
     result: list[Segment] = []
     last_index: int | None = None          # the last paragraph (asides don't count)

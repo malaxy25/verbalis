@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-251 tests in 26 files.
+253 tests in 26 files.
 
 ### `test_app.py` (7)
 
@@ -159,7 +159,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Soundcard without the windows warning class** – 0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
 - **Microphone only choice has no second device**
 
-### `test_diarization.py` (21)
+### `test_diarization.py` (22)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -173,6 +173,7 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Failing diarization keeps the transcript**
 - **Settings switch diarization per track**
 - **Speaker split setting sets the threshold** – «Sprechertrennung: Eher weniger Personen» clusters with the higher threshold – Teams calls split one
+- **Asides setting is kept and checked**
 - **Rename merge and reassign**
 - **Speaker sample is playable wav**
 - **Reference and compare use the track not the name**
@@ -387,7 +388,7 @@ Step-by-step transcription: pieces cut in speech pauses, both tracks alternately
 - **Finished transcript removes the partial file**
 - **Service resumes cut off transcriptions at start**
 
-### `test_transcript.py` (7)
+### `test_transcript.py` (8)
 
 Merging both tracks into paragraphs and the Markdown output.
 
@@ -396,6 +397,7 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Markdown format**
 - **Question appears where it was asked** – 0.7.18 reading flow: a long answer used to swallow a question asked in the middle – it came afterwards.
 - **Interjection while someone speaks is an aside**
+- **Asides switched off are paragraphs** – «Kurze Einwürfe am Rand zeigen» off: an interjection is a normal paragraph where it was said.
 - **Short answer after a question stays a paragraph**
 - **Aside in markdown and json**
 

@@ -376,7 +376,8 @@ def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float 
                progress: Progress | None = None, paused_time: Callable[[], float] | None = None,
                diarize: dict[str, bool] | None = None, phase: Callable[[str], None] | None = None,
                problems: list[str] | None = None, partial: Path | None = None, model: str = "",
-               people: dict[str, int | None] | None = None, threshold: float | None = None):
+               people: dict[str, int | None] | None = None, threshold: float | None = None,
+               asides: bool = True):
     """Transcribe both tracks step by step. Returns (paragraphs, compute_s, recording_s).
 
     Each track is cut into pieces of about two minutes in speech pauses; the pieces
@@ -388,6 +389,7 @@ def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float 
 
     names: track → display name. people: track → known number of people (diarization).
     threshold: the clustering threshold for diarization (None = the default).
+    asides: short interjections go next to the paragraph (False: they are paragraphs of their own).
     paused_time returns the seconds spent paused
     so far; they don't count as compute time. progress(display name, fraction of
     the whole transcription).
@@ -446,7 +448,7 @@ def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float 
             state["compute_s"] += (time.monotonic() - t) - (paused_time() - p)
         result[names[track]] = units
     recording = max((ts["duration"] for ts in tracks.values()), default=0.0)
-    return merge(result), state["compute_s"], recording
+    return merge(result, asides), state["compute_s"], recording
 
 
 def partial_transcript(folder: Path) -> dict | None:
@@ -520,13 +522,13 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
                       corrections: "CorrectionList | None" = None, diarize: dict[str, bool] | None = None,
                       phase: Callable[[str], None] | None = None,
                       people: dict[str, int] | None = None,
-                      threshold: float | None = None) -> tuple[Path, float, float]:
+                      threshold: float | None = None, asides: bool = True) -> tuple[Path, float, float]:
     """Returns (path, compute_s, recording_s). diarize: track → tell speakers apart."""
     problems: list[str] = []
     paragraphs, compute, recording = transcribe(folder, transcriber, names, progress=progress,
                                                 paused_time=paused_time, diarize=diarize, phase=phase,
                                                 problems=problems, partial=folder / PARTIAL, model=model,
-                                                people=people, threshold=threshold)
+                                                people=people, threshold=threshold, asides=asides)
     h = header(folder, model, compute, recording)
     meta = read_meta(folder)
     if meta.get("project"):

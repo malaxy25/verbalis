@@ -828,6 +828,11 @@
           <label><input type="radio" name="speaker_split" value="fewer"> Eher weniger Personen <small>weniger doppelte Personen, ähnliche Stimmen werden aber eher vermischt</small></label>
           <small>Am zuverlässigsten ist es, vor dem Transkribieren die Anzahl Personen anzugeben.</small>
         </fieldset>
+        <div class="field">
+          <span>Kurze Einwürfe</span>
+          <label class="consent-like"><input type="checkbox" name="asides"> Kurze Einwürfe am Rand zeigen</label>
+          <small>«ja», «genau», «mhm» während jemand anderes spricht stehen klein neben dem Absatz und unterbrechen ihn nicht. Ausgeschaltet: als eigener Absatz an der Stelle, wo sie gesagt wurden. Gilt für neue Transkripte.</small>
+        </div>
       </section>
       <section class="tab-panel" id="panel-retention" role="tabpanel" aria-labelledby="tab-retention" hidden>
         <div class="field">
@@ -2500,6 +2505,7 @@ async function openSettings(tab) {
   form.elements.model_auto_update.checked = e.model_auto_update === "on";
   form.elements.diarize_others.checked = e.diarize_others !== "off";
   form.elements.diarize_me.checked = e.diarize_me === "on";
+  form.elements.asides.checked = e.asides !== "off";
   form.elements.auto_transcribe.checked = e.auto_transcribe === "on";
   form.elements.call_detection.checked = e.call_detection !== "off";
   $("audio-hint").textContent = AUDIO_HINT;
@@ -2867,6 +2873,7 @@ function collectSettings() {
   data.model_auto_update = form.elements.model_auto_update.checked ? "on" : "off";
   data.diarize_others = form.elements.diarize_others.checked ? "on" : "off";
   data.diarize_me = form.elements.diarize_me.checked ? "on" : "off";
+  data.asides = form.elements.asides.checked ? "on" : "off";
   data.auto_transcribe = form.elements.auto_transcribe.checked ? "on" : "off";
   data.call_detection = form.elements.call_detection.checked ? "on" : "off";
   const choice = chosenModel();

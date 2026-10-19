@@ -183,6 +183,15 @@ def test_speaker_split_setting_sets_the_threshold(no_real_diarization, monkeypat
     assert used == [diarization.THRESHOLD_FEWER] and diarization.THRESHOLD_FEWER > diarization.THRESHOLD
 
 
+def test_asides_setting_is_kept_and_checked():
+    s = make_service()
+    assert s._s.asides == "on"
+    s.save_settings({"asides": "off"})
+    assert s._s.asides == "off"
+    s.save_settings({"asides": "maybe"})
+    assert s._s.asides == "on"
+
+
 def test_rename_merge_and_reassign(no_real_diarization):
     s, rid = service_with_speakers(no_real_diarization)
     folder, data = s._transcript_data(rid)

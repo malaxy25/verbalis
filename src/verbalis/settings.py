@@ -29,6 +29,7 @@ class Settings:
     diarize_others: str = "on"        # tell the others apart (Gegenüber 1, 2, …)
     diarize_me: str = "off"           # tell speakers apart on the own microphone (meetings in a room)
     speaker_split: str = "normal"     # "normal" or "fewer" (a higher clustering threshold: fewer speakers)
+    asides: str = "on"                # "on" = short interjections in a column next to the paragraph
     call_detection: str = "on"        # "on" = suggest recording when a call app uses the microphone
     max_recording_min: str = "120"    # end a recording after N minutes (notice 5 min before); empty = never
     auto_transcribe: str = "off"      # "on" = transcribe right after recording; "off" = start it by hand
@@ -86,6 +87,8 @@ class Settings:
             s.diarize_others = "on"
         if s.diarize_me not in ("on", "off"):
             s.diarize_me = "off"
+        if s.asides not in ("on", "off"):
+            s.asides = "on"
         if s.speaker_split not in ("normal", "fewer"):
             s.speaker_split = "normal"
         if s.auto_transcribe not in ("on", "off"):

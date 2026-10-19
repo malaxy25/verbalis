@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.31 – 2026-10-19
+- **Setting «Sprechertrennung»** (Einstellungen → Sprecher): «Standard» or «Eher weniger Personen». Measured on
+  two Teams calls and two on-site meetings: Teams splits one person into 7–19 speakers but hardly ever mixes
+  two people; «Eher weniger Personen» gives fewer duplicates, but similar voices in the same room are mixed
+  a little more often. Also used by «Neu zuordnen».
+- **The number of people is the reliable way:** with it, Teams calls were 99–100 % right. Before
+  transcribing, a track whose voices are not told apart in the settings now shows «1»; the number entered
+  there overrides the setting for that recording – explained in the settings and in the introduction
+  («Wer spricht?»).
+- **Setting «Kurze Einwürfe am Rand zeigen»** (on by default): switched off, «ja», «genau», «mhm» become
+  paragraphs of their own where they were said. Applies to new transcripts.
+
 ## 0.7.30 – 2026-10-17
 - **Introduction for new users:** on the first start without recordings a short guided tour in 11 steps –
   your name, microphone and Systemton checked with the real level meters (test tone), a test recording that

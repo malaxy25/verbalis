@@ -4,12 +4,13 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.31 – planned and decided with Andrea
+## 0.7.32 – next
 
-**Status 19 Oct 2026:** thresholds measured on all four recordings (below); «Sprechertrennung» built and
-committed locally (not pushed). Introduction tested on the Mac by Andrea – works. Still open: the switch
-«Kurze Einwürfe am Rand zeigen» (asides themselves exist since 0.7.18) and «Leise oder undeutliche Stellen».
+**Status 19 Oct 2026:** 0.7.31 released (settings «Sprechertrennung» and «Kurze Einwürfe am Rand zeigen»,
+the number of people explained; introduction tested on the Mac – works).
 
+0.7.31 (19 Oct 2026): «Sprechertrennung» Standard 0.7 / Eher weniger Personen 0.9, «Kurze Einwürfe am Rand
+zeigen», «1» shown for a track that is not told apart.
 0.7.30 (17 Oct 2026): introduction for new users, tracks «Mikrofon»/«Systemton», «Person 1, 2, …» on the
 microphone, Mac no longer experimental.
 0.7.29 (15 Oct 2026): «Problem melden» (Google Sheet via Apps Script), Mac certificate path after the
@@ -19,16 +20,12 @@ self-move, gcoli from our mirror.
 recordings with 2 and 4 people: 75 % / 90 % right instead of 56 % / 76 %. Per-turn re-assignment was
 tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hints when merging by hand.
 
-1. **Settings for recognition and speakers** – in plain words, few steps, values from measurements:
-   - [x] «Sprechertrennung»: Standard (0.7) / Eher weniger Personen (0.9) – built. «Eher mehr Personen»
-     dropped: 0.6 was nowhere better than 0.7. Before transcribing, a track that is not told apart in the
-     settings shows «1»; the number entered there overrides the setting for that recording (hint in the
-     settings, introduction step «Wer spricht?» now points to the number instead of the checkbox).
-   - [ ] «Kurze Einwürfe am Rand zeigen» (on/off)
-   - [ ] «Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD) – needs a `compare` option to
-     measure; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
+1. **«Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD)** – first a `compare` option to
+   measure; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it. **[quality]**
+2. **Split a paragraph at a speaker change** – once in a 48-min Teams call one paragraph started with one
+   person and went on with another; word timestamps exist. Check how often it happens first. **[quality]**
 
-   **Measurements 19 Oct 2026** (speakers after refining · right without merging by hand · pure = right
+**Speaker measurements 19 Oct 2026** (speakers after refining · right without merging by hand · pure = right
    after naming · right with the known number):
 
    | Recording | 0.7 | 0.9 | 1.0 | with number (0.7) |
@@ -47,7 +44,7 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    48 min) – the reference uses whole segments, so the measurement cannot see this; if it happens more
    often, split paragraphs at speaker changes (word timestamps exist).
 
-## After 0.7.31 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
+## After 0.7.32 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 
 - **Meeting notes must be generic, not tocco-specific** (Andrea, 15 Oct 2026 – how exactly is open): the
   instruction and the structure of the minutes are set in Einstellungen (e.g. several templates such as
