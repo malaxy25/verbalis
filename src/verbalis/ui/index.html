@@ -819,6 +819,7 @@
           <span>Sprechererkennung</span>
           <label class="consent-like"><input type="checkbox" name="diarize_others"> Systemton: verschiedene Personen unterscheiden (Teams-Calls mit mehreren Teilnehmenden – «Gegenüber 1, 2, …»)</label>
           <label class="consent-like"><input type="checkbox" name="diarize_me"> Mikrofon: verschiedene Personen unterscheiden (Besprechung vor Ort, alle am selben Mikrofon – «Person 1, 2, …»)</label>
+          <small>Vor dem Transkribieren lässt sich die Anzahl Personen pro Aufnahme angeben – sie gilt dann statt dieser Einstellung.</small>
           <small>Die Stimmen werden nur innerhalb einer Aufnahme verglichen und nicht gespeichert. Beim ersten Gebrauch werden dafür zwei Modelle geladen (ca. 46 MB). Namen vergibst du im Transkript unter «Sprecher».</small>
         </div>
         <fieldset>
@@ -3090,8 +3091,9 @@ const TOUR_STEPS = [
     body: () => [
       tourParagraph("Verbalis unterscheidet die Stimmen. Bei einem Teams-Call mit mehreren Personen heissen sie zuerst "
         + "«Gegenüber 1», «Gegenüber 2» … – im Transkript gibst du ihnen Namen."),
-      tourParagraph("Für eine Besprechung vor Ort, bei der alle am selben Mikrofon sind, schaltest du «Mikrofon: verschiedene "
-        + "Personen unterscheiden» ein – die Stimmen heissen dann «Person 1», «Person 2» …"),
+      tourParagraph("Am zuverlässigsten wird es, wenn du vor dem Transkribieren angibst, wie viele Personen auf jeder Spur "
+        + "sprechen – bei einer Besprechung vor Ort, bei der alle am selben Mikrofon sind, z.B. «Personen am Mikrofon: 3». "
+        + "Die Stimmen heissen dann «Person 1», «Person 2» …"),
     ],
   },
   {

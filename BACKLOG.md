@@ -4,12 +4,11 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.31 – planned and decided with Andrea (waiting for measurements)
+## 0.7.31 – planned and decided with Andrea
 
-**Status 17 Oct 2026:** 0.7.30 released (introduction, track names «Mikrofon»/«Systemton», Mac no longer
-experimental). Next session (Mon 19 Oct): Andrea gives the folder paths of the two Teams recordings → measure
-the thresholds (labels and timings only, never content) → build item 1 → Andrea tests the introduction on
-the Mac (button name «Dennoch öffnen» to confirm).
+**Status 19 Oct 2026:** thresholds measured on all four recordings (below); «Sprechertrennung» built and
+committed locally (not pushed). Next: Andrea tests the introduction on the Mac (button name «Dennoch öffnen»
+to confirm); «Kurze Einwürfe am Rand zeigen» and «Leise oder undeutliche Stellen» are still open.
 
 0.7.30 (17 Oct 2026): introduction for new users, tracks «Mikrofon»/«Systemton», «Person 1, 2, …» on the
 microphone, Mac no longer experimental.
@@ -21,13 +20,32 @@ recordings with 2 and 4 people: 75 % / 90 % right instead of 56 % / 76 %. Per-tu
 tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hints when merging by hand.
 
 1. **Settings for recognition and speakers** – in plain words, few steps, values from measurements:
-   - «Sprechertrennung»: eher weniger Personen / Standard / eher mehr Personen (`THRESHOLD`)
-   - «Kurze Einwürfe am Rand zeigen» (on/off)
-   - «Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD) – needs a `compare` option to measure
-   **Waiting for recordings:** on-site (2 and 4 people) is measured. Andrea sends a Teams call with 3–4
-   people and a 1:1 Teams call, transcribed without a number and every speaker named correctly; Claude
-   measures how much is right per threshold (numbers only). For «Leise oder undeutliche Stellen» Claude
-   first builds a comparison; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
+   - [x] «Sprechertrennung»: Standard (0.7) / Eher weniger Personen (0.9) – built. «Eher mehr Personen»
+     dropped: 0.6 was nowhere better than 0.7. Before transcribing, a track that is not told apart in the
+     settings shows «1»; the number entered there overrides the setting for that recording (hint in the
+     settings, introduction step «Wer spricht?» now points to the number instead of the checkbox).
+   - [ ] «Kurze Einwürfe am Rand zeigen» (on/off)
+   - [ ] «Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD) – needs a `compare` option to
+     measure; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it.
+
+   **Measurements 19 Oct 2026** (speakers after refining · right without merging by hand · pure = right
+   after naming · right with the known number):
+
+   | Recording | 0.7 | 0.9 | 1.0 | with number (0.7) |
+   |---|---|---|---|---|
+   | Teams 1:1, Mikrofon (1 person) | 7 · 28 % · 100 % | 3 · 54 % · 100 % | 3 · 46 % · 100 % | 100 % |
+   | Teams 1:1, Systemton (1) | 11 · 20 % · 100 % | 5 · 52 % · 100 % | 3 · 83 % · 100 % | 100 % |
+   | Teams 3 people, Mikrofon (1) | 7 · 40 % · 100 % | 4 · 61 % · 99 % | 2 · 90 % · 99 % | 99 % |
+   | Teams 3 people, Systemton (2) | 19 · 52 % · 100 % | 11 · 71 % · 99 % | 6 · 87 % · 98 % | 100 % |
+   | On site, 4 people | 7 · 78 % · 96 % | 5 · 87 % · 97 % | 5 · 88 % · 97 % | 96 % |
+   | On site, 2 people (Andrea, Basil) | 10 · 46 % · 99.7 % | 9 · 49 % · 97.5 % | 6 · 53 % · 97 % | 78 % |
+
+   Findings: Teams calls split one person into many speakers but hardly ever mix two people; the known
+   number fixes Teams calls almost completely. A higher threshold mixes similar voices on site (Basil),
+   so 0.7 stays the default. On-site, 2 people: the number still mixes 22 % (part of Andrea sounds like
+   Basil to the model). Also seen: a turn that started with one person and went on with another (once in
+   48 min) – the reference uses whole segments, so the measurement cannot see this; if it happens more
+   often, split paragraphs at speaker changes (word timestamps exist).
 
 ## After 0.7.31 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
 
