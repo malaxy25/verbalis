@@ -166,6 +166,23 @@ def test_settings_switch_diarization_per_track():
     assert (s._s.diarize_others, s._s.diarize_me) == ("off", "on")
 
 
+def test_speaker_split_setting_sets_the_threshold(no_real_diarization, monkeypatch):
+    """«Sprechertrennung: Eher weniger Personen» clusters with the higher threshold – Teams calls split one
+    person into 7–19 speakers at 0.7 (measured 19 Oct 2026)."""
+    used = []
+    monkeypatch.setattr(diarization, "find_turns",
+                        lambda audio, folder=None, **kwargs: used.append(kwargs.get("threshold")) or [(0.0, 1.0, 0)])
+    s = make_service()
+    assert s._s.speaker_split == "normal"
+    s.save_settings({"speaker_split": "something else"})
+    assert s._s.speaker_split == "normal"
+    s.save_settings({"speaker_split": "fewer"})
+    rid = s.start_recording(consent=True)
+    s.stop_recording()
+    assert wait_until(lambda: (s._path(rid) / "transcript.json").exists())
+    assert used == [diarization.THRESHOLD_FEWER] and diarization.THRESHOLD_FEWER > diarization.THRESHOLD
+
+
 def test_rename_merge_and_reassign(no_real_diarization):
     s, rid = service_with_speakers(no_real_diarization)
     folder, data = s._transcript_data(rid)

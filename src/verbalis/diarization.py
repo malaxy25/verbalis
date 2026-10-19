@@ -52,12 +52,19 @@ EMBEDDING = {
     "file": "embedding.onnx",
 }
 THRESHOLD = 0.7          # cosine distance for clustering; higher = fewer speakers
+THRESHOLD_FEWER = 0.9    # setting «eher weniger Personen» (Teams calls without a number: 4–11 instead of 7–19
+                         # speakers for 1–2 people, still 99–100 % pure; measured 19 Oct 2026)
 MIN_TURN_S = 1.5         # a speaker with only shorter turns is no speaker of its own
 SMALL_SPEAKER_S = 20.0   # speakers with less talk time are merged into a similar one …
 MERGE_DISTANCE = 0.8     # … if their voice prints are at most this far apart (cosine distance)
 PROFILE_S = 30.0         # seconds of audio per voice print
 MERGE_PROFILE_S = 120.0  # … when joining down to a known number of people (more audio: 75 % instead of 71 % right)
 SAMPLERATE = 16_000
+
+
+def threshold_for(speaker_split: str) -> float:
+    """The clustering threshold for the setting «Sprechertrennung»."""
+    return THRESHOLD_FEWER if speaker_split == "fewer" else THRESHOLD
 
 
 def models_dir() -> Path:

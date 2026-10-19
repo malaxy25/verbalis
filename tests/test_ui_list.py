@@ -51,7 +51,7 @@ function heads() {
 }
 function click(label) {
   const li = list.items.find((x) => x.attrs.class === "group" && text(x.children[0]).includes(label));
-  li.children[0].attrs.onclick();
+  if (li) li.children[0].attrs.onclick();   // on a Monday there is no «Diese Woche» (the test is skipped)
 }
 const steps = [];
 renderList(); steps.push(heads());

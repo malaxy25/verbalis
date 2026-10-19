@@ -1163,6 +1163,8 @@ class Service:
                             self._job["phase"] = text
                     self._wait_while_paused()
 
+                from .diarization import threshold_for
+
                 diarize = {"others": s.diarize_others == "on", "me": s.diarize_me == "on"}
                 people = pipeline.read_meta(self._path(recording_id)).get("people") or {}
                 for track, number in people.items():   # a given number decides: 1 = nobody to tell apart
@@ -1170,7 +1172,8 @@ class Service:
                         diarize[track] = number > 1
                 _, compute, duration = pipeline.create_transcript(
                     self._path(recording_id), tr, s.model, names, progress, paused_time, corrections,
-                    diarize=diarize, phase=phase, people={t: n for t, n in people.items() if n and n > 1})
+                    diarize=diarize, phase=phase, people={t: n for t, n in people.items() if n and n > 1},
+                    threshold=threshold_for(s.speaker_split))
                 if duration > 0 and compute > 0:
                     self._remember_factor(key, compute / duration)
             except ShuttingDown:
@@ -1445,7 +1448,8 @@ class Service:
         if path is None:
             raise RuntimeError("Das Audio dieser Spur wurde gelöscht.")
         diarization.ensure_models()
-        turns = diarization.turns_for_file(path, progress=progress, num_speakers=count)
+        turns = diarization.turns_for_file(path, progress=progress, num_speakers=count,
+                                           threshold=diarization.threshold_for(self._s.speaker_split))
         folder, data = self._transcript_data(recording_id)   # read now: the newest state of the transcript
         base = data["tracks"][track]
         old = [seg for seg in data["segments"] if seg.get("track") == track]

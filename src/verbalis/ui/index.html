@@ -821,6 +821,12 @@
           <label class="consent-like"><input type="checkbox" name="diarize_me"> Mikrofon: verschiedene Personen unterscheiden (Besprechung vor Ort, alle am selben Mikrofon – «Person 1, 2, …»)</label>
           <small>Die Stimmen werden nur innerhalb einer Aufnahme verglichen und nicht gespeichert. Beim ersten Gebrauch werden dafür zwei Modelle geladen (ca. 46 MB). Namen vergibst du im Transkript unter «Sprecher».</small>
         </div>
+        <fieldset>
+          <legend>Sprechertrennung</legend>
+          <label><input type="radio" name="speaker_split" value="normal"> Standard <small>trennt die Stimmen sauber; eine Person kommt oft mehrmals vor – gib ihnen beim Benennen denselben Namen</small></label>
+          <label><input type="radio" name="speaker_split" value="fewer"> Eher weniger Personen <small>weniger doppelte Personen, ähnliche Stimmen werden aber eher vermischt</small></label>
+          <small>Am zuverlässigsten ist es, vor dem Transkribieren die Anzahl Personen anzugeben.</small>
+        </fieldset>
       </section>
       <section class="tab-panel" id="panel-retention" role="tabpanel" aria-labelledby="tab-retention" hidden>
         <div class="field">
@@ -1278,14 +1284,16 @@ function detailsPanel(a, open = false) {
     more);
 }
 
-/* Number of people per track before transcribing: empty = find out, 1 = nobody to tell apart. */
+/* Number of people per track before transcribing: empty = find out, 1 = nobody to tell apart.
+   A track whose voices are not told apart in the settings shows 1 – that is what happens anyway. */
 function peopleFields(a) {
   const known = a.people || {};
   const input = (track, label) => {
     const field = element("input", { type: "number", min: "1", max: "30", placeholder: "automatisch",
       inputmode: "numeric", "aria-label": label });
     const listed = ((a.participants || {})[track] || []).length;   // from the participants entered
-    field.value = known[track] ? String(known[track]) : listed ? String(listed) : "";
+    const apart = state.settings[`diarize_${track}`] === "on";
+    field.value = known[track] ? String(known[track]) : listed ? String(listed) : apart ? "" : "1";
     return field;
   };
   const me = input("me", "Personen am Mikrofon");
@@ -2498,6 +2506,7 @@ async function openSettings(tab) {
     $("audio-hint").textContent = `${AUDIO_HINT} Belegt: ${sp.audio_mb.toLocaleString("de-CH")} MB.`;
   }).catch(() => {});
   form.elements.quality.value = e.quality || "accurate";
+  form.elements.speaker_split.value = e.speaker_split || "normal";
   $("folder-hint").textContent = e.storage_warning || `Leer lassen für den Standard. Aktuell: ${e.recordings_path}`;
   $("folder-hint").classList.toggle("warning-text", !!e.storage_warning);
   try { state.models = await call("models"); } catch (_) { state.models = []; }
@@ -2852,7 +2861,7 @@ function replaceWord(range, replacement) {
 function collectSettings() {
   const form = $("form-settings");
   const data = {};
-  for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "audio_days", "audio_max_mb", "max_recording_min"]) data[field] = form.elements[field].value;
+  for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "speaker_split", "audio_days", "audio_max_mb", "max_recording_min"]) data[field] = form.elements[field].value;
   data.update_check = form.elements.update_check.checked ? "on" : "off";
   data.model_auto_update = form.elements.model_auto_update.checked ? "on" : "off";
   data.diarize_others = form.elements.diarize_others.checked ? "on" : "off";

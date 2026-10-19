@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-250 tests in 26 files.
+251 tests in 26 files.
 
 ### `test_app.py` (7)
 
@@ -159,7 +159,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Soundcard without the windows warning class** – 0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
 - **Microphone only choice has no second device**
 
-### `test_diarization.py` (20)
+### `test_diarization.py` (21)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -172,6 +172,7 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Switched off means no speakers**
 - **Failing diarization keeps the transcript**
 - **Settings switch diarization per track**
+- **Speaker split setting sets the threshold** – «Sprechertrennung: Eher weniger Personen» clusters with the higher threshold – Teams calls split one
 - **Rename merge and reassign**
 - **Speaker sample is playable wav**
 - **Reference and compare use the track not the name**
