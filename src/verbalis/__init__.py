@@ -36,4 +36,4 @@ _OWN_CERT_MARK = "VERBALIS_SSL_CERT_FILE_SET"
 
 _certificates_on_macos()
 
-__version__ = "0.7.31"
+__version__ = "0.7.32"

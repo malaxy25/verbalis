@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.32 – 2026-10-20
+- **Split a paragraph:** while correcting, Enter splits the paragraph at the cursor – e.g. where another
+  person takes over – and the choice of person for the second part opens right away. Shift+Enter is a line
+  break within a paragraph (kept in the Markdown file too); Ctrl+Enter saves as before.
+- **Word timestamps are kept** in new transcripts, so the second part of a split paragraph starts at its
+  first word, also after corrections. Older transcripts get an estimate from the text length.
+- **Time left during speaker diarization:** after transcribing, the app said «noch weniger als eine Minute»
+  while the speakers of a long call were still recognised for minutes; the estimate now comes from the
+  speaker recognition itself.
+- **Participants in the speaker box:** the names entered for a track can be picked from «Teilnehmende ▾».
+- **Participants and notes:** the fields can be pulled wider, not only taller; with notes, «Teilnehmende und
+  Notizen» is open in the transcript.
+- **New Swiss German models:** a monthly check on Hugging Face opens an issue for speech recognition models
+  we haven't looked at yet (`tools/find_new_models.py`, `tools/known-models.txt`).
+
 ## 0.7.31 – 2026-10-19
 - **Setting «Sprechertrennung»** (Einstellungen → Sprecher): «Standard» or «Eher weniger Personen». Measured on
   two Teams calls and two on-site meetings: Teams splits one person into 7–19 speakers but hardly ever mixes

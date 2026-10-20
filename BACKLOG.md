@@ -4,16 +4,16 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.32 – next
+## 0.7.33 – next
 
-**Status 20 Oct 2026:** built and committed locally (not pushed): monthly search for new Swiss German models
-(`tools/find_new_models.py`, issue for models not in `tools/known-models.txt`); split a paragraph with Enter
-while correcting (the person of the second part is chosen right away), Shift+Enter for a line break; word
-timestamps kept in `transcript.json` for the time of the split. Andrea tests it in the app before the
-release; don't deploy before Andrea says so. Not measured: `gcoli/whisper-large-v3-swiss-german-mit` (large-v3
-instead of turbo) – turbo already needs ~1.1–1.2× real time on Andrea's PC, large-v3 would be several times
-slower (decided 20 Oct 2026). `Flurin17/cohere-transcribe-swiss-german` is new but non-commercial (cc-by-nc).
+**Status 20 Oct 2026:** 0.7.32 released (split paragraphs with Enter, Shift+Enter line breaks, word
+timestamps kept, time left during diarization, participants to pick in the speaker box, wider fields,
+monthly search for new Swiss German models). Not measured: `gcoli/whisper-large-v3-swiss-german-mit` –
+turbo already needs ~1.1–1.2× real time on Andrea's PC, large-v3 would be several times slower.
+`Flurin17/cohere-transcribe-swiss-german` is new but non-commercial (cc-by-nc).
 
+0.7.32 (20 Oct 2026): split paragraphs with Enter, word timestamps kept, time left during diarization,
+participants in the speaker box, model search.
 0.7.31 (19 Oct 2026): «Sprechertrennung» Standard 0.7 / Eher weniger Personen 0.9, «Kurze Einwürfe am Rand
 zeigen», «1» shown for a track that is not told apart.
 0.7.30 (17 Oct 2026): introduction for new users, tracks «Mikrofon»/«Systemton», «Person 1, 2, …» on the
@@ -27,10 +27,9 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
 
 1. **«Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD)** – first a `compare` option to
    measure; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it. **[quality]**
-2. [x] **Split a paragraph by hand** (Enter) – built, see the status above.
-3. **Split automatically at a speaker change** – diarization sees a change within a sentence; the words are
+2. **Split automatically at a speaker change** – diarization sees a change within a sentence; the words are
    there now. Measure first how often it happens, so short overlaps don't chop paragraphs. **[quality]**
-4. **New user-defined speaker after splitting** – today the second part can only go to a person already
+3. **New user-defined speaker after splitting** – today the second part can only go to a person already
    found on that track. **[ux]**
 
 **Speaker measurements 19 Oct 2026** (speakers after refining · right without merging by hand · pure = right
