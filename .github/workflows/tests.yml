@@ -54,8 +54,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      # an environment of its own: `pip check` looked at the runner's preinstalled tools too – pipx 1.18.4
+      # wanted a newer filelock than ours and failed 0.7.33, although nothing of Verbalis was wrong
+      - name: Own environment
+        run: |
+          python -m venv .venv-build
+          "$PWD\.venv-build\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Install the exact build versions
         run: |
+          python -m pip install --upgrade pip
           pip install -c packaging/requirements-build.txt -e ".[build]" pytest
           if ($LASTEXITCODE -ne 0) { throw "The pinned versions in packaging/requirements-build.txt don't fit together" }
           pip check
