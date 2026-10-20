@@ -285,8 +285,11 @@
   .details-row .saved { color: var(--muted); font-size: 12px; align-self: center; }
   .when-text { padding: 5px 0; }
   .details-more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
-  .details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: 12px 20px; margin: 10px 0 6px; }
-  .details-grid textarea { padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); resize: vertical; font: inherit; font-size: 14px; }
+  /* flex instead of grid: a field pulled wider takes the room it needs and the others move to the next line */
+  .details-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px; margin: 10px 0 6px; }
+  .details-grid .field { flex: 1 1 14em; }
+  .details-grid textarea { padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+    resize: both; min-width: 100%; max-width: min(52em, calc(100vw - 420px)); box-sizing: border-box; font: inherit; font-size: 14px; }
   .notice span { flex: 1; }
   .notice button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
   .notice button:hover { color: var(--ink); }
@@ -418,7 +421,8 @@
     background: var(--surface); display: grid; gap: 10px; }
   .speakers-panel h3 { margin: 0; font-size: 15px; }
   .speakers-panel .hint { margin: 0; color: var(--muted); font-size: 13px; }
-  .speaker-row { display: grid; grid-template-columns: auto minmax(10em, 1fr) auto auto; gap: 10px; align-items: center; }
+  .speaker-row { display: grid; grid-template-columns: auto minmax(10em, 1fr) auto auto auto; gap: 10px; align-items: center; }
+  .speaker-row .pick { max-width: 11em; }
   .speaker-row .talk { color: var(--muted); font-size: 13px; white-space: nowrap; }
   .play-button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2);
     cursor: pointer; color: var(--ink); }
@@ -1280,7 +1284,7 @@ function detailsPanel(a, open = false) {
       participants("others", "Im Systemton (Call)"),
       area("Notizen", a.notes || "", (value) => save({ notes: value }), 4)),
     element("small", { class: "edit-hint" }, "Ein Name pro Zeile. Die Namen lassen sich später in der Sprecherbox auswählen."));
-  if (open || a.status === "planned") more.open = true;
+  if (open || a.status === "planned" || (a.notes || "").trim()) more.open = true;   // notes stay in view
 
   return element("section", { class: "details-panel", "aria-label": "Angaben zur Aufnahme" },
     title,
@@ -1460,6 +1464,16 @@ function speakersPanel(a, t) {
     input.addEventListener("input", () => { typed[id] = input.value.trim() || info.name; });
     input.addEventListener("change", () => saveName(id, input, saved));
     input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); input.blur(); } });
+    // the participants entered for this track as a list to pick from (typing stays possible for anyone else)
+    const listed = (a.participants || {})[info.track] || [];
+    const pick = listed.length ? element("select", { class: "pick", "aria-label": `${info.name}: Teilnehmende wählen`,
+      onchange: (event) => {
+        if (!event.target.value) return;
+        input.value = typed[id] = event.target.value;
+        event.target.value = "";
+        saveName(id, input, saved);
+      } }, element("option", { value: "" }, "Teilnehmende ▾"), ...listed.map((n) => element("option", { value: n }, n)))
+      : element("span");
     const others = entries.filter(([other, o]) => other !== id && o.track === info.track && talk[other]);
     const fillMerge = (select) => select.replaceChildren(
       element("option", { value: "" }, "Gleiche Person wie …"),
@@ -1477,7 +1491,7 @@ function speakersPanel(a, t) {
       title: a.audio ? "Hörprobe abspielen" : "Das Audio dieser Aufnahme wurde gelöscht – keine Hörprobe mehr möglich.",
       onclick: () => playSample(a.id, id, play) }, "▶");
     play.disabled = !a.audio;
-    return element("div", { class: "speaker-row" }, play, input,
+    return element("div", { class: "speaker-row" }, play, input, pick,
       element("span", { class: "talk" }, `${timeText(talk[id])} Redezeit`, " ", saved), merge);
   });
   return element("section", { class: "speakers-panel", "aria-label": "Sprecher" },

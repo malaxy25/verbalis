@@ -1087,6 +1087,8 @@ class Service:
     def _remaining(self, job: dict) -> float | None:
         if job["start"] is None:
             return None
+        if job.get("diarizing"):
+            return job.get("diarize_rest")
         now = job["paused_since"] or time.monotonic()
         active = max(now - job["start"] - job["paused_s"], 0.0)
         progress = job["progress"]
@@ -1158,10 +1160,13 @@ class Service:
                     with self._lock:
                         return self._job["paused_s"] if self._job else 0.0
 
-                def phase(text: str) -> None:
+                def phase(text: str, remaining_s: float | None = None, diarizing: bool = False) -> None:
                     with self._lock:
                         if self._job:
                             self._job["phase"] = text
+                            # transcribing is done by then (progress near 100 %): the time left comes from
+                            # the speaker diarization itself, otherwise it said «less than a minute» for minutes
+                            self._job["diarizing"], self._job["diarize_rest"] = diarizing, remaining_s
                     self._wait_while_paused()
 
                 from .diarization import threshold_for

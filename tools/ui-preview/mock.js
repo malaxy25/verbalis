@@ -21,7 +21,7 @@ for (let n = 3; n <= 7; n++) {   // short extra speakers – diarization of real
 const recs = [
   { id: "2026-10-08_093012", start: "2026-10-08T09:30:12+02:00", duration_s: 1834, status: "running", error: null, audio: true, audio_mb: 60, audio_delete: null },
   { id: "2026-10-15_100000", start: "2026-10-15T10:00:00+02:00", duration_s: null, status: "planned", audio: false, audio_mb: 0, title: "Weekly mit dem Team", project: "tocco Release", participants: { me: ["Andrea"], others: ["Eva Beispiel", "Tom Muster"] }, notes: "Agenda: Release-Termin" },
-  { id: "2026-10-07_204727", title: "Sprint Review", project: "Verbalis", participants: { me: ["Andrea"], others: ["Hans Muster", "Eva Beispiel"] }, start: "2026-10-07T20:47:27+02:00", duration_s: 66.1, status: "done", error: null, audio: true, audio_mb: 2.4, audio_delete: "2026-10-10T20:47+02:00" },
+  { id: "2026-10-07_204727", title: "Sprint Review", project: "Verbalis", participants: { me: ["Andrea"], others: ["Hans Muster", "Eva Beispiel"] }, notes: "Release am Freitag besprechen", start: "2026-10-07T20:47:27+02:00", duration_s: 66.1, status: "done", error: null, audio: true, audio_mb: 2.4, audio_delete: "2026-10-10T20:47+02:00" },
   { id: "2026-10-07_143000", start: "2026-10-07T14:30:00+02:00", duration_s: 412, status: "none", error: null, audio: true, audio_mb: 14, audio_delete: null, people: {} },
   { id: "2026-10-06_101500", start: "2026-10-06T10:15:00+02:00", duration_s: 2710, status: "error", error: "Modell konnte nicht geladen werden.", audio: true, audio_mb: 80, audio_delete: null },
 ];

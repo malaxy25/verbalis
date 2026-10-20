@@ -760,3 +760,19 @@ def test_split_paragraph_where_another_person_takes_over(home):
     assert (folder / "transcript_original.json").exists()
     with pytest.raises(ValueError, match="Cursor"):
         s.split_paragraph(rid, 0, "", "Wir starten am Montag.")
+
+
+def test_remaining_time_during_speaker_diarization():
+    """0.7.32: after transcribing, the progress was near 100 % while diarization of a long call still ran
+    for minutes – the app said «noch weniger als eine Minute». Now the time left comes from diarization."""
+    from verbalis.pipeline import diarization_rest
+
+    s = make_service()
+    job = {"start": time.monotonic() - 600, "paused_s": 0.0, "paused_since": None,
+           "progress": 0.99, "duration_s": 3000, "factor": None, "diarizing": True, "diarize_rest": None}
+    assert s._remaining(job) is None                              # «Restdauer wird geschätzt», not «< 1 min»
+    job["diarize_rest"] = 240.0
+    assert s._remaining(job) == 240.0
+    assert diarization_rest(60, 0.25, 1500) == pytest.approx(180)              # 60 s for 25 % → 180 s left
+    assert diarization_rest(60, 0.25, 1500, later_s=1500) == pytest.approx(420)   # + the next track: 240 s
+    assert diarization_rest(2, 0.5, 1500) is None and diarization_rest(60, 0.01, 1500) is None

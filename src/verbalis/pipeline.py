@@ -438,13 +438,15 @@ def transcribe(folder: Path, transcriber, names: dict[str, str], until_s: float 
         report(end - start, end - start)
 
     result = {}
+    to_diarize = [t for t, ts in tracks.items() if (diarize or {}).get(t) and ts["segments"]]
     for track, ts in tracks.items():
         units = sentences([Segment(d["start"], d["end"], d["text"], track=track, words=d.get("words"))
                            for d in ts["segments"]])
         if (diarize or {}).get(track) and units:
             t, p = time.monotonic(), paused_time()
+            later = sum(tracks[x]["duration"] for x in to_diarize[to_diarize.index(track) + 1:])
             units = _diarize(units, paths[track], until_s, track, names[track], phase, problems,
-                             (people or {}).get(track), threshold)
+                             (people or {}).get(track), threshold, (ts["duration"], later))
             state["compute_s"] += (time.monotonic() - t) - (paused_time() - p)
         result[names[track]] = units
     recording = max((ts["duration"] for ts in tracks.values()), default=0.0)
@@ -471,18 +473,32 @@ def partial_transcript(folder: Path) -> dict | None:
     return {"until": until, "tracks": names, "segments": segments}
 
 
-def _diarize(segments, path, until_s, track, display_name, phase, problems, people=None, threshold=None):
+def diarization_rest(elapsed: float, fraction: float, track_s: float, later_s: float = 0.0) -> float | None:
+    """Seconds left for speaker diarization: the rest of this track from its progress so far, plus the
+    tracks still to come at the same speed (seconds of computing per second of audio). None = too early."""
+    if fraction < 0.05 or elapsed < 5:
+        return None
+    total = elapsed / fraction
+    return total - elapsed + (total / track_s * later_s if track_s > 0 else 0.0)
+
+
+def _diarize(segments, path, until_s, track, display_name, phase, problems, people=None, threshold=None,
+             lengths=(0.0, 0.0)):
     """Tell the speakers of one track apart. Never loses the transcript: on errors it stays as it is.
 
     people: the known number of people on this track (None = find out). threshold: None = the default.
+    lengths: seconds of audio of this track and of the tracks diarized after it (for the time left).
+    phase(text, remaining_s=…, diarizing=True) gets the progress and the time left (None = not known yet).
     """
     from . import diarization
 
     label = TRACK_LABELS.get(track, display_name)
+    started = time.monotonic()
 
     def progress(fraction):
         if phase:
-            phase(f"Sprecher im {label} werden erkannt: {fraction:.0%}")
+            rest = diarization_rest(time.monotonic() - started, fraction, *lengths)
+            phase(f"Sprecher im {label} werden erkannt: {fraction:.0%}", remaining_s=rest, diarizing=True)
 
     try:
         if not diarization.models_ready():

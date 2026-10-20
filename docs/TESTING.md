@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-259 tests in 26 files.
+260 tests in 26 files.
 
 ### `test_app.py` (7)
 
@@ -325,7 +325,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (40)
+### `test_service.py` (41)
 
 App flow without a window: recording → queue → transcript.
 
@@ -369,6 +369,7 @@ App flow without a window: recording → queue → transcript.
 - **Maximum recording time warns extends and ends cleanly** – 0.7.26: a forgotten recording ends after the maximum time (2 h by default) – as a complete recording.
 - **Model tiles say whether the model is up to date** – 0.7.26: «Stand 540fb2e, 8.10.2026» didn't say whether it is the newest – now the tile says so.
 - **Split paragraph where another person takes over** – 0.7.32: a paragraph that started with one person and went on with another (seen in a Teams call)
+- **Remaining time during speaker diarization** – 0.7.32: after transcribing, the progress was near 100 % while diarization of a long call still ran
 
 ### `test_spelling.py` (5)
 
