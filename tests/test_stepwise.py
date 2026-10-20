@@ -102,7 +102,7 @@ def test_finished_transcript_removes_the_partial_file(tmp_path):
     pipeline.create_transcript(folder, PieceTranscriber(), "m", NAMES)
     assert (folder / "transcript.json").exists() and not (folder / pipeline.PARTIAL).exists()
     data = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))
-    assert all("words" not in s for s in data["segments"])        # word timestamps are not stored
+    assert all(s["words"] for s in data["segments"])               # word timestamps are kept (0.7.32: splitting)
 
 
 def test_service_resumes_cut_off_transcriptions_at_start(home):

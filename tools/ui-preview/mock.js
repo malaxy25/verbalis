@@ -51,6 +51,11 @@ window.pywebview = { api: {
   merge_speakers: (id, src, dst) => { if (/^Gegenüber( \d+)?$/.test(speakerMap[dst].name) && !/^Gegenüber( \d+)?$/.test(speakerMap[src].name)) speakerMap[dst].name = speakerMap[src].name; segments.forEach((g) => { if (g.speaker_id === dst) g.speaker = speakerMap[dst].name; }); segments.forEach((g) => { if (g.speaker_id === src) { g.speaker_id = dst; g.speaker = speakerMap[dst].name; } }); delete speakerMap[src]; window.__merged = [src, dst]; return ok([]); },
   set_paragraph_speaker: (id, i, sid) => { segments[i].speaker_id = sid; segments[i].speaker = speakerMap[sid].name; window.__moved = [i, sid]; return ok(null); },
   speaker_sample: (id, sid) => { window.__sample = sid; return ok({ url: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=", start: 0 }); },
+  split_paragraph: (id, i, first, second) => {
+    const s = segments[i], middle = s.start + (s.end - s.start) * first.length / (first.length + second.length);
+    segments.splice(i, 1, { ...s, text: first, end: middle }, { ...s, text: second, start: middle });
+    return ok({ index: i + 1, suggestions: [] });
+  },
   edit_transcript: (id, i, text) => { segments[i].text = text; return ok({ suggestions: [
     { variant: "Toko", target: "tocco", kind: "new", previous: null },
     { variant: "Limet nah", target: "Limmat", kind: "added", previous: null },

@@ -112,6 +112,9 @@ class Api:
     def edit_transcript(self, recording_id, index, text):
         return self._call(self._s.edit_transcript, recording_id, int(index), text)
 
+    def split_paragraph(self, recording_id, index, before, after):
+        return self._call(self._s.split_paragraph, recording_id, int(index), before, after)
+
     def remember_corrections(self, recording_id, rules):
         return self._call(self._s.remember_corrections, recording_id, rules)
 

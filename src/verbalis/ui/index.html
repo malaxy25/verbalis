@@ -450,6 +450,7 @@
   .paragraph .text {
     font-family: var(--font-text); font-size: 17px; line-height: 1.6; max-width: 38em; margin: 0;
     padding: 2px 8px; margin-left: -8px; border-radius: 6px; cursor: text;
+    white-space: pre-line;   /* line breaks typed with Shift+Enter */
   }
   .paragraph .text:hover { background: var(--surface-2); }
   .paragraph .text.readonly { cursor: default; }
@@ -1391,7 +1392,7 @@ function renderSegments(body, id, segments, speakerMap, meName, editable, playab
       : element("div", { class: "who", "data-speaker-id": s.speaker_id || "" }, s.speaker || "");
     const asides = element("div", { class: "asides" });
     columns.set(index, asides);
-    const paragraph = element("div", { class: `paragraph ${track}` },
+    const paragraph = element("div", { class: `paragraph ${track}`, "data-index": String(index) },
       element("div", {}, who, element("time", {}, timeText(s.start),
         playable ? element("button", { type: "button", class: "play-passage", title: "Diese Stelle anhören",
           "aria-label": `Absatz ab ${timeText(s.start)} anhören`,
@@ -1671,11 +1672,17 @@ function retranscribeButton(id, edited) {
 
 let editing = null;  // { cancel } of the paragraph being edited
 
+/* A paragraph as typed: spaces collapsed, line breaks kept (as transcript.clean_text in Python). */
+function cleanText(text) {
+  return text.split("\n").map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
+}
+
 function editParagraph(id, index, paragraph, textEl) {
   if (textEl.hasAttribute("contenteditable")) return;
   if (editing) editing.cancel();
   paragraph.querySelectorAll(".suggestions").forEach((v) => v.remove());
   const before = textEl.textContent;
+  const aside = textEl.classList.contains("aside-text");   // an interjection is not split
   textEl.setAttribute("contenteditable", "plaintext-only");
   textEl.removeAttribute("title");
   textEl.focus();
@@ -1684,7 +1691,9 @@ function editParagraph(id, index, paragraph, textEl) {
   const saveButton = element("button", { type: "button", class: "action primary" }, "Korrektur speichern");
   const cancelButton = element("button", { type: "button", class: "action" }, "Abbrechen");
   const spellStatus = element("small", { class: "spell-status" }, "Rechtsklick auf ein Wort zeigt Vorschläge");
-  bar.append(saveButton, cancelButton, element("small", {}, "Strg+Enter speichert, Esc bricht ab."), spellStatus);
+  bar.append(saveButton, cancelButton, element("small", {}, aside ? "Strg+Enter speichert, Esc bricht ab."
+    : "Enter trennt den Absatz (z.B. wenn jemand anderes übernimmt), Shift+Enter neue Zeile, Strg+Enter speichert, Esc bricht ab."),
+    spellStatus);
   textEl.after(bar);
   startSpelling(textEl, spellStatus);
 
@@ -1699,8 +1708,8 @@ function editParagraph(id, index, paragraph, textEl) {
     editing = null;
   }
   async function save() {
-    const newText = textEl.textContent.replace(/\s+/g, " ").trim();
-    if (newText === before.trim()) { finish(before); return; }
+    const newText = cleanText(textEl.innerText);
+    if (newText === cleanText(before)) { finish(before); return; }
     saveButton.disabled = true;
     try {
       const r = await call("edit_transcript", id, index, newText);
@@ -1711,11 +1720,38 @@ function editParagraph(id, index, paragraph, textEl) {
       showMessage(e.message);
     }
   }
+  /* Enter: two paragraphs at the cursor; the person of the second one is chosen right away. */
+  async function split() {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const cursor = selection.getRangeAt(0);
+    const head = document.createRange();
+    head.selectNodeContents(textEl);
+    head.setEnd(cursor.startContainer, cursor.startOffset);
+    const tail = document.createRange();
+    tail.selectNodeContents(textEl);
+    tail.setStart(cursor.endContainer, cursor.endOffset);
+    const first = cleanText(head.toString()), second = cleanText(tail.toString());
+    if (!first || !second) return;   // at the very start or end there is nothing to split
+    try {
+      const r = await call("split_paragraph", id, index, first, second);
+      stopSpelling();
+      editing = null;
+      await renderContent(true);
+      const shown = (i) => document.querySelector(`.paragraph[data-index="${i}"]`);
+      if (r.suggestions.length && shown(index)) showSuggestions(id, shown(index).children[1], r.suggestions);
+      const who = shown(r.index) && shown(r.index).querySelector(".who-button");
+      if (who) who.click();   // only when there is another person on this track to choose
+    } catch (e) {
+      showMessage(e.message);
+    }
+  }
   function onKey(ev) {
     if (ev.key === "Escape" && spell.menu) return;   // Escape closes the spelling menu first
     if (ev.key === "Escape") { ev.preventDefault(); finish(before); }
-    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); }
-    if (ev.key === "Enter" && !ev.ctrlKey && !ev.metaKey) ev.preventDefault();  // a paragraph stays one paragraph
+    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); return; }
+    if (ev.key === "Enter" && ev.shiftKey && !aside) return;   // a line break within the paragraph
+    if (ev.key === "Enter") { ev.preventDefault(); if (!aside) split(); }
   }
   textEl.addEventListener("keydown", onKey);
   saveButton.addEventListener("click", save);

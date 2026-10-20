@@ -91,8 +91,12 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   tracks alternately, progress in `transcript.partial.json` after each piece; the service resumes it at
   start. Diarization and corrections run at the end. Finished parts are read-only while it runs.
 - **Reading flow** (`transcript.merge`): sentences from word timestamps form the paragraphs; short
-  interjections during someone else's speech get `aside: true` (shown next to the paragraph). Word
-  timestamps are only kept in the partial file, not in `transcript.json`.
+  interjections during someone else's speech get `aside: true` (shown next to the paragraph). Since
+  0.7.32 the word timestamps are kept in `transcript.json` (`words` per paragraph, about 3–4× the size) so a
+  paragraph split by hand (Enter while correcting) gets the time of its second part, also after corrections
+  (`transcript.split_times` compares the text with the words); old transcripts fall back to an estimate from
+  the text length. The window never gets the words (`Service.transcript` drops them). Shift+Enter keeps a
+  line break in a paragraph (`clean_text`; Markdown gets a hard line break).
   sherpa-onnx bundles its own onnxruntime next to faster-whisper's – the release self-test runs both
   in one process with the real models on Windows and macOS.
 - **Recording details** (0.7.19) live in `meta.json` (`title`, `project`, `participants`, `notes`); they

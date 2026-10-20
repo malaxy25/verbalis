@@ -465,7 +465,10 @@ def partial_transcript(folder: Path) -> dict | None:
     paragraphs = merge({names.get(track, track): [
         Segment(d["start"], d["end"], d["text"], track=track, words=d.get("words"))
         for d in ts["segments"] if d["start"] < until] for track, ts in tracks.items()})
-    return {"until": until, "tracks": names, "segments": [segment_dict(p) for p in paragraphs]}
+    segments = [segment_dict(p) for p in paragraphs]
+    for seg in segments:
+        seg.pop("words", None)   # the window does not need them
+    return {"until": until, "tracks": names, "segments": segments}
 
 
 def _diarize(segments, path, until_s, track, display_name, phase, problems, people=None, threshold=None):

@@ -13,6 +13,9 @@ interleave them. Reading flow:
   answer – when nobody else is speaking – stays a normal paragraph. The setting
   «Kurze Einwürfe am Rand zeigen» switches this off (`merge(…, asides=False)`).
 - Consecutive sentences of the same person become one paragraph.
+
+Since 0.7.32 every paragraph keeps its word timestamps (`words`) in transcript.json, so a paragraph
+split by hand gets the time of the first word of its second part (`split_times`).
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, replace
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from .transcription.base import Segment
@@ -81,18 +85,60 @@ def merge(tracks: dict[str, list[Segment]], asides: bool = True) -> list[Segment
     result: list[Segment] = []
     last_index: int | None = None          # the last paragraph (asides don't count)
     for s in units:
-        s = replace(s, words=None)
         if s.aside:
             result.append(s)
             continue
         last = result[last_index] if last_index is not None else None
         if (last and last.speaker == s.speaker and last.speaker_id == s.speaker_id
                 and s.start - last.end <= MAX_PAUSE_IN_PARAGRAPH_S):
-            result[last_index] = replace(last, end=max(last.end, s.end), text=f"{last.text} {s.text}")
+            result[last_index] = replace(last, end=max(last.end, s.end), text=f"{last.text} {s.text}",
+                                         words=joined_words(last.words, s.words))
         else:
             result.append(s)
             last_index = len(result) - 1
     return result
+
+
+def joined_words(a: list | None, b: list | None) -> list | None:
+    """The words of two joined paragraphs – None when one of them has none (then they would not match)."""
+    return a + b if a and b else None
+
+
+def clean_text(text: str) -> str:
+    """A paragraph as typed: spaces collapsed, line breaks (Shift+Enter) kept, empty lines dropped."""
+    lines = (" ".join(line.split()) for line in text.splitlines())
+    return "\n".join(line for line in lines if line)
+
+
+def _token(word: str) -> str:
+    return re.sub(r"[^\w]", "", word.lower())
+
+
+def split_times(start: float, end: float, words: list | None, before: str, after: str):
+    """Where a paragraph is split into `before` and `after`: (end of the first part, start of the second,
+    words of the first, words of the second).
+
+    The text may have been corrected, so it is compared with the transcribed words (like a text
+    comparison); the second part starts at the word that matches its first word. Without words, or when
+    nothing matches, the time is estimated from the length of the text.
+    """
+    if words:
+        tokens = [_token(t) for t in before.split() + after.split()]
+        cut_at = len(before.split())
+        to_word: dict[int, int] = {}
+        matcher = SequenceMatcher(None, [_token(str(w[2])) for w in words], tokens, autojunk=False)
+        for a, b, size in matcher.get_matching_blocks():
+            for i in range(size):
+                to_word[b + i] = a + i
+        earlier = [to_word[j] for j in range(cut_at) if j in to_word]
+        later = [(j, to_word[j]) for j in range(cut_at, len(tokens)) if j in to_word]
+        lowest = earlier[-1] + 1 if earlier else 0
+        cut = max(lowest, later[0][1] - (later[0][0] - cut_at)) if later else lowest
+        if 0 < cut < len(words):
+            return float(words[cut - 1][1]), float(words[cut][0]), words[:cut], words[cut:]
+    share = len(before) / max(len(before) + len(after), 1)
+    middle = round(start + (end - start) * share, 2)
+    return middle, middle, None, None
 
 
 def _time(seconds: float) -> str:
@@ -109,15 +155,16 @@ def to_markdown(paragraphs: list[Segment], title: str, header: dict[str, str]) -
         if p.aside:   # interjection: small, doesn't interrupt the conversation
             lines.append(f"*[{_time(p.start)}] {p.speaker}: {p.text}*")
         else:
-            lines.append(f"**[{_time(p.start)}] {p.speaker}:** {p.text}")
+            lines.append(f"**[{_time(p.start)}] {p.speaker}:** " + p.text.replace("\n", "  \n"))   # line break
         lines.append("")
     return "\n".join(lines)
 
 
 def segment_dict(p: Segment) -> dict:
-    """A paragraph as stored in transcript.json – without word timestamps, `aside` only when set."""
+    """A paragraph as stored in transcript.json – `words` and `aside` only when set."""
     data = asdict(p)
-    data.pop("words", None)
+    if not data.get("words"):
+        data.pop("words", None)
     if not data.get("aside"):
         data.pop("aside", None)
     return data

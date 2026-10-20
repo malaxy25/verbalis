@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-254 tests in 26 files.
+259 tests in 26 files.
 
 ### `test_app.py` (7)
 
@@ -325,7 +325,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (39)
+### `test_service.py` (40)
 
 App flow without a window: recording → queue → transcript.
 
@@ -368,6 +368,7 @@ App flow without a window: recording → queue → transcript.
 - **Microphone only recording for a meeting in a room** – 0.7.26: «Keiner – nur Mikrofon» – no second track, no warning about it, nothing reported missing.
 - **Maximum recording time warns extends and ends cleanly** – 0.7.26: a forgotten recording ends after the maximum time (2 h by default) – as a complete recording.
 - **Model tiles say whether the model is up to date** – 0.7.26: «Stand 540fb2e, 8.10.2026» didn't say whether it is the newest – now the tile says so.
+- **Split paragraph where another person takes over** – 0.7.32: a paragraph that started with one person and went on with another (seen in a Teams call)
 
 ### `test_spelling.py` (5)
 
@@ -389,7 +390,7 @@ Step-by-step transcription: pieces cut in speech pauses, both tracks alternately
 - **Finished transcript removes the partial file**
 - **Service resumes cut off transcriptions at start**
 
-### `test_transcript.py` (8)
+### `test_transcript.py` (12)
 
 Merging both tracks into paragraphs and the Markdown output.
 
@@ -401,6 +402,10 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Asides switched off are paragraphs** – «Kurze Einwürfe am Rand zeigen» off: an interjection is a normal paragraph where it was said.
 - **Short answer after a question stays a paragraph**
 - **Aside in markdown and json**
+- **Paragraphs keep their word timestamps** – 0.7.32: the words are saved, so a paragraph split by hand gets the time of its second part.
+- **Split time comes from the words also after a correction**
+- **Split time without words is estimated from the text**
+- **Line breaks are kept**
 
 ### `test_ui_list.py` (1)
 

@@ -6,8 +6,12 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## 0.7.32 – next
 
-**Status 19 Oct 2026:** 0.7.31 released (settings «Sprechertrennung» and «Kurze Einwürfe am Rand zeigen»,
-the number of people explained; introduction tested on the Mac – works).
+**Status 20 Oct 2026:** built and committed locally (not pushed): monthly search for new Swiss German models
+(`tools/find_new_models.py`, issue for models not in `tools/known-models.txt`); split a paragraph with Enter
+while correcting (the person of the second part is chosen right away), Shift+Enter for a line break; word
+timestamps kept in `transcript.json` for the time of the split. Andrea tests it in the app before the
+release. Worth measuring: `gcoli/whisper-large-v3-swiss-german-mit` (MIT, large-v3 instead of turbo –
+slower, maybe better); `Flurin17/cohere-transcribe-swiss-german` is new but non-commercial (cc-by-nc).
 
 0.7.31 (19 Oct 2026): «Sprechertrennung» Standard 0.7 / Eher weniger Personen 0.9, «Kurze Einwürfe am Rand
 zeigen», «1» shown for a track that is not told apart.
@@ -22,8 +26,11 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
 
 1. **«Leise oder undeutliche Stellen»: Standard / empfindlicher (VAD)** – first a `compare` option to
    measure; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it. **[quality]**
-2. **Split a paragraph at a speaker change** – once in a 48-min Teams call one paragraph started with one
-   person and went on with another; word timestamps exist. Check how often it happens first. **[quality]**
+2. [x] **Split a paragraph by hand** (Enter) – built, see the status above.
+3. **Split automatically at a speaker change** – diarization sees a change within a sentence; the words are
+   there now. Measure first how often it happens, so short overlaps don't chop paragraphs. **[quality]**
+4. **New user-defined speaker after splitting** – today the second part can only go to a person already
+   found on that track. **[ux]**
 
 **Speaker measurements 19 Oct 2026** (speakers after refining · right without merging by hand · pure = right
    after naming · right with the known number):

@@ -1,5 +1,6 @@
 """App flow without a window: recording → queue → transcript."""
 
+import json
 import threading
 import time
 from pathlib import Path
@@ -733,3 +734,29 @@ def test_model_tiles_say_whether_the_model_is_up_to_date(monkeypatch):
         raise OSError("keine Verbindung")
     monkeypatch.setattr(m, "check_revision", offline)
     assert {t["id"]: t for t in s.check_models_now()}["large-v3"]["check"]["state"] == "failed"
+
+
+def test_split_paragraph_where_another_person_takes_over(home):
+    """0.7.32: a paragraph that started with one person and went on with another (seen in a Teams call)
+    can be split with Enter; the second part gets the time of its first word."""
+    s = make_service(transcriber_factory=ToccoTranscriber)
+    rid = finished_recording(s)
+    folder = home / "recordings" / rid
+    data = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))
+    words = [[20.0 + i, 21.0 + i, f" {w}"] for i, w in enumerate("Wir starten am Montag. Ich bin dabei.".split())]
+    data["segments"][0].update(start=20.0, end=27.0, text="Wir starten am Montag. Ich bin dabei.", words=words)
+    s._write_transcript(folder, data)
+
+    r = s.split_paragraph(rid, 0, "Wir starten am Montag.", "Ich bin\ndabei.")
+    assert r["index"] == 1
+    stored = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))["segments"]
+    assert (stored[0]["text"], stored[0]["end"]) == ("Wir starten am Montag.", 24.0)
+    assert (stored[1]["text"], stored[1]["start"], stored[1]["end"]) == ("Ich bin\ndabei.", 24.0, 27.0)
+    assert len(stored[0]["words"]) == 4 and len(stored[1]["words"]) == 3
+    assert stored[1]["speaker"] == stored[0]["speaker"]                    # chosen afterwards in the window
+    t = s.transcript(rid)
+    assert t["edited"] and all("words" not in seg for seg in t["segments"])   # the window gets no words
+    assert "Ich bin  \ndabei." in t["markdown"]
+    assert (folder / "transcript_original.json").exists()
+    with pytest.raises(ValueError, match="Cursor"):
+        s.split_paragraph(rid, 0, "", "Wir starten am Montag.")

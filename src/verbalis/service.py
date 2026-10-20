@@ -33,7 +33,8 @@ from . import __version__, feedback, hardware, pipeline, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
-from .transcript import is_default_name, segment_from_dict, to_markdown
+from .transcript import (clean_text, is_default_name, joined_words, segment_from_dict, split_times,
+                         to_markdown)
 from .transcription.models import verbalis_home
 
 VALID_ID = re.compile(r"^[\w\-]+$")
@@ -1320,23 +1321,59 @@ class Service:
         segments = data["segments"]
         if not 0 <= index < len(segments):
             raise ValueError("Diesen Absatz gibt es nicht (mehr).")
-        text = " ".join(text.split())
+        text = clean_text(text)
         if not text:
             raise ValueError("Ein Absatz darf nicht leer sein.")
         old = segments[index]["text"]
         if text == old:
             return {"suggestions": []}
 
-        original = folder / "transcript_original.json"
-        if not original.exists():  # keep the unedited version once
-            original.write_text((folder / "transcript.json").read_text(encoding="utf-8"), encoding="utf-8")
+        self._keep_original(folder)
         segments[index]["text"] = text
         data["edited"] = True
         self._write_transcript(folder, data)
+        return {"suggestions": self._suggestions(old, text)}
 
+    def split_paragraph(self, recording_id: str, index: int, before: str, after: str) -> dict:
+        """Enter while correcting: the paragraph becomes two at the cursor, e.g. where another person takes
+        over. The second part starts with the same person. Returns its index and correction suggestions."""
+        folder = self._path(recording_id)
+        data = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))
+        segments = data["segments"]
+        if not 0 <= index < len(segments) or segments[index].get("aside"):
+            raise ValueError("Diesen Absatz gibt es nicht (mehr).")
+        before, after = clean_text(before), clean_text(after)
+        if not before or not after:
+            raise ValueError("Zum Trennen den Cursor mitten in den Text setzen.")
+        seg = segments[index]
+        old = seg["text"]
+        first_end, second_start, first_words, second_words = split_times(
+            seg["start"], seg["end"], seg.get("words"), before, after)
+        first = {**seg, "text": before, "end": first_end}
+        second = {**seg, "text": after, "start": second_start}
+        for part, words in ((first, first_words), (second, second_words)):
+            if words:
+                part["words"] = words
+            else:
+                part.pop("words", None)
+        self._keep_original(folder)
+        segments[index:index + 1] = [first, second]
+        data["edited"] = True
+        self._write_transcript(folder, data)
+        return {"index": index + 1, "suggestions": self._suggestions(old, f"{before} {after}")}
+
+    @staticmethod
+    def _keep_original(folder: Path) -> None:
+        original = folder / "transcript_original.json"
+        if not original.exists():  # keep the unedited version once
+            original.write_text((folder / "transcript.json").read_text(encoding="utf-8"), encoding="utf-8")
+
+    @staticmethod
+    def _suggestions(old: str, new: str) -> list[dict]:
+        """Corrections worth adding to the correction list."""
         corrections = CorrectionList.load()
-        proposals = [corrections.classify(v, t) for v, t in suggestions(old, text)]
-        return {"suggestions": [p for p in proposals if p["kind"] != "known"]}
+        proposals = [corrections.classify(v, t) for v, t in suggestions(" ".join(old.split()), " ".join(new.split()))]
+        return [p for p in proposals if p["kind"] != "known"]
 
     # ------------------------------------------------------------ speakers
 
@@ -1846,6 +1883,8 @@ class Service:
             return None
         md = folder / "transcript.md"
         data["markdown"] = md.read_text(encoding="utf-8") if md.exists() else ""
+        for seg in data["segments"]:
+            seg.pop("words", None)   # only needed here in Python (splitting), not in the window
         return data
 
     def delete_recording(self, recording_id: str) -> None:
@@ -1950,6 +1989,10 @@ def _join_neighbours(segments: list[dict], max_pause: float = 2.0) -> list[dict]
                 and seg["start"] - last["end"] <= max_pause):
             last["end"] = max(last["end"], seg["end"])
             last["text"] = f"{last['text']} {seg['text']}"
+            if words := joined_words(last.get("words"), seg.get("words")):
+                last["words"] = words
+            else:
+                last.pop("words", None)
         else:
             joined.append(dict(seg))
     return joined

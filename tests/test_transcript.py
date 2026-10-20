@@ -2,7 +2,7 @@
 
 import json
 
-from verbalis.transcript import merge, to_markdown
+from verbalis.transcript import clean_text, merge, segment_dict, split_times, to_markdown
 from verbalis.transcription.base import Segment
 
 
@@ -81,3 +81,30 @@ def test_aside_in_markdown_and_json(tmp_path):
     assert "*[00:02] Andrea: mhm*" in md
     data = json.loads((tmp_path / "transcript.json").read_text(encoding="utf-8"))
     assert data["segments"][1]["aside"] is True and "aside" not in data["segments"][0]
+
+
+def test_paragraphs_keep_their_word_timestamps():
+    """0.7.32: the words are saved, so a paragraph split by hand gets the time of its second part."""
+    paragraphs = merge({"Andrea": [_seg(0.0, "Wir starten am Montag."), _seg(2.0, "Das passt gut.")]})
+    assert len(paragraphs) == 1 and [w[2].strip() for w in paragraphs[0].words] == [
+        "Wir", "starten", "am", "Montag.", "Das", "passt", "gut."]
+    assert segment_dict(paragraphs[0])["words"] == paragraphs[0].words
+
+
+def test_split_time_comes_from_the_words_also_after_a_correction():
+    words = _words(10.0, "Ich komme morgen. Jo das passt mir.", step=1.0)   # «Ja» was heard as «Jo»
+    first_end, second_start, first, second = split_times(
+        10.0, 17.0, words, "Ich komme morgen.", "Ja, das passt mir.")
+    assert (first_end, second_start) == (13.0, 13.0)
+    assert [w[2].strip() for w in first] == ["Ich", "komme", "morgen."] and len(second) == 4
+
+
+def test_split_time_without_words_is_estimated_from_the_text():
+    first_end, second_start, first, second = split_times(0.0, 10.0, None, "a" * 30, "b" * 10)
+    assert first_end == second_start == 7.5 and first is None and second is None
+
+
+def test_line_breaks_are_kept():
+    assert clean_text("  Erste   Zeile \n\n  zweite Zeile ") == "Erste Zeile\nzweite Zeile"
+    md = to_markdown([Segment(0.0, 2.0, "Erste Zeile\nzweite Zeile", "Ich")], "Titel", {})
+    assert "**[00:00] Ich:** Erste Zeile  \nzweite Zeile" in md
