@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.33 – 2026-10-20
+- **Speaker box: one list of participants.** In the app the name field already lists the participants of
+  the track, so «Teilnehmende ▾» from 0.7.32 was a second list – it is gone. A name Verbalis gave
+  («Gegenüber 2») moves to the placeholder while the field has the focus, so the list shows every
+  participant; clicking away without choosing keeps the old name.
+- **Fix:** «Anzahl Personen auf dieser Spur ()» showed empty brackets – now «(Systemton)» or «(Mikrofon)».
+
 ## 0.7.32 – 2026-10-20
 - **Split a paragraph:** while correcting, Enter splits the paragraph at the cursor – e.g. where another
   person takes over – and the choice of person for the second part opens right away. Shift+Enter is a line

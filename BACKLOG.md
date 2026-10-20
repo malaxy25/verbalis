@@ -4,14 +4,16 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## 0.7.33 – next
+## 0.7.34 – next
 
-**Status 20 Oct 2026:** 0.7.32 released (split paragraphs with Enter, Shift+Enter line breaks, word
+**Status 20 Oct 2026:** 0.7.33 released (speaker box: the name field is the only list of
+participants; the track named in «Anzahl Personen auf dieser Spur»). 0.7.32 released (split paragraphs with Enter, Shift+Enter line breaks, word
 timestamps kept, time left during diarization, participants to pick in the speaker box, wider fields,
 monthly search for new Swiss German models). Not measured: `gcoli/whisper-large-v3-swiss-german-mit` –
 turbo already needs ~1.1–1.2× real time on Andrea's PC, large-v3 would be several times slower.
 `Flurin17/cohere-transcribe-swiss-german` is new but non-commercial (cc-by-nc).
 
+0.7.33 (20 Oct 2026): one participant list in the speaker box, track named in the people count.
 0.7.32 (20 Oct 2026): split paragraphs with Enter, word timestamps kept, time left during diarization,
 participants in the speaker box, model search.
 0.7.31 (19 Oct 2026): «Sprechertrennung» Standard 0.7 / Eher weniger Personen 0.9, «Kurze Einwürfe am Rand
