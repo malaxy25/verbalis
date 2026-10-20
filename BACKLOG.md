@@ -10,8 +10,9 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 (`tools/find_new_models.py`, issue for models not in `tools/known-models.txt`); split a paragraph with Enter
 while correcting (the person of the second part is chosen right away), Shift+Enter for a line break; word
 timestamps kept in `transcript.json` for the time of the split. Andrea tests it in the app before the
-release. Worth measuring: `gcoli/whisper-large-v3-swiss-german-mit` (MIT, large-v3 instead of turbo –
-slower, maybe better); `Flurin17/cohere-transcribe-swiss-german` is new but non-commercial (cc-by-nc).
+release; don't deploy before Andrea says so. Not measured: `gcoli/whisper-large-v3-swiss-german-mit` (large-v3
+instead of turbo) – turbo already needs ~1.1–1.2× real time on Andrea's PC, large-v3 would be several times
+slower (decided 20 Oct 2026). `Flurin17/cohere-transcribe-swiss-german` is new but non-commercial (cc-by-nc).
 
 0.7.31 (19 Oct 2026): «Sprechertrennung» Standard 0.7 / Eher weniger Personen 0.9, «Kurze Einwürfe am Rand
 zeigen», «1» shown for a track that is not told apart.
