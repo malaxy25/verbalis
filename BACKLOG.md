@@ -52,19 +52,44 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    48 min) – the reference uses whole segments, so the measurement cannot see this; if it happens more
    often, split paragraphs at speaker changes (word timestamps exist).
 
-## After 0.7.32 – AI meeting notes (decided 15 Oct 2026: measure first, then build)
+## Later – AI meeting notes (planned 20 Oct 2026, on hold – Andrea: «lassen wir es mal sein»)
 
-- **Meeting notes must be generic, not tocco-specific** (Andrea, 15 Oct 2026 – how exactly is open): the
-  instruction and the structure of the minutes are set in Einstellungen (e.g. several templates such as
-  «Protokoll», «Kurznotiz», each with instruction + sections). Used both for «Transkript kopieren» (copy with
-  the template, for Claude Code) and later for «Notizen erstellen». Not built yet – design with Andrea first.
-- **Test a local model first:** e.g. Qwen 3 8B (Apache 2.0) via llama.cpp on 2–3 of Andrea's transcripts,
-  long ones split into parts and joined; Andrea compares with his Claude notes (are decisions and to-dos
-  with owner right?). Measure time on his PC (CPU) and on the Mac.
-- **Only if good enough:** «Notizen erstellen» in the transcript – background job in its own process,
-  model downloaded like the Whisper models, template Zusammenfassung · Entscheide · Pendenzen (wer, bis
-  wann) · offene Fragen, saved as `notes.md`, editable. Cloud (Claude API) at most as an explicit opt-in:
-  real conversations would leave the computer. **[ux] [privacy]**
+Today Andrea writes the notes with Claude Code: transcript + e-mails after the meeting + template + project
+context from his vault, result into the vault. Expectation for a local model: a good first draft to edit,
+not Claude's judgment. Measure first, then build.
+
+- **What his notes need** (from his Claude Code prompt, 20 Oct 2026): one block per topic/CR with status,
+  questions and tasks («Aufgabe: … *(Verantwortlich · Status · Deadline)*»); sources ranked corrections in
+  mails > mail summary > transcript; things only in the transcript marked «(in der Mail nicht
+  festgehalten)»; «Entscheid» only when confirmed as final, proposals and open points marked as such;
+  leave out small talk, private matters, personnel matters; names spelled as in the mails, uncertain names
+  marked 🔶; dates absolute; frontmatter (date, type, project, participants with role). The model also needs
+  project context in one sentence and who took part (the transcript often says «Person 3»).
+- **Let Python do what rules can do:** absolute dates (the meeting date is known), 🔶 for names that are not
+  among the participants/speakers or in the mail. The model only writes.
+- **Technique:** `llama-server` from llama.cpp (MIT) as a separate process, downloaded with a fixed SHA-256
+  like the other models (no GIL freeze, Metal on the Mac). Two steps: per ~10-min chunk extract facts as
+  JSON forced by a schema (topic, statement, who, decision/proposal/open, task, time), then write the note
+  from the facts + mail + template – easier for small models, every statement traceable to the transcript.
+- **Models to compare:** Qwen 3 8B (Apache 2.0, ~5 GB) and Phi-4 14B (MIT, ~9 GB – tight: Andrea's PC has
+  15.5 GB RAM, Intel Core Ultra 7 255U without a graphics card; the speaker measurement already ran out of
+  memory). Estimate for a 48-min meeting: 10–20 min in the background on his PC, maybe 3–5 min on the Mac.
+- **Step 1 – measure without UI:** `verbalis notes <folder> --template … --mail mail.txt --model …` writes
+  `notes.md`. 2–3 meetings that already have a Claude note (e.g. SGUM 19 Oct 2026); Andrea rates: decisions
+  right, tasks with owner complete, nothing invented, private things left out, how much he would rewrite.
+  Claude does not read transcripts or notes unless Andrea names a file. Measure time and RAM on PC and Mac.
+  **Bar:** if more than about a third has to be rewritten, don't build it.
+- **Step 2 – build only if good:** Einstellungen → Notizen with templates (instruction + sections; his rules
+  above as the default instruction, generic, not tocco-specific), model download on request; «Notizen
+  erstellen» in the transcript with template, a field for the mail/additions, project context, participants
+  with role (prefilled from the recording details); background job with progress, `notes.md` editable and
+  copyable. **[ux] [privacy]**
+- **Independent and cheap:** «Transkript kopieren mit Vorlage» – prompt, template, participants and
+  transcript in one go for Claude Code. **[ux]**
+- **Open questions for Andrea:** only for him or also for colleagues (their laptops)? Mail pasted into a
+  field (recommended) or fetched from Outlook? Write the note into a vault folder per project, or copy and
+  `notes.md` only? Cloud (Claude API) as an explicit opt-in – the transcript would leave the computer,
+  needs tocco's consent.
 
 ## Security (from the review on 15 Oct 2026)
 
