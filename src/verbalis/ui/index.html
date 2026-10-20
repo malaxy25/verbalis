@@ -421,8 +421,7 @@
     background: var(--surface); display: grid; gap: 10px; }
   .speakers-panel h3 { margin: 0; font-size: 15px; }
   .speakers-panel .hint { margin: 0; color: var(--muted); font-size: 13px; }
-  .speaker-row { display: grid; grid-template-columns: auto minmax(10em, 1fr) auto auto auto; gap: 10px; align-items: center; }
-  .speaker-row .pick { max-width: 11em; }
+  .speaker-row { display: grid; grid-template-columns: auto minmax(10em, 1fr) auto auto; gap: 10px; align-items: center; }
   .speaker-row .talk { color: var(--muted); font-size: 13px; white-space: nowrap; }
   .play-button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2);
     cursor: pointer; color: var(--ink); }
@@ -1464,16 +1463,16 @@ function speakersPanel(a, t) {
     input.addEventListener("input", () => { typed[id] = input.value.trim() || info.name; });
     input.addEventListener("change", () => saveName(id, input, saved));
     input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); input.blur(); } });
-    // the participants entered for this track as a list to pick from (typing stays possible for anyone else)
-    const listed = (a.participants || {})[info.track] || [];
-    const pick = listed.length ? element("select", { class: "pick", "aria-label": `${info.name}: Teilnehmende wählen`,
-      onchange: (event) => {
-        if (!event.target.value) return;
-        input.value = typed[id] = event.target.value;
-        event.target.value = "";
-        saveName(id, input, saved);
-      } }, element("option", { value: "" }, "Teilnehmende ▾"), ...listed.map((n) => element("option", { value: n }, n)))
-      : element("span");
+    // the field lists the participants of this track (datalist) – but only those matching what is in it, so a
+    // name given by Verbalis («Gegenüber 2») is moved to the placeholder while the field has the focus
+    if (((a.participants || {})[info.track] || []).length) {
+      input.addEventListener("focus", () => {
+        if (!generatedName(input.value, (t.tracks || {})[info.track])) return;
+        input.placeholder = input.value;
+        input.value = "";
+      });
+      input.addEventListener("blur", () => { if (!input.value.trim()) input.value = typed[id]; });
+    }
     const others = entries.filter(([other, o]) => other !== id && o.track === info.track && talk[other]);
     const fillMerge = (select) => select.replaceChildren(
       element("option", { value: "" }, "Gleiche Person wie …"),
@@ -1491,7 +1490,7 @@ function speakersPanel(a, t) {
       title: a.audio ? "Hörprobe abspielen" : "Das Audio dieser Aufnahme wurde gelöscht – keine Hörprobe mehr möglich.",
       onclick: () => playSample(a.id, id, play) }, "▶");
     play.disabled = !a.audio;
-    return element("div", { class: "speaker-row" }, play, input, pick,
+    return element("div", { class: "speaker-row" }, play, input,
       element("span", { class: "talk" }, `${timeText(talk[id])} Redezeit`, " ", saved), merge);
   });
   return element("section", { class: "speakers-panel", "aria-label": "Sprecher" },
@@ -1504,6 +1503,13 @@ function speakersPanel(a, t) {
       ...((a.participants || {})[track] || []).map((n) => element("option", { value: n })))),
     ...speakerCountRows(a, t, talk),
   );
+}
+
+/* A name diarization gave («Gegenüber 2», «Person 3», or the track's name), not one the user typed
+   (as transcript.is_default_name in Python). */
+function generatedName(name, trackName) {
+  const escaped = (trackName || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return /^Person \d+$/.test(name) || (!!trackName && new RegExp(`^${escaped}( \\d+)?$`).test(name));
 }
 
 /* «Anzahl Personen auf dieser Spur» + «Neu zuordnen»: diarize this track again with a known number of
@@ -1535,7 +1541,7 @@ function speakerCountRows(a, t, talk) {
       }
     });
     return element("div", { class: "speaker-count" },
-      element("label", {}, `Anzahl Personen auf dieser Spur (${name}) `, input), button, note);
+      element("label", {}, `Anzahl Personen auf dieser Spur (${TRACK_LABELS[track] || track}) `, input), button, note);
   });
 }
 

@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-260 tests in 26 files.
+262 tests in 27 files.
 
 ### `test_app.py` (7)
 
@@ -413,6 +413,13 @@ Merging both tracks into paragraphs and the Markdown output.
 The recording list in the UI: groups open and close. Runs the list functions of index.html in Node.js.
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
+
+### `test_ui_speakers.py` (2)
+
+The speaker box in the UI. Runs functions of index.html in Node.js.
+
+- **Speaker count names the track** – 0.7.32: «Anzahl Personen auf dieser Spur ()» – the label used a variable that no longer existed.
+- **Generated names are recognised** – A name Verbalis gave is cleared on focus so the field lists all participants; a typed name is kept.
 
 ### `test_ui_tour.py` (1)
 
