@@ -1,4 +1,4 @@
-name: 4 · Monthly check – our model copies
+name: 4 · Monthly check – our model copies and new Swiss German models
 
 # Our Flix copy (malaxy/flix-swissgerman-ct2) is converted from Flix-AI/flix-swissgerman-full; our gcoli
 # copy (malaxy/whisper-large-v3-turbo-swiss-german-ct2) mirrors gcoli's ct2/ folder unchanged.
@@ -7,6 +7,7 @@ name: 4 · Monthly check – our model copies
 # (UPSTREAM_REVISIONS in src/verbalis/transcription/models.py) and opens an issue if so.
 # Models downloaded directly from their publishers (large-v3, large-v3-turbo) need no check:
 # Verbalis notices and downloads their updates itself.
+# A second step looks for new Swiss German speech recognition models (tools/find_new_models.py).
 
 on:
   schedule:
@@ -53,3 +54,28 @@ jobs:
 
           Every installation then downloads the new model the next time it transcribes, with progress,
           and shows a notice that the model was updated."
+
+      - name: Look for new Swiss German models
+        if: ${{ !cancelled() }}   # also when the first check failed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          report=$(python3 tools/find_new_models.py)
+          status=$?
+          echo "$report"
+          if [ $status -eq 0 ]; then exit 0; fi
+          if [ $status -ne 1 ]; then echo "Search failed"; exit $status; fi
+          title="New Swiss German speech recognition models"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq 'length')
+          if [ "$open" != "0" ]; then
+            echo "An issue is already open."
+            exit 0
+          fi
+          gh issue create --title "$title" --body "$report
+
+          Not in \`tools/known-models.txt\` yet. For each one:
+          1. Licence: Verbalis is used at tocco – non-commercial licences (cc-by-nc …) are out.
+          2. Promising (large model, many downloads, known training data)? Convert it if needed and measure it
+             against the default model with \`verbalis compare\` (read-aloud text and a real Teams recording).
+          3. Add it to \`tools/known-models.txt\` (with a short note), so it is not reported again."

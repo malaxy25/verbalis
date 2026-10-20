@@ -194,6 +194,30 @@ def test_upstream_check_script_reads_pins():
 
 
 
+
+def test_new_model_search_reports_only_unknown_speech_models(tmp_path):
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    import find_new_models as find
+
+    def fake(query):
+        return [{"id": "a/whisper-gsw", "pipeline_tag": "automatic-speech-recognition", "downloads": 5,
+                 "createdAt": "2026-11-01T00:00:00Z", "tags": ["license:mit", "base_model:openai/whisper-large-v3"]},
+                {"id": "b/known", "pipeline_tag": "automatic-speech-recognition", "tags": []},
+                {"id": "c/text-model", "pipeline_tag": "text-generation", "tags": []}]
+
+    known = tmp_path / "known.txt"
+    known.write_text("# comment\nb/known  # measured, worse\n", encoding="utf-8")
+    found = find.candidates(fetch=fake)
+    assert set(found) == {"a/whisper-gsw", "b/known"}            # only speech recognition models
+    lines = find.report(found, find.known(known))
+    assert len(lines) == 1 and "a/whisper-gsw" in lines[0] and "licence mit" in lines[0]
+    assert "based on openai/whisper-large-v3" in lines[0]
+    # every repo in the list is known (the list in the repo is read the same way)
+    assert find.known() and "gcoli/whisper-large-v3-turbo-swiss-german-mit" in find.known()
+
+
 def test_check_update_ignores_documentation_only_changes(monkeypatch):
     from types import SimpleNamespace as NS
 

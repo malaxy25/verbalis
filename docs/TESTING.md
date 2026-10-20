@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-253 tests in 26 files.
+254 tests in 26 files.
 
 ### `test_app.py` (7)
 
@@ -252,7 +252,7 @@ Migration from «Mitschrift» (≤ 0.6) to Verbalis.
 - **Existing new files are not overwritten**
 - **Missing custom folder falls back to default**
 
-### `test_models.py` (20)
+### `test_models.py` (21)
 
 Model names, download sources and subfolders, cache detection, updates, conversion checks.
 
@@ -272,6 +272,7 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Local revision from cache**
 - **Page urls**
 - **Upstream check script reads pins**
+- **New model search reports only unknown speech models**
 - **Check update ignores documentation only changes**
 - **Gcoli comes from our mirror** – 0.7.29: the default model is downloaded from our unchanged copy (files at the root), pinned and
 - **Subfolder model** – gcoli kept the CTranslate2 version in ct2/ (until 0.7.28) – Verbalis must load that, not the repo root.
