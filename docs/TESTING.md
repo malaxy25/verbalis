@@ -64,13 +64,13 @@ in the README and in `BACKLOG.md`):
 
 **User interface:** the HTML/JavaScript UI can be opened in any browser with a fake
 backend: `python tools/ui_preview.py` writes `tools/ui-preview/preview.html`
-(scenarios via `#transcript`, `#recording`, `#paused`, `#news`, `#notice`, `#empty`, `#dev`, `#nomic`).
+(scenarios via `#transcript`, `#recording`, `#paused`, `#news`, `#notice`, `#empty`, `#dev`, `#nomic`, `#linux`).
 During development every UI change was clicked through this way with Playwright.
 
 ## Catalogue
 
 <!-- catalog:start -->
-264 tests in 27 files.
+270 tests in 28 files.
 
 ### `test_app.py` (8)
 
@@ -220,6 +220,17 @@ Processor, memory and graphics card in the diagnosis – with fake system comman
 - **Mac shows chip memory and graphics in the chip**
 - **Failing commands give unknown instead of an error**
 - **Windows reads processor memory and graphics**
+
+### `test_linux.py` (6)
+
+Linux (experimental): call detection via pactl, notifications via notify-send, one app at a time.
+
+- **Pactl lists programs using the microphone**
+- **No pactl means no call**
+- **Click on linux notification opens the window**
+- **Hide closes the open notification**
+- **Without notify send there are no notifications**
+- **Second app on linux is refused**
 
 ### `test_logs.py` (5)
 

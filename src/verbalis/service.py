@@ -163,7 +163,7 @@ class Service:
             log.exception("Checking for cut-off transcriptions failed")
         if cleanup_on_start:
             self._queue.put(CLEANUP)  # check old audio files
-        if detect_calls is None and sys.platform == "win32":
+        if detect_calls is None and (sys.platform == "win32" or sys.platform.startswith("linux")):
             from .audio.call_detect import detect as detect_calls
         if detect_calls is not None:
             threading.Thread(target=self._watch_calls, args=(detect_calls,), name="call-detection",

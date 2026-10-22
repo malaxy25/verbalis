@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import os
+import shutil
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -23,7 +25,7 @@ PROJECT_URL = "https://github.com/malaxy25/verbalis/releases"
 ZIP_FILTER = "ZIP Archiv (*.zip)"
 ICON = Path(__file__).parent / "ui" / "verbalis.ico"
 log = logging.getLogger("verbalis")
-_MUTEX = None  # holds the Windows lock against opening the app twice
+_MUTEX = None  # holds the lock against opening the app twice (Windows mutex, Linux lock file)
 
 
 class Api:
@@ -380,8 +382,8 @@ def start() -> None:
         except Exception:
             log.exception("Could not bring the window to the front")
 
-    from .notify import TrayNotifier
-    notifier = TrayNotifier(ICON, bring_to_front)
+    from .notify import notifier as make_notifier
+    notifier = make_notifier(ICON, bring_to_front)
     service.call_notifier = notifier if notifier.available else None
 
     api._window = window
@@ -453,10 +455,12 @@ def _setup_logging() -> None:
         "Unhandled error in thread %s", a.thread, exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
 
 
-def _already_running() -> bool:
-    """On Windows, prevent the app from running twice (two recordings at once)."""
+def _already_running(platform: str = sys.platform, lock_file: Path | None = None) -> bool:
+    """On Windows and Linux, prevent the app from running twice (two recordings at once)."""
     global _MUTEX
-    if sys.platform != "win32":
+    if platform.startswith("linux"):
+        return _locked_elsewhere(lock_file)
+    if platform != "win32":
         return False
     import ctypes
 
@@ -466,11 +470,32 @@ def _already_running() -> bool:
     return ctypes.get_last_error() == 183  # ERROR_ALREADY_EXISTS
 
 
+def _locked_elsewhere(lock_file: Path | None = None) -> bool:
+    """Linux: a lock on ~/.verbalis/app.lock, held as long as the app runs (freed by the system on exit)."""
+    global _MUTEX
+    import fcntl
+
+    from .transcription.models import verbalis_home
+
+    path = lock_file or verbalis_home() / "app.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(path, "a")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return True
+    _MUTEX = handle
+    return False
+
+
 def _notify(text: str) -> None:
     if sys.platform == "win32":
         import ctypes
 
         ctypes.windll.user32.MessageBoxW(None, text, "Verbalis", 0x40)
+    elif sys.platform.startswith("linux") and shutil.which("notify-send"):
+        subprocess.run(["notify-send", "--app-name=Verbalis", "Verbalis", text], check=False, timeout=5)
     else:
         print(text)
 

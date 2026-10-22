@@ -72,6 +72,11 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   bundled into the app) records the system audio through a Core Audio tap (macOS 14.2+) and
   streams it to Python (`audio/mac_tap.py`). BlackHole only for older Macs. Updates swap the
   app bundle via a script. I (Claude) can't run Swift or macOS: Mac changes need Andrea's tests.
+- **Linux (experimental, since 0.7.34):** runs from the repository only, no installer/update. Loopback is
+  the PipeWire/PulseAudio monitor source (soundcard). Call detection parses `pactl list source-outputs`
+  (with `LC_ALL=C`), notifications use `notify-send --wait --action`, a lock file (`~/.verbalis/app.lock`,
+  `fcntl.flock`) stops a second app. The device hint in the UI says «experimentell». Never run on real
+  hardware by me (Claude) – Linux changes need Andrea's tests.
 - **soundcard on Windows** only opens devices whose mix format is float32 WAVEFORMATEXTENSIBLE (and
   its struct has wrong offsets). `audio/wasapi_fix.py` wraps its `_AudioClient.__init__`: on its assertion
   the stream is opened with an own packed float32 format and AUTOCONVERTPCM. Check this file when
@@ -102,7 +107,7 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
 - **Recording details** (0.7.19) live in `meta.json` (`title`, `project`, `participants`, `notes`); they
   survive the rewrite at the end of a recording (`pipeline.DETAIL_FIELDS`). A planned recording is a folder
   with only `meta.json` and `state: planned`; recording into it keeps the id.
-- **Call detection** (`audio/call_detect.py`, Windows): reads the microphone consent store in the registry
+- **Call detection** (`audio/call_detect.py`, Windows; Linux via `pactl`): reads the microphone consent store in the registry
   (which app uses the microphone now). Only known call apps count – dictation tools and Voicemeeter use the
   microphone constantly. It only suggests; recording always needs the consent checkbox. The notification
   (`notify.py`) is a notification-area balloon via ctypes – no extra package, works without an AppUserModelID.

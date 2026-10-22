@@ -133,7 +133,9 @@ code requirement (same certificate), checked in the release build with the real 
 - [ ] **GPU support** (CUDA) when an Nvidia GPU is available. **[quality]**
 - [ ] **Echo without headset** – reduce remote voices on the microphone track. **[quality]**
 - [ ] **Taskbar icon on Windows** – may still show the Python icon; set an AppUserModelID / window icon. **[ux]**
-- [ ] **Ubuntu test** – PipeWire monitor source, pywebview with GTK or Qt. **[ops]**
+- [ ] **Ubuntu test** (Linux experimental since 0.7.34) – PipeWire monitor source, pywebview with GTK or Qt,
+  clipboard and save dialog in WebKitGTK, call detection with Teams/Zoom/browser (`pactl`), notification click
+  (`notify-send`), second start refused. Then decide on an AppImage (+ auto-update). **[ops]**
 - [ ] **Call detection on macOS** – via the Swift helper (any call app using the microphone). **[ux]**
 - [ ] **Planned recordings from the Outlook calendar.** **[ux]**
 - [ ] **Intel Macs** – only Apple Silicon is built; add an Intel build if needed. **[ops]**

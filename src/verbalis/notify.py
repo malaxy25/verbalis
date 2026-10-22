@@ -1,4 +1,7 @@
-"""A Windows notification with a click action, without extra packages.
+"""A system notification with a click action, without extra packages.
+
+Windows: `TrayNotifier`. Linux (experimental): `LinuxNotifier` with `notify-send`.
+`notifier()` picks the right one.
 
 Uses a notification-area icon with an info balloon (Shell_NotifyIcon); Windows 10/11
 show it as a normal notification. A click on the notification or on the icon calls
@@ -10,6 +13,8 @@ notification from the notification centre. On other systems everything is a no-o
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -157,3 +162,62 @@ class TrayNotifier:
         except Exception:
             log.exception("Notification message %s failed", message)
         return self._user32.DefWindowProcW(hwnd, message, wparam, lparam)
+
+
+class LinuxNotifier:
+    """Linux (experimental): `notify-send --wait` with an «Öffnen» action (libnotify 0.7.10+, Ubuntu 22.04+).
+
+    notify-send waits until the notification is clicked or closed and prints the chosen action.
+    """
+
+    def __init__(self, icon: Path, on_click: Callable[[], None], popen: Callable = subprocess.Popen,
+                 which: Callable = shutil.which):
+        self._icon_path, self._on_click, self._popen = icon, on_click, popen
+        self._process = None
+        self._waiter: threading.Thread | None = None
+        self._lock = threading.Lock()
+        self.available = which("notify-send") is not None
+
+    def show(self, title: str, text: str) -> None:
+        if not self.available:
+            return
+        self.hide()
+        try:
+            process = self._popen(["notify-send", "--app-name=Verbalis", f"--icon={self._icon_path}", "--wait",
+                                   "--action=default=Öffnen", title, text],
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        except OSError:
+            log.exception("notify-send failed")
+            return
+        with self._lock:
+            self._process = process
+        self._waiter = threading.Thread(target=self._wait, args=(process,), name="notification", daemon=True)
+        self._waiter.start()
+
+    def _wait(self, process) -> None:
+        try:
+            action = (process.communicate()[0] or "").strip()
+        except Exception:
+            log.exception("Waiting for the notification failed")
+            return
+        with self._lock:
+            if self._process is process:
+                self._process = None
+        if action == "default":
+            self._on_click()
+
+    def hide(self) -> None:
+        with self._lock:
+            process, self._process = self._process, None
+        if process is not None and process.poll() is None:
+            process.terminate()
+
+    def close(self) -> None:
+        self.hide()
+
+
+def notifier(icon: Path, on_click: Callable[[], None]):
+    """The notifier for this system; `available` is False where there is none (e.g. macOS)."""
+    if sys.platform.startswith("linux"):
+        return LinuxNotifier(icon, on_click)
+    return TrayNotifier(icon, on_click)

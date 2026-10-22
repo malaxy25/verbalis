@@ -52,9 +52,18 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
-Ubuntu additionally needs PipeWire with `pipewire-pulse` (default on Ubuntu) and
-GTK or Qt for the window, e.g. `sudo apt install python3-gi gir1.2-webkit2-4.1`
-or `pip install pywebview[qt]`.
+## Linux (experimental)
+
+Runs from the repository only – there is no installer or automatic update for Linux.
+Not yet tested on real hardware; please report problems with «Problem melden».
+
+- **PipeWire** with `pipewire-pulse` (default on Ubuntu 22.04+) or PulseAudio. The system audio
+  comes from the speaker's «monitor» source.
+- **Window:** GTK or Qt, e.g. `sudo apt install python3-gi gir1.2-webkit2-4.1` (with a venv created
+  using `--system-site-packages`) or `pip install pywebview[qt]`.
+- **Call detection:** `pactl` (package `pulseaudio-utils`) lists the programs using the microphone.
+- **Notifications:** `notify-send` (package `libnotify-bin`, 0.7.10+ for the click action).
+- Start with `verbalis app`. A second start shows «Verbalis ist bereits geöffnet.»
 
 ## Mac
 

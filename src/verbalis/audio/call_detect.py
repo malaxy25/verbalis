@@ -1,4 +1,4 @@
-"""Recognise a call: a call app uses the microphone (Windows).
+"""Recognise a call: a call app uses the microphone (Windows, Linux).
 
 Windows notes in the registry which app uses the microphone right now – the same
 information that drives the microphone icon in the taskbar:
@@ -10,6 +10,9 @@ information that drives the microphone icon in the taskbar:
 An app uses the microphone while LastUsedTimeStart > 0 and LastUsedTimeStop == 0.
 Nothing about the call itself is read.
 
+Linux (experimental): PipeWire/PulseAudio list every program recording from a
+microphone as a «source output» (`pactl list source-outputs`); paused ones are «corked».
+
 Only known call apps count: dictation tools and audio mixers (e.g. Voicemeeter) use the
 microphone all the time and would suggest a recording constantly. Verbalis itself is
 never a call (its level meters open the microphone too).
@@ -17,8 +20,11 @@ never a call (its level meters open the microphone too).
 
 from __future__ import annotations
 
+import os
+import re
+import subprocess
 import sys
-from typing import Iterable
+from typing import Callable, Iterable
 
 KEY = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone"
 
@@ -30,6 +36,9 @@ CALL_APPS = {
     "slack": "Slack", "com.tinyspeck.slackdesktop": "Slack",
     "skype": "Skype", "discord": "Discord",
     "chrome": "Browser", "msedge": "Browser", "firefox": "Browser", "brave": "Browser", "opera": "Browser",
+    # Linux program names
+    "teams-for-linux": "Teams", "zoom.real": "Zoom", "discord.real": "Discord",
+    "chromium": "Browser", "chromium-browser": "Browser", "firefox-bin": "Browser", "msedge-beta": "Browser",
 }
 
 
@@ -84,10 +93,34 @@ def registry_entries() -> list[tuple[str, int, int]]:
     return entries
 
 
+def pulse_entries(run: Callable = subprocess.run) -> list[tuple[str, int, int]]:
+    """Programs recording from a microphone right now (Linux); empty on errors (e.g. no pactl).
+
+    Same shape as registry_entries(): (program name, 1, 0) for every source output that isn't paused.
+    """
+    try:
+        result = run(["pactl", "list", "source-outputs"], capture_output=True, text=True, timeout=5,
+                     check=False, env={**os.environ, "LC_ALL": "C"})
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    entries: list[tuple[str, int, int]] = []
+    # one block per source output, starting with an unindented «Source Output #12»
+    for block in re.split(r"^(?=\S)", result.stdout, flags=re.M):
+        if re.search(r"^\s*Corked:\s*yes", block, flags=re.M):
+            continue
+        program = re.search(r'application\.process\.binary = "([^"]*)"', block)
+        if program:
+            entries.append((program.group(1), 1, 0))
+    return entries
+
+
 def own_programs() -> list[str]:
     """Verbalis' own executables (also the Python behind a virtual environment)."""
     return [p for p in {sys.executable, getattr(sys, "_base_executable", "")} if p]
 
 
 def detect() -> list[str]:
-    return call_apps(registry_entries(), own_programs())
+    entries = pulse_entries() if sys.platform.startswith("linux") else registry_entries()
+    return call_apps(entries, own_programs())

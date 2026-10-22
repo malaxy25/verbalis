@@ -2353,6 +2353,9 @@ async function loadDevices() {
       notes.push("Für den Systemton (die anderen im Call) braucht dieser Mac macOS 14.2 oder neuer – oder ein virtuelles "
         + "Audiogerät wie BlackHole (kostenlos), hier gewählt. Anleitung im README.");
     }
+    if (g.platform === "linux") {
+      notes.push("Verbalis unter Linux ist experimentell. Falls etwas nicht klappt: Einstellungen → Log → «Problem melden».");
+    }
     hint.hidden = !notes.length;
     hint.textContent = notes.join(" ");
   } catch (e) {
