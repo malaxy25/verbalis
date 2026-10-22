@@ -131,7 +131,12 @@ code requirement (same certificate), checked in the release build with the real 
 - [ ] **Export** to Word/PDF (copy as Markdown exists). **[ux]**
 - [ ] **Import/export the correction list**, e.g. to share company terms within a team. **[tocco]**
 - [ ] **i18n** – UI in English as an option. **[ux]**
-- [ ] **GPU support** (CUDA) when an Nvidia GPU is available. **[quality]**
+- [ ] **GPU support.** Measured 22 Oct 2026: more CPU threads don't help (Intel Core Ultra: 4 threads
+  0.66× real time, 8/12 threads slower). **Apple M chips:** `mlx:` in `verbalis compare` (MLX, experimental) –
+  Andrea measures speed and WER on a real recording; if clearly faster at similar WER, build it into the app
+  (model conversion hosted on our Hugging Face account, mlx-whisper needs torch → bigger Mac app).
+  **Nvidia (CUDA):** CTranslate2 already supports it; cuBLAS + cuDNN (~700 MB) downloaded on demand. Test
+  device: Andrea's T500 (works, but only ~2–4× faster; RTX cards 15–40×). **[quality]**
 - [ ] **Echo without headset** – reduce remote voices on the microphone track. **[quality]**
 - [ ] **Taskbar icon on Windows** – may still show the Python icon; set an AppUserModelID / window icon. **[ux]**
 - [ ] **Ubuntu test** (Linux experimental since 0.7.34) – PipeWire monitor source, pywebview with GTK or Qt,

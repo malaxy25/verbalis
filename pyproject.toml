@@ -21,6 +21,8 @@ dependencies = [
 dev = ["pytest>=8", "pyyaml"]   # pyyaml: tests read the release workflow
 # Linux (experimental): the Qt window instead of the system's GTK packages
 qt = ["pywebview[qt]>=5"]
+# Mac with M chip (experimental, for measuring): transcription on the GPU with MLX – verbalis compare … mlx:MODEL
+mac-gpu = ["mlx-whisper>=0.4.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 # Only needed to build the Windows installer (see packaging/ and .github/workflows/release.yml)
 build = ["pyinstaller>=6.10", "pillow; sys_platform == 'darwin'"]  # Pillow converts the icon for macOS
 # Only needed to convert Hugging Face models (e.g. Swiss German fine-tunes)

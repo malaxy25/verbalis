@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-270 tests in 28 files.
+275 tests in 29 files.
 
 ### `test_app.py` (8)
 
@@ -263,6 +263,16 @@ Migration from «Mitschrift» (≤ 0.6) to Verbalis.
 - **Nothing to do without old folder**
 - **Existing new files are not overwritten**
 - **Missing custom folder falls back to default**
+
+### `test_mlx.py` (5)
+
+MLX on Apple M chips (experimental): model conversion names, times after the silence filter, missing package.
+
+- **Transformers names become mlx names**
+- **Dimensions from transformers config**
+- **Without mlx whisper a clear message**
+- **Only speech is transcribed and times point into the recording**
+- **Silence only sends nothing**
 
 ### `test_models.py` (21)
 

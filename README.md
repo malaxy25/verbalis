@@ -195,6 +195,16 @@ verbalis compare <folder> --reference testdata/reference_standard_german.txt
 whole recording) and writes `comparison.md` with load time, compute time,
 real-time factor and word error rate (WER), plus one transcript per model.
 
+**Mac with M chip – GPU (experimental, measuring only):** today Verbalis only uses the CPU of a Mac.
+`mlx:` before a model name transcribes on the GPU with MLX (no beam search, keywords go into the prompt);
+the model is converted once into `~/.verbalis/models/mlx/`:
+
+```bash
+pip install -e ".[mac-gpu]"
+verbalis compare <folder> --reference transcript --until 600 --name Andrea   --models gcoli/whisper-large-v3-turbo-swiss-german-mit mlx:gcoli/whisper-large-v3-turbo-swiss-german-mit
+verbalis compare <folder> --reference transcript --until 600 --name Andrea --beam 1   --models gcoli/whisper-large-v3-turbo-swiss-german-mit   # fair: also greedy on the CPU
+```
+
 Models are downloaded on first use, with progress in the app; the model list in
 the settings shows which ones are already on this computer. Flix only exists in
 Transformers format upstream, so a ready-converted copy is provided in

@@ -263,6 +263,7 @@ def cmd_compare(args) -> int:
     from .pipeline import header
     from .transcript import save
     from .transcription.faster import FasterWhisperTranscriber
+    from .transcription.mlx import PREFIX as MLX_PREFIX
     from .transcription.models import ModelError, slug
 
     folder = Path(args.folder)
@@ -279,14 +280,19 @@ def cmd_compare(args) -> int:
         print(f"\n=== {model} ===")
         t = time.monotonic()
         try:
-            tr = FasterWhisperTranscriber(model, device=args.device, keywords=args.keywords, beam_size=args.beam)
+            if model.startswith(MLX_PREFIX):   # Apple GPU (experimental): mlx:gcoli/…
+                from .transcription.mlx import MlxTranscriber
+
+                tr = MlxTranscriber(model[len(MLX_PREFIX):], keywords=args.keywords)
+            else:
+                tr = FasterWhisperTranscriber(model, device=args.device, keywords=args.keywords, beam_size=args.beam)
         except ModelError as e:
             print(e)
             rows.append(f"| {model} | – | – | – | – |{' – | – |' if per_track else ''} Fehler beim Laden |")
             continue
         load_time = time.monotonic() - t
         paragraphs, compute, duration = _transcribe_folder(folder, tr, names, args.until)
-        filename = f"comparison_{slug(model)}"
+        filename = f"comparison_{slug(model).replace(':', '-')}"
         save(folder, filename, paragraphs, f"Vergleich: {model}", header(folder, model, compute, duration))
         words = sum(len(p.text.split()) for p in paragraphs)
         wer = "–"
@@ -529,7 +535,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("compare", help="Mehrere Modelle auf derselben Aufnahme vergleichen")
     transcription_options(p)
-    p.add_argument("--models", nargs="+", default=[m for m, _ in RECOMMENDED], help="Zu vergleichende Modelle")
+    p.add_argument("--models", nargs="+", default=[m for m, _ in RECOMMENDED],
+                   help="Zu vergleichende Modelle; «mlx:» davor rechnet auf dem Grafikchip eines Macs mit M-Chip")
     p.add_argument("--reference", help="Referenz für die Fehlerquote: «transcript» (das in der App korrigierte "
                                         "Transkript der Aufnahme), eine transcript.json oder ein Text wie "
                                         "testdata/reference_standard_german.txt")

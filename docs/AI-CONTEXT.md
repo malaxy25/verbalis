@@ -77,6 +77,11 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   (with `LC_ALL=C`), notifications use `notify-send --wait --action`, a lock file (`~/.verbalis/app.lock`,
   `fcntl.flock`) stops a second app. The device hint in the UI says «experimentell». Never run on real
   hardware by me (Claude) – Linux changes need Andrea's tests.
+- **Apple GPU (experimental, measuring only):** `transcription/mlx.py` runs Whisper with mlx-whisper on
+  the M-chip GPU, selected in `verbalis compare` by the prefix `mlx:`. It converts the Transformers weights
+  itself (safetensors, no torch; follows mlx-examples convert.py) and uses Silero VAD from faster-whisper
+  like faster-whisper does (speech only, times mapped back). No beam search, no hotwords. Not in the app
+  until Andrea's measurement shows it is worth it. More CPU threads were measured and don't help.
 - **soundcard on Windows** only opens devices whose mix format is float32 WAVEFORMATEXTENSIBLE (and
   its struct has wrong offsets). `audio/wasapi_fix.py` wraps its `_AudioClient.__init__`: on its assertion
   the stream is opened with an own packed float32 format and AUTOCONVERTPCM. Check this file when
