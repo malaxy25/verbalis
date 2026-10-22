@@ -19,6 +19,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pyyaml"]   # pyyaml: tests read the release workflow
+# Linux (experimental): the Qt window instead of the system's GTK packages
+qt = ["pywebview[qt]>=5"]
 # Only needed to build the Windows installer (see packaging/ and .github/workflows/release.yml)
 build = ["pyinstaller>=6.10", "pillow; sys_platform == 'darwin'"]  # Pillow converts the icon for macOS
 # Only needed to convert Hugging Face models (e.g. Swiss German fine-tunes)

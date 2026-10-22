@@ -65,6 +65,17 @@ Not yet tested on real hardware; please report problems with «Problem melden».
 - **Notifications:** `notify-send` (package `libnotify-bin`, 0.7.10+ for the click action).
 - Start with `verbalis app`. A second start shows «Verbalis ist bereits geöffnet.»
 
+Install without cloning the repository, directly from GitHub with [pipx](https://pipx.pypa.io)
+(`sudo apt install pipx`); replace the version with the latest release (0.7.34 or newer):
+
+```bash
+pipx install "verbalis[qt] @ git+https://github.com/malaxy25/verbalis.git@v0.7.34"
+verbalis app
+```
+
+`[qt]` brings the Qt window along (no system GTK packages needed). Update: the same command with the
+new version and `--force`. The app shows when a new version is out, but can't update itself on Linux.
+
 ## Mac
 
 For Macs with Apple Silicon (M1 or newer). Tested on real Macs since 0.7.24.
