@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-275 tests in 29 files.
+284 tests in 30 files.
 
 ### `test_app.py` (8)
 
@@ -137,6 +137,20 @@ Correction list: unique targets, variants, applying rules, suggestions from edit
 - **Ignores identical words**
 - **Suggestions from edit**
 - **No suggestions for rephrasing and insertions**
+
+### `test_cuda.py` (9)
+
+Nvidia GPU (experimental): choosing the device, CPU fallback, downloading cuBLAS/cuDNN from PyPI.
+
+- **The wheel for this system**
+- **Libraries in loading order and what is missing**
+- **Device choice**
+- **Gpu used when ready**
+- **Too little graphics memory falls back to the cpu** – A GPU that can't hold the model (e.g. T500 with 2 GB) must not stop the transcription.
+- **Gpu error while transcribing repeats on the cpu**
+- **Device cuda asked explicitly does not fall back**
+- **Install keeps only the libraries**
+- **Install with a wrong checksum installs nothing**
 
 ### `test_details.py` (5)
 

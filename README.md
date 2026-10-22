@@ -195,6 +195,18 @@ verbalis compare <folder> --reference testdata/reference_standard_german.txt
 whole recording) and writes `comparison.md` with load time, compute time,
 real-time factor and word error rate (WER), plus one transcript per model.
 
+**Nvidia graphics card (experimental, Windows and Linux):** Verbalis transcribes on the GPU when
+NVIDIA's cuBLAS and cuDNN libraries are there (about 1.3 GB download, 1.7 GB on disk, in
+`~/.verbalis/cuda`); otherwise, and after any GPU error, on the CPU:
+
+```bash
+verbalis gpu              # status: graphics card, libraries, CPU or GPU
+verbalis gpu --install    # once: download cuBLAS 12.8 + cuDNN 9.10 from PyPI (SHA-256 checked)
+```
+
+With the installed app: `%LOCALAPPDATA%\Programs\Verbaliserbalis-cli.exe gpu --install`. The app
+then uses the GPU too (log: «runs on the Nvidia GPU»). `--device cpu` forces the CPU.
+
 **Mac with M chip – GPU (experimental, measuring only):** today Verbalis only uses the CPU of a Mac.
 `mlx:` before a model name transcribes on the GPU with MLX (no beam search, keywords go into the prompt);
 the model is converted once into `~/.verbalis/models/mlx/`:

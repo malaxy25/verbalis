@@ -126,6 +126,7 @@ class MlxTranscriber:
         self._mlx = mlx_whisper
         self.name = PREFIX + model
         self.beam_size = 1
+        self.device = "mlx"
         self.keywords = keywords or None
         self.prompt: str | None = None
         self._path = str(convert(model))

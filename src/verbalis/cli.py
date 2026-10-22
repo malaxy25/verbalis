@@ -6,6 +6,7 @@
     verbalis transcribe FOLDER [--model M] [--name Andrea]
     verbalis compare FOLDER [--models A B C] [--until 180] [--reference FILE]
     verbalis models
+    verbalis gpu [--install]
     verbalis convert-model HF_ID
 """
 
@@ -247,6 +248,7 @@ def cmd_transcribe(args) -> int:
     except ModelError as e:
         print(e)
         return 1
+    print(f"Rechnet auf: {_where(tr)}")
 
     names = {"me": args.name, "others": args.others}
     paragraphs, compute, duration = _transcribe_folder(folder, tr, names, args.until)
@@ -256,6 +258,10 @@ def cmd_transcribe(args) -> int:
     md = save(folder, "transcript", paragraphs, f"Transkript {folder.name}", h, tracks=names)
     print(f"\nGespeichert: {md}  ({compute / max(duration, 1e-9):.2f}× Echtzeit)")
     return 0
+
+
+def _where(tr) -> str:
+    return {"cuda": "Nvidia-Grafikkarte", "mlx": "Apple-Grafikchip (MLX)"}.get(getattr(tr, "device", "cpu"), "CPU")
 
 
 def cmd_compare(args) -> int:
@@ -291,6 +297,7 @@ def cmd_compare(args) -> int:
             rows.append(f"| {model} | – | – | – | – |{' – | – |' if per_track else ''} Fehler beim Laden |")
             continue
         load_time = time.monotonic() - t
+        print(f"Rechnet auf: {_where(tr)}")
         paragraphs, compute, duration = _transcribe_folder(folder, tr, names, args.until)
         filename = f"comparison_{slug(model).replace(':', '-')}"
         save(folder, filename, paragraphs, f"Vergleich: {model}", header(folder, model, compute, duration))
@@ -340,6 +347,39 @@ def cmd_compare(args) -> int:
         encoding="utf-8",
     )
     print(f"\nÜbersicht: {report}")
+    return 0
+
+
+def cmd_gpu(args) -> int:
+    from .transcription import cuda
+    from .transcription.models import ModelError
+
+    if args.install:
+        print(f"Lade cuBLAS und cuDNN von NVIDIA (PyPI, ca. 1.3 GB) nach {cuda.cuda_dir()} …")
+        shown: dict[str, int] = {}
+
+        def progress(package: str, fraction: float) -> None:
+            step = int(fraction * 10)
+            if shown.get(package) != step:
+                shown[package] = step
+                print(f"  {package}: {min(step * 10, 100)} %", flush=True)
+
+        try:
+            cuda.install(progress)
+        except (ModelError, OSError) as e:
+            print(f"Fehler: {e}")
+            return 1
+        print("Fertig.")
+    info = cuda.status()
+    print(f"Nvidia-Grafikkarten: {info['gpus']}")
+    print(f"Bibliotheken: {len(info['libraries'])} gefunden" + (f", es fehlen: {', '.join(info['missing'])}"
+                                                               if info["missing"] else ""))
+    for path in info["libraries"]:
+        print(f"  {path}")
+    if info["problem"]:
+        print(f"Verbalis rechnet auf der CPU: {info['problem']}")
+        return 1
+    print("Bereit: Verbalis transkribiert auf der Nvidia-Grafikkarte (bei einem Fehler automatisch auf der CPU).")
     return 0
 
 
@@ -522,7 +562,8 @@ def main(argv: list[str] | None = None) -> int:
         q.add_argument("folder", help="Aufnahmeordner mit me- und others-Spur")
         q.add_argument("--name", default="Ich", help="Name für die Mikrofonspur (Standard: Ich)")
         q.add_argument("--others", default="Gegenüber", help="Name für die Systemaudio-Spur")
-        q.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="Rechnen auf CPU oder Nvidia-GPU")
+        q.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"],
+                       help="auto = Nvidia-Grafikkarte, wenn bereit (verbalis gpu), sonst CPU")
         q.add_argument("--keywords", help="Namen/Fachbegriffe, z.B. \"tocco, Höngg\"")
         q.add_argument("--until", type=float, help="Nur die ersten N Sekunden transkribieren")
         q.add_argument("--beam", type=int, default=5, help="Suchbreite: 5 = genau (Standard), 1 = schneller")
@@ -557,6 +598,10 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_speakers_test)
 
     sub.add_parser("models", help="Empfohlene und konvertierte Modelle anzeigen").set_defaults(func=cmd_models)
+
+    p = sub.add_parser("gpu", help="Nvidia-Grafikkarte prüfen (experimentell); --install lädt die Bibliotheken")
+    p.add_argument("--install", action="store_true", help="cuBLAS und cuDNN einmalig laden (ca. 1.3 GB)")
+    p.set_defaults(func=cmd_gpu)
 
     sub.add_parser("selftest", help=argparse.SUPPRESS).set_defaults(func=cmd_selftest)
 

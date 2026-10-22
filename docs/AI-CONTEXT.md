@@ -77,6 +77,12 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   (with `LC_ALL=C`), notifications use `notify-send --wait --action`, a lock file (`~/.verbalis/app.lock`,
   `fcntl.flock`) stops a second app. The device hint in the UI says «experimentell». Never run on real
   hardware by me (Claude) – Linux changes need Andrea's tests.
+- **Nvidia GPU (experimental):** `transcription/cuda.py`. CTranslate2's wheels support CUDA but need
+  cuBLAS 12 + cuDNN 9, too big for the installer: `verbalis gpu --install` downloads NVIDIA's wheels from
+  PyPI (pinned, SHA-256 from PyPI) and keeps only the DLLs/.so files in `~/.verbalis/cuda` (pip-installed
+  `nvidia-*` packages are found too). `prepare()` preloads them (ctypes, retry rounds for dependencies) so
+  CTranslate2's lookup by name finds them. Device "auto" is the default everywhere; compute type
+  int8_float16 (small GPUs); load or run errors fall back to the CPU (`--device cuda` doesn't). No UI yet.
 - **Apple GPU (experimental, measuring only):** `transcription/mlx.py` runs Whisper with mlx-whisper on
   the M-chip GPU, selected in `verbalis compare` by the prefix `mlx:`. It converts the Transformers weights
   itself (safetensors, no torch; follows mlx-examples convert.py) and uses Silero VAD from faster-whisper

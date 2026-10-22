@@ -10,10 +10,13 @@ Important settings:
 - word_timestamps: needed to split paragraphs at sentence boundaries (reading flow).
 - prompt: the last sentences of the previous piece when a track is transcribed in
   pieces, so names and spelling stay consistent across the cuts.
+- device "auto": an Nvidia GPU when cuda.prepare() says it is ready (experimental), otherwise
+  the CPU. Any GPU error (e.g. too little graphics memory) falls back to the CPU.
 """
 
 from __future__ import annotations
 
+import logging
 from math import gcd
 from pathlib import Path
 from typing import Callable
@@ -22,6 +25,8 @@ import numpy as np
 
 from .base import Segment
 from .models import ModelError, resolve
+
+log = logging.getLogger(__name__)
 
 WHISPER_SAMPLERATE = 16_000
 
@@ -65,28 +70,46 @@ class FasterWhisperTranscriber:
     def __init__(
         self,
         model: str = "large-v3-turbo",
-        device: str = "cpu",
+        device: str = "auto",
         compute_type: str | None = None,
         beam_size: int = 5,
         keywords: str | None = None,
     ):
-        from faster_whisper import WhisperModel
+        from . import cuda
 
         self.name = model
         self.beam_size = beam_size
         self.keywords = keywords or None
         self.prompt: str | None = None
-        compute_type = compute_type or ("int8" if device == "cpu" else "float16")
+        self._auto = device == "auto"
+        self.device, chosen_type = cuda.choose(device)
         try:
-            self._model = WhisperModel(resolve(model), device=device, compute_type=compute_type)
+            self._model = self._load(self.device, compute_type or chosen_type)
+        except ModelError:
+            if not (self._auto and self.device == "cuda"):
+                raise
+            log.warning("Loading %s on the Nvidia GPU failed – using the CPU", model, exc_info=True)
+            self._to_cpu()
+        log.info("Model %s runs on %s", model, "the Nvidia GPU" if self.device == "cuda" else "the CPU")
+
+    def _load(self, device: str, compute_type: str):
+        from faster_whisper import WhisperModel
+
+        try:
+            return WhisperModel(resolve(self.name), device=device, compute_type=compute_type)
         except (RuntimeError, ValueError, OSError) as e:
             hint = ""
-            if "/" in model and "model.bin" in str(e):
+            if "/" in self.name and "model.bin" in str(e):
                 hint = (
                     f"\nDas Repo ist vermutlich kein CTranslate2-Modell. Einmalig konvertieren mit:\n"
-                    f"  verbalis convert-model {model}"
+                    f"  verbalis convert-model {self.name}"
                 )
-            raise ModelError(f"Modell '{model}' konnte nicht geladen werden: {e}{hint}") from e
+            raise ModelError(f"Modell '{self.name}' konnte nicht geladen werden: {e}{hint}") from e
+
+    def _to_cpu(self) -> None:
+        self._model = None            # free the graphics memory first
+        self._model = self._load("cpu", "int8")
+        self.device = "cpu"
 
     def transcribe(
         self,
@@ -98,6 +121,16 @@ class FasterWhisperTranscriber:
         duration = len(audio) / WHISPER_SAMPLERATE
         if duration == 0:
             return []
+        try:
+            return self._transcribe(audio, language, progress, duration)
+        except RuntimeError:     # CUDA errors (out of memory, a missing library part) show up here
+            if not (self._auto and self.device == "cuda"):
+                raise
+            log.warning("Transcribing on the Nvidia GPU failed – again on the CPU", exc_info=True)
+            self._to_cpu()
+            return self._transcribe(audio, language, progress, duration)
+
+    def _transcribe(self, audio, language, progress, duration) -> list[Segment]:
         segments, _info = self._model.transcribe(
             audio,
             language=language,

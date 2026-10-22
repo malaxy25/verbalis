@@ -135,8 +135,9 @@ code requirement (same certificate), checked in the release build with the real 
   0.66× real time, 8/12 threads slower). **Apple M chips:** `mlx:` in `verbalis compare` (MLX, experimental) –
   Andrea measures speed and WER on a real recording; if clearly faster at similar WER, build it into the app
   (model conversion hosted on our Hugging Face account, mlx-whisper needs torch → bigger Mac app).
-  **Nvidia (CUDA):** CTranslate2 already supports it; cuBLAS + cuDNN (~700 MB) downloaded on demand. Test
-  device: Andrea's T500 (works, but only ~2–4× faster; RTX cards 15–40×). **[quality]**
+  **Nvidia (CUDA):** built (experimental): `verbalis gpu --install` downloads cuBLAS + cuDNN (1.3 GB), then
+  «auto» uses the GPU with CPU fallback. Test device: Andrea's T500 (expect only ~2–4× faster; RTX 15–40×).
+  If it works: a button in the settings instead of the command line, diarization on the GPU. **[quality]**
 - [ ] **Echo without headset** – reduce remote voices on the microphone track. **[quality]**
 - [ ] **Taskbar icon on Windows** – may still show the Python icon; set an AppUserModelID / window icon. **[ux]**
 - [ ] **Ubuntu test** (Linux experimental since 0.7.34) – PipeWire monitor source, pywebview with GTK or Qt,
