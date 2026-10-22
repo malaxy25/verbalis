@@ -204,7 +204,7 @@ verbalis gpu              # status: graphics card, libraries, CPU or GPU
 verbalis gpu --install    # once: download cuBLAS 12.8 + cuDNN 9.10 from PyPI (SHA-256 checked)
 ```
 
-With the installed app: `%LOCALAPPDATA%\Programs\Verbaliserbalis-cli.exe gpu --install`. The app
+With the installed app: `%LOCALAPPDATA%\Programs\Verbalis\verbalis-cli.exe gpu --install`. The app
 then uses the GPU too (log: «runs on the Nvidia GPU»). `--device cpu` forces the CPU.
 
 **Mac with M chip – GPU (experimental, measuring only):** today Verbalis only uses the CPU of a Mac.
