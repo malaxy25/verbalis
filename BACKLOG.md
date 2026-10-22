@@ -6,7 +6,8 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## 0.7.34 – next
 
-**Status 20 Oct 2026:** 0.7.33 released (speaker box: the name field is the only list of
+**Status 22 Oct 2026:** 0.7.34 released (Linux experimental: call detection via pactl, notify-send
+notifications, single instance, pipx install; macOS: no crash on quitting with an open audio device). 0.7.33 released (speaker box: the name field is the only list of
 participants; the track named in «Anzahl Personen auf dieser Spur»). 0.7.32 released (split paragraphs with Enter, Shift+Enter line breaks, word
 timestamps kept, time left during diarization, participants to pick in the speaker box, wider fields,
 monthly search for new Swiss German models). Not measured: `gcoli/whisper-large-v3-swiss-german-mit` –

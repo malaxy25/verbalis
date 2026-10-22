@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.34 – 2026-10-22
+- **Linux (experimental):** Verbalis runs from the repository or with `pipx install` straight from GitHub
+  (README «Linux (experimental)»); there is no installer and no automatic update yet. The app says so next
+  to the audio devices. New on Linux: call detection (programs using the microphone, via `pactl`),
+  notifications with a click that opens Verbalis (`notify-send`), and a second start is refused like on
+  Windows. Optional Qt window: `verbalis[qt]`. Not tested on real hardware yet – please report problems
+  with «Problem melden».
+- **Fix (macOS):** Verbalis could crash on quitting while an audio device was still open (e.g. after waking
+  the Mac). Everything was saved already; now the app ends cleanly.
+
 ## 0.7.33 – 2026-10-20
 - **Speaker box: one list of participants.** In the app the name field already lists the participants of
   the track, so «Teilnehmende ▾» from 0.7.32 was a second list – it is gone. A name Verbalis gave
