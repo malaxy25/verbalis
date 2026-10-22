@@ -67,3 +67,16 @@ def test_taskbar_identity_only_for_development_version_on_windows():
     assert set_taskbar_identity("win32", frozen=True, shell32=Shell32()) is False   # Verbalis.exe has its own
     assert set_taskbar_identity("darwin", frozen=False, shell32=Shell32()) is False
     assert len(calls) == 1
+
+
+def test_app_ends_without_python_clean_up_only_while_audio_is_open_on_mac():
+    """Regression 0.7.33: on the Mac the app sometimes crashed on quitting (after waking up) – a CoreAudio
+    thread handed audio to Python while Python was shutting down."""
+    from verbalis.app import audio_still_open
+
+    meter = SimpleNamespace(name="track-me", is_alive=lambda: True)
+    ended = SimpleNamespace(name="track-others", is_alive=lambda: False)
+    other = SimpleNamespace(name="level-monitor", is_alive=lambda: True)
+    assert audio_still_open("darwin", [meter])
+    assert not audio_still_open("darwin", [ended, other])
+    assert not audio_still_open("win32", [meter])

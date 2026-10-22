@@ -548,6 +548,16 @@ def test_levels_before_recording_open_and_close_the_devices(monkeypatch):
     s.stop_recording()
 
 
+def test_shutdown_closes_the_level_meters_right_away():
+    """Regression 0.7.33: quitting with the level meters open left the devices to the watchdog thread;
+    on the Mac a device that still delivered audio while Python ended crashed the app."""
+    FakeMonitor.opened = []
+    s = make_service(monitor_factory=FakeMonitor)
+    s.preview_levels("Mic", "")
+    s.shutdown()
+    assert FakeMonitor.opened[0].closed and s._monitor is None
+
+
 def test_level_preview_with_broken_device_does_not_flood_the_log(caplog):
     calls = []
 

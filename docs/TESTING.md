@@ -70,9 +70,9 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-262 tests in 27 files.
+264 tests in 27 files.
 
-### `test_app.py` (7)
+### `test_app.py` (8)
 
 Window size and position, log output without console, file dialog filter.
 
@@ -83,6 +83,7 @@ Window size and position, log output without console, file dialog filter.
 - **Log replacement handles progress bars**
 - **Zip filter is valid for pywebview** – Regression 0.7.3: «ZIP-Datei (*.zip)» was rejected by the save dialog.
 - **Taskbar identity only for development version on windows** – Regression: the development version showed the Python logo in the taskbar.
+- **App ends without python clean up only while audio is open on mac** – Regression 0.7.33: on the Mac the app sometimes crashed on quitting (after waking up) – a CoreAudio
 
 ### `test_audio.py` (10)
 
@@ -325,7 +326,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_service.py` (41)
+### `test_service.py` (42)
 
 App flow without a window: recording → queue → transcript.
 
@@ -358,6 +359,7 @@ App flow without a window: recording → queue → transcript.
 - **Model rollback from settings**
 - **Recordings in a synced folder are flagged**
 - **Levels before recording open and close the devices** – 0.7.17: level meters while choosing devices – without recording, closed again when not needed.
+- **Shutdown closes the level meters right away** – Regression 0.7.33: quitting with the level meters open left the devices to the watchdog thread;
 - **Level preview with broken device does not flood the log**
 - **Transcription waits for the user by default** – 0.7.18: after a meeting the number of people is entered first – transcribing starts by hand.
 - **Audio clip mixes both tracks**

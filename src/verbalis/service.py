@@ -1975,6 +1975,8 @@ class Service:
         wait_s: how long to wait for the background thread to end (tests).
         """
         self._stopping.set()
+        with self._lock:   # level meters: close the devices now, not later in the watchdog thread
+            self._close_monitor()
         if self._rec is not None:
             rec, info = self._rec, self._rec_info
             self._rec, self._rec_info = None, {}

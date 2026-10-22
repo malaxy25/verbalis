@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import logging.handlers
+import os
 import sys
 import threading
 from pathlib import Path
@@ -493,3 +494,20 @@ def main() -> None:
         log.exception("Start failed")
         _notify(f"Verbalis konnte nicht gestartet werden.\n\nDetails stehen im Log:\n{logs.log_path()}")
     log.info("Verbalis closed")
+    if audio_still_open():
+        logging.shutdown()
+        os._exit(0)
+
+
+def audio_still_open(platform: str = sys.platform, threads=None) -> bool:
+    """True on macOS while an audio device may still be open when the app ends.
+
+    soundcard hands every audio block to Python from a CoreAudio thread. If a
+    device still delivers while Python shuts down, the app crashes on quitting
+    (0.7.33, after waking the Mac). Everything is saved and logged by then, so
+    the app may end without Python's clean-up.
+    """
+    if platform != "darwin":
+        return False
+    threads = threading.enumerate() if threads is None else threads
+    return any(t.name.startswith("track-") and t.is_alive() for t in threads)
