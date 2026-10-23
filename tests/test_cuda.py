@@ -129,7 +129,7 @@ def _pypi(wheels: dict, wrong_sum: bool = False):
 @pytest.fixture
 def pypi_wheels(monkeypatch, tmp_path):
     monkeypatch.setenv("VERBALIS_HOME", str(tmp_path))
-    monkeypatch.setattr(cuda, "wheel_matches", lambda filename: True)
+    monkeypatch.setattr(cuda, "wheel_matches", lambda filename: True)   # the fake files have no platform tag
     return {
         "nvidia-cublas-cu12": _wheel({f"nvidia/cublas/{FOLDER}/{LIBS[0]}": b"lt", f"nvidia/cublas/{FOLDER}/{LIBS[1]}": b"b",
                                       "nvidia/cublas/include/cublas.h": b"header"}),

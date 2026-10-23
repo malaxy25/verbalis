@@ -127,6 +127,11 @@ class Service:
         self.call_notifier = None         # set by the app: shows a Windows notification (show/hide)
         self._diagnosis: dict | None = None   # the audio test in steps: {"running", "steps": [...]}
         self._network: list[dict] | None = None
+        # experimental tests in the diagnosis: a background task (install or speed test) and the last results
+        self._accel: dict = {"task": None, "phase": "", "progress": None, "error": None}
+        self._speed_result: dict | None = None
+        self._notify_test: dict | None = None
+        self._calls_test: dict | None = None
 
         self._rec = None
         self._rec_info: dict = {}
@@ -173,6 +178,12 @@ class Service:
             threading.Thread(target=self._check_updates_safely, name="update-check", daemon=True).start()
 
     # ------------------------------------------------------------ default building blocks
+
+    @staticmethod
+    def _speed_test(model, audio, accelerated, phase):
+        from . import acceleration
+
+        return acceleration.speed_test(model, audio, accelerated, phase=phase)
 
     @staticmethod
     def _default_recorder(microphone, loopback, folder):
@@ -588,6 +599,127 @@ class Service:
             with self._lock:
                 self._diagnosis["running"] = False
 
+    # ------------------------------------------------------------ experimental tests (diagnosis)
+
+    def acceleration_info(self) -> dict:
+        """Graphics chip status plus the running task and the last test results – polled by the UI."""
+        from . import acceleration
+
+        try:
+            status = acceleration.info()
+        except Exception as e:
+            log.exception("Checking the graphics chip failed")
+            status = {"kind": None, "ready": False, "problem": str(e), "can_install": False, "size": ""}
+        with self._lock:
+            return {**status, **json.loads(json.dumps(self._accel)),
+                    "speed": acceleration.result_lines(self._speed_result) if self._speed_result else None,
+                    "notification": dict(self._notify_test) if self._notify_test else None,
+                    "calls": dict(self._calls_test) if self._calls_test else None}
+
+    def _start_accel_task(self, name: str, work: Callable[[], None]) -> None:
+        with self._lock:
+            if self._accel["task"]:
+                raise RuntimeError("Ein Test läuft schon.")
+            self._accel = {"task": name, "phase": "", "progress": None, "error": None}
+
+        def run() -> None:
+            try:
+                work()
+            except Exception as e:
+                log.exception("%s failed", name)
+                with self._lock:
+                    self._accel["error"] = str(e) or type(e).__name__
+            finally:
+                with self._lock:
+                    self._accel["task"] = None
+                    self._accel["progress"] = None
+
+        threading.Thread(target=run, name=name, daemon=True).start()
+
+    def _accel_phase(self, text: str, progress: float | None = None) -> None:
+        with self._lock:
+            self._accel["phase"], self._accel["progress"] = text, progress
+
+    def start_acceleration_install(self) -> None:
+        """Load the Nvidia libraries or MLX (one time, in the background)."""
+        from . import acceleration
+
+        def work() -> None:
+            acceleration.install(lambda package, f: self._accel_phase(f"{package} wird geladen …", f))
+            self._accel_phase("Fertig geladen.")
+            log.info("Graphics chip add-on installed: %s", acceleration.info())
+
+        self._start_accel_task("install", work)
+
+    def start_speed_test(self) -> None:
+        """Transcribe 2 minutes of the newest recording on the CPU and on the graphics chip."""
+        from . import acceleration
+
+        with self._lock:
+            if self._rec is not None:
+                raise RuntimeError("Während einer Aufnahme nicht möglich.")
+            if self._job is not None:
+                raise RuntimeError("Bitte warten, bis die laufende Transkription fertig ist – sie würde die "
+                                   "Messung verfälschen.")
+        audio = acceleration.newest_audio(self._s.recordings)
+        if audio is None:
+            raise RuntimeError("Keine Aufnahme mit Audio gefunden – zuerst eine kurze Probeaufnahme machen.")
+        status = acceleration.info()
+        accelerated = {"nvidia": "cuda", "mlx": "mlx"}.get(status["kind"]) if status["ready"] else None
+        model = self._s.model
+
+        def work() -> None:
+            result = self._speed_test(model, audio, accelerated, self._accel_phase)
+            with self._lock:
+                self._speed_result = result
+            log.info("Speed test (%s, %s): %s", model, audio.parent.name, result)
+            self._accel_phase("Fertig." if accelerated else
+                              "Fertig – nur CPU gemessen: " + (status["problem"] or "keine Grafikkarte bereit."))
+
+        self._start_accel_task("speed-test", work)
+
+    def test_notification(self) -> dict:
+        """Show a test notification; a click on it is noted (notification_clicked)."""
+        if self.call_notifier is None:
+            result = {"ok": False, "detail": "Auf diesem System zeigt Verbalis (noch) keine Meldungen."}
+        else:
+            self.call_notifier.show("Verbalis – Test-Meldung", "Klicken, um Verbalis nach vorne zu holen.")
+            result = {"ok": True, "detail": "Meldung gezeigt – bitte darauf klicken.", "clicked": False}
+        with self._lock:
+            self._notify_test = result
+        log.info("Notification test: %s", result)
+        return result
+
+    def notification_clicked(self) -> None:
+        with self._lock:
+            test = self._notify_test
+            if test and test.get("ok") and not test.get("clicked"):
+                test.update(clicked=True, detail="Meldung gezeigt und angeklickt – Verbalis kam nach vorne.")
+                log.info("Notification test: clicked")
+
+    def check_calls(self) -> dict:
+        """Which programs use the microphone right now, and which of them count as a call (program names only)."""
+        from .audio import call_detect
+
+        if sys.platform == "win32":
+            entries = call_detect.registry_entries()
+        elif sys.platform.startswith("linux"):
+            entries = call_detect.pulse_entries()
+        else:
+            entries = None
+        if entries is None:
+            result = {"ok": False, "detail": "Anruf-Erkennung gibt es auf diesem System noch nicht.", "programs": []}
+        else:
+            programs = sorted({call_detect._program(name) for name, start, stop in entries if start and not stop})
+            calls = call_detect.call_apps(entries, call_detect.own_programs())
+            result = {"ok": bool(calls), "programs": programs, "calls": calls,
+                      "detail": (f"Call erkannt: {', '.join(calls)}" if calls else "Kein Call-Programm am Mikrofon")
+                      + (f" – am Mikrofon: {', '.join(programs)}" if programs else " – kein Programm am Mikrofon")}
+        with self._lock:
+            self._calls_test = result
+        log.info("Call detection check: %s", result)
+        return result
+
     def diagnosis(self) -> dict | None:
         with self._lock:
             return json.loads(json.dumps(self._diagnosis)) if self._diagnosis else None
@@ -608,7 +740,29 @@ class Service:
                     lines.append("    " + _result_text(r))
             if diagnosis.get("error"):
                 lines.append(f"  Fehler: {diagnosis['error']}")
+        lines += self._experimental_report()
         return "\n".join(lines) + "\n"
+
+    def _experimental_report(self) -> list[str]:
+        from . import acceleration
+
+        try:
+            status = acceleration.info()
+            chip = "bereit" if status["ready"] else status["problem"]
+        except Exception as e:
+            chip = f"Fehler: {e}"
+        with self._lock:
+            speed, notify, calls, task = self._speed_result, self._notify_test, self._calls_test, dict(self._accel)
+        lines = ["", "Experimentell:", f"  Grafikchip: {chip}"]
+        if task.get("error"):
+            lines.append(f"  Letzter Test: FEHLER – {task['error']}")
+        if speed:
+            lines += [f"  Tempo ({self._s.model}): {line}" for line in acceleration.result_lines(speed)]
+        if notify:
+            lines.append(f"  Meldung: {notify['detail']}")
+        if calls:
+            lines.append(f"  Anruf-Erkennung: {calls['detail']}")
+        return lines
 
     # ------------------------------------------------------------ «Problem melden»
 

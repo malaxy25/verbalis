@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.36 – 2026-10-23
+- **Experimental tests in Einstellungen → Diagnose**, so new systems can be tested without the command
+  line; the results go into «Diagnose kopieren» and «Problem melden» (numbers only, never text):
+  - **Graphics chip status** and a button to load the add-on once: the Nvidia libraries (1.3 GB,
+    Windows/Linux) or **MLX for Macs with M chip (90 MB)** – downloaded from PyPI and checked, so the
+    installers stay small.
+  - **«Geschwindigkeit messen»:** transcribes 2 minutes of the newest recording on the CPU and on the
+    graphics chip and shows the time and how far the texts agree.
+  - **«Meldung testen»** (also notes when the notification is clicked) and **«Anruf-Erkennung prüfen»**
+    (which programs use the microphone right now).
+- With the Nvidia libraries loaded, the app transcribes on the graphics card (fall-back to the CPU on any
+  error). On the Mac, MLX is only measured for now – the app keeps transcribing on the CPU.
+
 ## 0.7.35 – 2026-10-23
 - **Fix: a recording no longer ends when an audio device disappears.** A headset switched off or
   unplugged, or a Bluetooth headset leaving hands-free mode at the end of a Teams call, ended the

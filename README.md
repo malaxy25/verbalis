@@ -207,6 +207,11 @@ verbalis gpu --install    # once: download cuBLAS 12.8 + cuDNN 9.10 from PyPI (S
 With the installed app: `%LOCALAPPDATA%\Programs\Verbalis\verbalis-cli.exe gpu --install`. The app
 then uses the GPU too (log: «runs on the Nvidia GPU»). `--device cpu` forces the CPU.
 
+**In the app:** Einstellungen → Diagnose → «Experimentell: Tempo und neue Systeme» shows the graphics
+chip, loads the Nvidia libraries or MLX (Mac, about 90 MB into `~/.verbalis/mlx`) with one button, and
+measures the speed on 2 minutes of the newest recording (CPU against graphics chip). «Meldung testen» and
+«Anruf-Erkennung prüfen» help on Linux. All results go into «Diagnose kopieren» / «Problem melden».
+
 **Mac with M chip – GPU (experimental, measuring only):** today Verbalis only uses the CPU of a Mac.
 `mlx:` before a model name transcribes on the GPU with MLX (no beam search, keywords go into the prompt);
 the model is converted once into `~/.verbalis/models/mlx/`:

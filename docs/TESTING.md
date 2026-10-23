@@ -70,7 +70,21 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-288 tests in 30 files.
+297 tests in 31 files.
+
+### `test_acceleration.py` (9)
+
+Experimental tests in the diagnosis: speed test, MLX wheels, notification and call-detection checks.
+
+- **Mac wheel picks the binary for this macos**
+- **Speed test uses the newest recording with audio**
+- **Speed test compares cpu and graphics chip**
+- **Speed test says when the gpu fell back to the cpu**
+- **Speed test in the service reports numbers only**
+- **Speed test refused while transcribing**
+- **Failed install is shown**
+- **Test notification and its click**
+- **Call check lists program names only**
 
 ### `test_app.py` (8)
 

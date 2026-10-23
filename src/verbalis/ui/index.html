@@ -376,6 +376,9 @@
   .diag-result { font-family: var(--font-mono); font-size: 13px; overflow-wrap: anywhere; }
   .diag-result.good { color: var(--ink); }
   .diag-result.bad { color: var(--red); }
+  .diag-experimental { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .diag-experimental h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .diag-experimental .diag-result:empty { display: none; }
   .diag-info { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
   .diag-info dt { color: var(--muted); }
   .diag-info dd { margin: 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
@@ -884,6 +887,22 @@
           Schritt wie bei einer Aufnahme. «Diagnose kopieren» enthält Gerätenamen, aber keine Gesprächsinhalte.</p>
         <ol class="diag-steps" id="diag-steps"></ol>
         <ul class="diag-network" id="diag-network"></ul>
+        <section class="diag-experimental" aria-labelledby="diag-exp-title">
+          <h3 id="diag-exp-title">Experimentell: Tempo und neue Systeme</h3>
+          <p class="diag-lead">Zum Testen von Grafikkarte, Mac-Grafikchip und Linux. Die Ergebnisse stehen danach in
+            «Diagnose kopieren» und «Problem melden» – nur Zahlen, nie Text aus Gesprächen.</p>
+          <div class="diag-result" id="accel-status">Grafikchip wird geprüft …</div>
+          <div class="log-toolbar">
+            <button type="button" class="action" id="btn-accel-install" hidden>Bibliotheken laden</button>
+            <button type="button" class="action" id="btn-accel-speed">Geschwindigkeit messen</button>
+            <button type="button" class="action" id="btn-test-notify">Meldung testen</button>
+            <button type="button" class="action" id="btn-test-calls">Anruf-Erkennung prüfen</button>
+          </div>
+          <p class="log-result" id="accel-hint">«Geschwindigkeit messen» transkribiert 2 Minuten der neusten Aufnahme
+            auf der CPU und – falls bereit – auf dem Grafikchip. Das dauert einige Minuten.</p>
+          <div class="diag-result" id="accel-phase"></div>
+          <ul class="diag-network" id="accel-results"></ul>
+        </section>
         <dl class="diag-info" id="diag-info"></dl>
       </section>
     </div>
@@ -2193,7 +2212,7 @@ function showTab(name) {
   }
   $("form-settings").querySelector(".settings-body").scrollTop = 0;
   if (name === "log") loadLog();
-  if (name === "diagnose") loadDiagnose();
+  if (name === "diagnose") { loadDiagnose(); loadAcceleration(); }
 }
 
 /* ---------- Diagnose ---------- */
@@ -2260,6 +2279,79 @@ async function checkNetwork() {
   } finally {
     button.disabled = false;
   }
+}
+
+/* ---------- Experimental tests: graphics chip, notification, call detection ---------- */
+
+const ACCEL_NAMES = { nvidia: "Nvidia-Grafikkarte", mlx: "Apple-Grafikchip (MLX)" };
+let accelPolling = false;
+let accelNotifyStarted = 0;   // the test notification: keep asking up to a minute whether it was clicked
+
+function renderAcceleration(a) {
+  const status = $("accel-status");
+  status.textContent = a.kind
+    ? `${ACCEL_NAMES[a.kind]}: ${a.ready ? "bereit – Verbalis kann ihn nutzen" : a.problem}`
+    : a.problem;
+  status.className = `diag-result ${a.ready ? "good" : ""}`;
+  const install = $("btn-accel-install");
+  install.hidden = !a.can_install;
+  install.textContent = a.kind === "mlx" ? `MLX laden (${a.size})` : `Nvidia-Bibliotheken laden (${a.size})`;
+  const busy = Boolean(a.task);
+  for (const id of ["btn-accel-install", "btn-accel-speed"]) $(id).disabled = busy;
+  const progress = a.progress != null ? ` ${Math.round(a.progress * 100)} %` : "";
+  const phase = $("accel-phase");
+  phase.textContent = a.error ? `Fehler: ${a.error}` : (a.phase ? a.phase + progress : "");
+  phase.className = `diag-result ${a.error ? "bad" : ""}`;
+  const lines = [];
+  for (const line of a.speed || []) lines.push([line, true]);
+  if (a.notification) lines.push([`Meldung: ${a.notification.detail}`, a.notification.ok]);
+  if (a.calls) lines.push([`Anruf-Erkennung: ${a.calls.detail}`, true]);
+  $("accel-results").replaceChildren(...lines.map(([text, ok]) =>
+    element("li", { class: `diag-result ${ok ? "good" : "bad"}` }, text)));
+}
+
+async function loadAcceleration() {
+  try { renderAcceleration(await call("acceleration_info")); } catch (e) { $("accel-status").textContent = e.message; }
+}
+
+async function pollAcceleration() {
+  if (accelPolling) return;
+  accelPolling = true;
+  try {
+    let a;
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      a = await call("acceleration_info");
+      renderAcceleration(a);
+    } while (a.task || (a.notification && a.notification.ok && !a.notification.clicked && Date.now() - accelNotifyStarted < 60000));
+  } catch (e) {
+    $("accel-phase").textContent = e.message;
+  } finally {
+    accelPolling = false;
+  }
+}
+
+async function startAccelTask(method) {
+  try {
+    await call(method);
+    pollAcceleration();
+  } catch (e) {
+    $("accel-phase").textContent = e.message;
+    $("accel-phase").className = "diag-result bad";
+  }
+}
+
+async function testNotification() {
+  try {
+    await call("test_notification");
+    accelNotifyStarted = Date.now();
+    await loadAcceleration();
+    pollAcceleration();   // shows when the notification was clicked
+  } catch (e) { $("accel-phase").textContent = e.message; }
+}
+
+async function checkCalls() {
+  try { await call("check_calls"); await loadAcceleration(); } catch (e) { $("accel-phase").textContent = e.message; }
 }
 
 async function copyDiagnosis() {
@@ -3383,6 +3475,10 @@ async function init() {
   $("btn-diag-audio").addEventListener("click", runAudioTest);
   $("btn-diag-network").addEventListener("click", checkNetwork);
   $("btn-diag-copy").addEventListener("click", copyDiagnosis);
+  $("btn-accel-install").addEventListener("click", () => startAccelTask("start_acceleration_install"));
+  $("btn-accel-speed").addEventListener("click", () => startAccelTask("start_speed_test"));
+  $("btn-test-notify").addEventListener("click", testNotification);
+  $("btn-test-calls").addEventListener("click", checkCalls);
   $("btn-diag-folder").addEventListener("click", () => call("open_data_folder").catch((e) => showMessage(e.message)));
   $("btn-message-close").addEventListener("click", () => showMessage(""));
   $("btn-plan").addEventListener("click", planRecording);

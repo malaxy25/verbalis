@@ -83,6 +83,12 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   `nvidia-*` packages are found too). `prepare()` preloads them (ctypes, retry rounds for dependencies) so
   CTranslate2's lookup by name finds them. Device "auto" is the default everywhere; compute type
   int8_float16 (small GPUs); load or run errors fall back to the CPU (`--device cuda` doesn't). No UI yet.
+- **Experimental tests in the diagnosis (0.7.36):** `acceleration.py` (status, install, speed test) and
+  Service.acceleration_info/start_acceleration_install/start_speed_test/test_notification/check_calls. Add-ons
+  come from PyPI via `transcription/wheels.py` (pinned version, PyPI SHA-256). MLX for the Mac app: wheels
+  for its Python 3.12 unpacked into `~/.verbalis/mlx/site-cp312` and appended to sys.path – works because
+  the app is not signed with the hardened runtime (library validation would block it). The speed test
+  reports numbers and word agreement (1 − WER CPU vs. GPU), never text.
 - **Apple GPU (experimental, measuring only):** `transcription/mlx.py` runs Whisper with mlx-whisper on
   the M-chip GPU, selected in `verbalis compare` by the prefix `mlx:`. It converts the Transformers weights
   itself (safetensors, no torch; follows mlx-examples convert.py) and uses Silero VAD from faster-whisper

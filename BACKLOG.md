@@ -6,7 +6,8 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## 0.7.34 – next
 
-**Status 23 Oct 2026:** 0.7.35 released (lost audio device reconnects instead of ending the recording;
+**Status 23 Oct 2026:** 0.7.36 released (experimental tests in the diagnosis: load Nvidia libraries or
+MLX with a button, speed test CPU vs. graphics chip, notification and call-detection checks). 0.7.35 released (lost audio device reconnects instead of ending the recording;
 Nvidia GPU via `verbalis gpu --install`; MLX measuring on Macs). 0.7.34 released (Linux experimental: call detection via pactl, notify-send
 notifications, single instance, pipx install; macOS: no crash on quitting with an open audio device). 0.7.33 released (speaker box: the name field is the only list of
 participants; the track named in «Anzahl Personen auf dieser Spur»). 0.7.32 released (split paragraphs with Enter, Shift+Enter line breaks, word

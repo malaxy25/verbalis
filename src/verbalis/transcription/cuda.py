@@ -15,7 +15,6 @@ FasterWhisperTranscriber falls back to the CPU on any GPU error.
 from __future__ import annotations
 
 import ctypes
-import hashlib
 import importlib.util
 import json
 import logging
@@ -124,7 +123,8 @@ def _prepare() -> str | None:
     dirs = library_dirs()
     libraries = find_libraries(dirs)
     if missing(libraries):
-        return "Die Nvidia-Bibliotheken (cuBLAS, cuDNN) fehlen – einmalig laden mit: verbalis gpu --install"
+        return ("Die Nvidia-Bibliotheken (cuBLAS, cuDNN) fehlen noch – einmalig laden: Einstellungen → Diagnose "
+                "→ «Nvidia-Bibliotheken laden» oder verbalis gpu --install")
     if WINDOWS:
         for folder in dirs:
             os.add_dll_directory(str(folder))
@@ -168,56 +168,34 @@ def choose(device: str) -> tuple[str, str]:
 # ---------------------------------------------------------------- download
 
 
-def _get(url: str, opener: Callable = urllib.request.urlopen):
-    from .. import __version__
-
-    return opener(urllib.request.Request(url, headers={"User-Agent": f"Verbalis/{__version__}"}), timeout=60)
-
-
-def wheel_info(package: str, version: str, opener: Callable = urllib.request.urlopen) -> dict:
-    """The PyPI file for this system: {"filename", "url", "size", "sha256"}."""
-    with _get(f"https://pypi.org/pypi/{package}/{version}/json", opener) as response:
-        data = json.loads(response.read().decode("utf-8"))
-    for file in data.get("urls", []):
-        if wheel_matches(file["filename"]):
-            return {"filename": file["filename"], "url": file["url"], "size": file["size"],
-                    "sha256": file["digests"]["sha256"]}
-    raise ModelError(f"{package} {version} gibt es nicht für dieses System ({sys.platform}, {platform.machine()}).")
-
-
 def install(progress: Callable[[str, float], None] | None = None,
             opener: Callable = urllib.request.urlopen) -> Path:
     """Download cuBLAS and cuDNN once into ~/.verbalis/cuda (only the libraries are kept)."""
+    from . import wheels
+
     target = cuda_dir()
     partial = target.with_name("cuda.partial")
     shutil.rmtree(partial, ignore_errors=True)
     partial.mkdir(parents=True)
-    for package, version in PACKAGES:
-        info = wheel_info(package, version, opener)
-        wheel = partial / info["filename"]
-        hasher, done = hashlib.sha256(), 0
-        with _get(info["url"], opener) as response, wheel.open("wb") as f:
-            while chunk := response.read(1 << 20):
-                f.write(chunk)
-                hasher.update(chunk)
-                done += len(chunk)
-                if progress:
-                    progress(package, done / max(info["size"], 1))
-        if hasher.hexdigest() != info["sha256"]:
-            shutil.rmtree(partial, ignore_errors=True)
-            raise ModelError(f"{info['filename']}: die Prüfsumme stimmt nicht mit PyPI überein – nichts installiert.")
-        with zipfile.ZipFile(wheel) as archive:
-            for member in archive.namelist():
-                name = member.rsplit("/", 1)[-1]
-                in_library_folder = re.match(r"nvidia/[^/]+/(bin|lib)/[^/]+$", member)
-                if in_library_folder and any(re.fullmatch(p, name) for p in LIBRARY_PATTERNS):
-                    with archive.open(member) as source, (partial / name).open("wb") as out:
-                        shutil.copyfileobj(source, out)
-        wheel.unlink()
-    (partial / "versions.json").write_text(json.dumps(dict(PACKAGES), indent=2), encoding="utf-8")
-    if missing(find_libraries([partial])):
+    try:
+        for package, version in PACKAGES:
+            info = wheels.wheel_info(package, version, lambda names: next((n for n in names if wheel_matches(n)), None),
+                                     opener)
+            wheel = wheels.download(info, partial, (lambda f, p=package: progress(p, f)) if progress else None, opener)
+            with zipfile.ZipFile(wheel) as archive:
+                for member in archive.namelist():
+                    name = member.rsplit("/", 1)[-1]
+                    in_library_folder = re.match(r"nvidia/[^/]+/(bin|lib)/[^/]+$", member)
+                    if in_library_folder and any(re.fullmatch(p, name) for p in LIBRARY_PATTERNS):
+                        with archive.open(member) as source, (partial / name).open("wb") as out:
+                            shutil.copyfileobj(source, out)
+            wheel.unlink()
+        (partial / "versions.json").write_text(json.dumps(dict(PACKAGES), indent=2), encoding="utf-8")
+        if missing(find_libraries([partial])):
+            raise ModelError("Die Nvidia-Pakete enthalten nicht die erwarteten Bibliotheken – nichts installiert.")
+    except BaseException:
         shutil.rmtree(partial, ignore_errors=True)
-        raise ModelError("Die Nvidia-Pakete enthalten nicht die erwarteten Bibliotheken – nichts installiert.")
+        raise
     shutil.rmtree(target, ignore_errors=True)
     partial.replace(target)
     _state.clear()

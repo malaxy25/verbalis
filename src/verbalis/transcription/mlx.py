@@ -12,24 +12,139 @@ from generation_config.json). The conversion follows convert.py of ml-explore/ml
 (commit e52c128) but reads safetensors directly, so it needs no PyTorch.
 
 In `verbalis compare` the prefix «mlx:» selects this backend: --models gcoli/… mlx:gcoli/…
-Install on a Mac: pip install -e ".[mac-gpu]"
+
+Installing: in a development environment `pip install -e ".[mac-gpu]"`. The Mac app can't pip
+install, so `install()` downloads the pinned wheels below from PyPI (about 150 MB, SHA-256
+checked) and unpacks them into ~/.verbalis/mlx/site-cpXY; `activate()` adds that folder to
+sys.path. mlx-whisper lists torch as a dependency but only its model converter uses it – the
+packages the app already contains (numpy, scipy, tqdm, huggingface_hub) are not downloaded.
 """
 
 from __future__ import annotations
 
+import importlib
 import json
+import platform
 import shutil
+import sys
+import urllib.request
+import zipfile
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
 from .base import Segment
-from .models import ModelError, models_dir, slug
+from .models import ModelError, models_dir, slug, verbalis_home
 
 PREFIX = "mlx:"
 WHISPER_SAMPLERATE = 16000
 VAD_MIN_SILENCE_MS = 500          # as in FasterWhisperTranscriber
+
+
+# for Python 3.12 (the Mac app) – other versions pick their own wheels of these versions if PyPI has them
+PACKAGES = [
+    ("mlx", "0.32.4"), ("mlx-metal", "0.32.4"), ("mlx-whisper", "0.4.3"),
+    ("numba", "0.68.0"), ("llvmlite", "0.50.0"),            # word timestamps; numba 0.68 supports numpy < 2.6
+    ("tiktoken", "0.14.0"), ("regex", "2026.9.29"), ("more-itertools", "11.2.1"),
+    ("requests", "2.34.2"), ("urllib3", "2.8.0"), ("charset-normalizer", "3.5.2"), ("idna", "3.20"),
+]
+MIN_MACOS = (14, 0)
+
+
+def site_dir() -> Path:
+    return verbalis_home() / "mlx" / f"site-cp{sys.version_info[0]}{sys.version_info[1]}"
+
+
+def supported() -> str | None:
+    """None on a Mac with M chip and macOS 14+, otherwise why not (German)."""
+    if sys.platform != "darwin" or platform.machine() != "arm64":
+        return "MLX gibt es nur auf Macs mit M-Chip."
+    from ..audio.mac_tap import macos_version
+
+    if tuple(macos_version()) < MIN_MACOS:
+        return "MLX braucht macOS 14 oder neuer."
+    return None
+
+
+def mac_wheel(names: list[str], python: tuple[int, int], macos: tuple[int, ...]) -> str | None:
+    """The best wheel for this Python and macOS: a binary for the newest macOS not newer than ours, else pure Python."""
+    cp = f"cp{python[0]}{python[1]}"
+    best, best_score = None, None
+    for name in names:
+        py, abi, plat = name[:-4].split("-")[-3:]
+        if not ((py == cp and abi == cp) or (abi == "abi3" and py.startswith("cp") and int(py[2:] or 0) <= int(cp[2:]))
+                or (py.startswith("py3") and abi == "none")):
+            continue
+        score = None
+        for tag in plat.split("."):
+            if tag == "any":
+                score = max(score or (0,), (0,))
+            elif tag.startswith("macosx_") and (tag.endswith("_arm64") or tag.endswith("_universal2")):
+                version = tuple(int(x) for x in tag.split("_")[1:3])
+                if version <= tuple(macos[:2]):
+                    score = max(score or (0,), (1, *version))
+        if score is not None and (best_score is None or score > best_score):
+            best, best_score = name, score
+    return best
+
+
+def activate() -> bool:
+    """Make the downloaded MLX packages importable; True if they are there."""
+    site = site_dir()
+    if not site.is_dir():
+        return False
+    if str(site) not in sys.path:
+        sys.path.append(str(site))   # after the app's own packages: theirs win
+    return True
+
+
+def install(progress: Callable[[str, float], None] | None = None,
+            opener: Callable = urllib.request.urlopen) -> Path:
+    """Download MLX and mlx-whisper once (Mac app); returns the folder."""
+    from ..audio.mac_tap import macos_version
+    from . import wheels
+
+    problem = supported()
+    if problem:
+        raise ModelError(problem)
+    python, macos = sys.version_info[:2], tuple(macos_version())
+    target = site_dir()
+    partial = target.with_name(target.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    partial.mkdir(parents=True)
+    try:
+        for package, version in PACKAGES:
+            info = wheels.wheel_info(package, version, lambda names: mac_wheel(names, python, macos), opener)
+            wheel = wheels.download(info, partial, (lambda f, p=package: progress(p, f)) if progress else None,
+                                    opener)
+            with zipfile.ZipFile(wheel) as archive:
+                archive.extractall(partial)
+            wheel.unlink()
+    except BaseException:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
+    shutil.rmtree(target, ignore_errors=True)
+    partial.replace(target)
+    return target
+
+
+def status() -> dict:
+    """For the diagnosis: can this computer use MLX, and is it there?"""
+    problem = supported()
+    if problem:
+        return {"supported": False, "ready": False, "problem": problem}
+    activate()
+    try:
+        importlib.import_module("mlx_whisper")
+    except Exception as e:
+        return {"supported": True, "ready": False,
+                "problem": "MLX ist noch nicht geladen." if isinstance(e, ImportError) else f"MLX lädt nicht: {e}"}
+    return {"supported": True, "ready": True, "problem": None}
+
+
+# built-in names of faster-whisper → the original models in Transformers format
+HF_NAMES = {"large-v3": "openai/whisper-large-v3", "large-v3-turbo": "openai/whisper-large-v3-turbo"}
 
 
 def mlx_folder(model: str) -> Path:
@@ -82,7 +197,7 @@ def convert(model: str) -> Path:
     if not source.is_dir():
         from huggingface_hub import snapshot_download
 
-        source = Path(snapshot_download(model, allow_patterns=["config.json", "generation_config.json",
+        source = Path(snapshot_download(HF_NAMES.get(model, model), allow_patterns=["config.json", "generation_config.json",
                                                                "model.safetensors"]))
     if not (source / "model.safetensors").exists():
         raise ModelError(f"{model} hat kein model.safetensors (Transformers-Format) – für MLX nicht umwandelbar.")
@@ -119,10 +234,12 @@ def convert(model: str) -> Path:
 
 class MlxTranscriber:
     def __init__(self, model: str, keywords: str | None = None):
+        activate()
         try:
             import mlx_whisper
         except ImportError as e:
-            raise ModelError('mlx-whisper fehlt. Auf einem Mac mit M-Chip: pip install -e ".[mac-gpu]"') from e
+            raise ModelError("mlx-whisper fehlt: in der App Einstellungen → Diagnose → «MLX laden», "
+                             'in der Entwicklerversion pip install -e ".[mac-gpu]"') from e
         self._mlx = mlx_whisper
         self.name = PREFIX + model
         self.beam_size = 1

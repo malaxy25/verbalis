@@ -232,6 +232,21 @@ class Api:
     def diagnose_report(self):
         return self._call(self._s.diagnose_report)
 
+    def acceleration_info(self):
+        return self._call(self._s.acceleration_info)
+
+    def start_acceleration_install(self):
+        return self._call(self._s.start_acceleration_install)
+
+    def start_speed_test(self):
+        return self._call(self._s.start_speed_test)
+
+    def test_notification(self):
+        return self._call(self._s.test_notification)
+
+    def check_calls(self):
+        return self._call(self._s.check_calls)
+
     def report_info(self):
         return self._call(self._s.report_info)
 
@@ -376,6 +391,7 @@ def start() -> None:
         service.shutdown()  # save a running recording properly
 
     def bring_to_front() -> None:   # click on the «call recognised» notification
+        service.notification_clicked()
         try:
             window.restore()
             window.show()
