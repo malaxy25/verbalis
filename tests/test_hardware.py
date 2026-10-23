@@ -41,3 +41,16 @@ def test_windows_reads_processor_memory_and_graphics(hardware):
     info = hardware.describe("win32", run=run)
     assert info["Prozessor"] != "unbekannt" and info["Arbeitsspeicher"].endswith(" GB")
     assert info["Grafikkarte"] == "AMD Radeon(TM) Graphics, Virtual Display"
+
+
+def test_linux_graphics_card_from_lspci():
+    """Ubuntu showed «Grafikkarte: unbekannt» on a ThinkPad with an Nvidia T500."""
+    from types import SimpleNamespace
+
+    from verbalis.hardware import _linux_gpu
+
+    out = ("00:02.0 VGA compatible controller: Intel Corporation TigerLake-LP GT2 [Iris Xe Graphics] (rev 01)\n"
+           "00:1f.3 Audio device: Intel Corporation Tiger Lake-LP Smart Sound Technology Audio Controller (rev 20)\n"
+           "01:00.0 3D controller: NVIDIA Corporation TU117GLM [T500 Mobile] (rev a1)\n")
+    assert _linux_gpu(lambda *a, **k: SimpleNamespace(stdout=out)) == \
+        "Intel Corporation TigerLake-LP GT2 [Iris Xe Graphics], NVIDIA Corporation TU117GLM [T500 Mobile]"

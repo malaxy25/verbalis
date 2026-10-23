@@ -18,6 +18,7 @@ from typing import Callable
 from . import pipeline
 
 TEST_SECONDS = 120          # the piece of a recording the speed test transcribes
+MIN_TEST_SECONDS = 60       # shorter recordings only when there is nothing longer
 SIZES = {"nvidia": "1.3 GB", "mlx": "90 MB"}
 NAMES = {"cpu": "CPU", "cuda": "Nvidia-Grafikkarte", "mlx": "Apple-Grafikchip (MLX)"}
 
@@ -64,15 +65,26 @@ def install(progress: Callable[[str, float], None] | None = None) -> None:
 
 
 def newest_audio(recordings: Path) -> Path | None:
-    """The system-audio track of the newest recording with audio (else its microphone track)."""
+    """The system-audio track of the newest recording with audio (else its microphone track) – one of at
+    least a minute if there is one (a test showed 31 s of silence: 0 words, nothing measured)."""
+    import soundfile as sf
+
     if not recordings.is_dir():
         return None
+    fallback = None
     for folder in sorted((f for f in recordings.iterdir() if f.is_dir()), reverse=True):
         for track in ("others", "me"):
             path = pipeline.audio_file(folder, track)
-            if path is not None:
+            if path is None:
+                continue
+            try:
+                long_enough = sf.info(str(path)).duration >= MIN_TEST_SECONDS
+            except Exception:
+                long_enough = False
+            if long_enough:
                 return path
-    return None
+            fallback = fallback or path
+    return fallback
 
 
 def default_transcriber(model: str, device: str):

@@ -406,7 +406,19 @@ def start() -> None:
     window.events.resized += remember_size
     window.events.closing += on_closing
     window.events.closing += notifier.close
-    webview.start(icon=str(ICON))
+    webview.start(icon=str(ICON), gui=window_library())
+
+
+def window_library(platform: str = sys.platform, has_gtk: bool | None = None) -> str | None:
+    """Linux: Qt right away when GTK's Python bindings (gi) are missing – pywebview would first try GTK and
+    log its import error twice. None = pywebview's own choice."""
+    if not platform.startswith("linux"):
+        return None
+    if has_gtk is None:
+        import importlib.util
+
+        has_gtk = importlib.util.find_spec("gi") is not None
+    return None if has_gtk else "qt"
 
 
 def set_taskbar_identity(platform: str = sys.platform, frozen: bool | None = None, shell32=None) -> bool:

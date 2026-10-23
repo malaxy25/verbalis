@@ -80,3 +80,12 @@ def test_app_ends_without_python_clean_up_only_while_audio_is_open_on_mac():
     assert audio_still_open("darwin", [meter])
     assert not audio_still_open("darwin", [ended, other])
     assert not audio_still_open("win32", [meter])
+
+
+def test_linux_without_gtk_bindings_starts_qt_directly():
+    """pipx on Ubuntu: no `gi` → pywebview logged «GTK cannot be loaded» with a traceback twice before Qt."""
+    from verbalis.app import window_library
+
+    assert window_library("linux", has_gtk=False) == "qt"
+    assert window_library("linux", has_gtk=True) is None
+    assert window_library("win32") is None and window_library("darwin") is None

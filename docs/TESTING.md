@@ -70,9 +70,9 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-298 tests in 31 files.
+301 tests in 31 files.
 
-### `test_acceleration.py` (9)
+### `test_acceleration.py` (10)
 
 Experimental tests in the diagnosis: speed test, MLX wheels, notification and call-detection checks.
 
@@ -85,8 +85,9 @@ Experimental tests in the diagnosis: speed test, MLX wheels, notification and ca
 - **Failed install is shown**
 - **Test notification and its click**
 - **Call check lists program names only**
+- **Speed test prefers a recording of at least a minute** – The first test on Windows took the newest recording: 31 s of silence, 0 words – nothing to compare.
 
-### `test_app.py` (8)
+### `test_app.py` (9)
 
 Window size and position, log output without console, file dialog filter.
 
@@ -98,6 +99,7 @@ Window size and position, log output without console, file dialog filter.
 - **Zip filter is valid for pywebview** – Regression 0.7.3: «ZIP-Datei (*.zip)» was rejected by the save dialog.
 - **Taskbar identity only for development version on windows** – Regression: the development version showed the Python logo in the taskbar.
 - **App ends without python clean up only while audio is open on mac** – Regression 0.7.33: on the Mac the app sometimes crashed on quitting (after waking up) – a CoreAudio
+- **Linux without gtk bindings starts qt directly** – pipx on Ubuntu: no `gi` → pywebview logged «GTK cannot be loaded» with a traceback twice before Qt.
 
 ### `test_audio.py` (10)
 
@@ -241,13 +243,14 @@ Word error rate (WER) and loading references for model comparisons.
 - **Service sends log and diagnosis without names**
 - **Service without address offers mail only**
 
-### `test_hardware.py` (3)
+### `test_hardware.py` (4)
 
 Processor, memory and graphics card in the diagnosis – with fake system commands.
 
 - **Mac shows chip memory and graphics in the chip**
 - **Failing commands give unknown instead of an error**
 - **Windows reads processor memory and graphics**
+- **Linux graphics card from lspci** – Ubuntu showed «Grafikkarte: unbekannt» on a ThinkPad with an Nvidia T500.
 
 ### `test_linux.py` (6)
 

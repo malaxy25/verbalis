@@ -25,7 +25,7 @@ def describe(system: str | None = None, run: Callable = subprocess.run) -> dict[
         ram = _safe(lambda: int(_sysctl(run, "hw.memsize")))
         gpu = f"im Chip ({cpu})" if cpu and cpu.startswith("Apple") else None
     else:
-        cpu, ram, gpu = _safe(_linux_cpu), _safe(_linux_ram), None
+        cpu, ram, gpu = _safe(_linux_cpu), _safe(_linux_ram), _safe(lambda: _linux_gpu(run))
     cores = os.cpu_count()
     return {
         "Prozessor": (cpu or platform.processor() or UNKNOWN) + (f", {cores} Threads" if cores else ""),
@@ -84,6 +84,17 @@ def _linux_cpu() -> str:
             if line.startswith("model name"):
                 return line.split(":", 1)[1]
     return ""
+
+
+def _linux_gpu(run: Callable) -> str:
+    """The graphics controllers from `lspci` (package pciutils), e.g. «NVIDIA Corporation TU117GLM [T500]»."""
+    result = run(["lspci"], capture_output=True, text=True, timeout=5)
+    names = []
+    for line in (result.stdout or "").splitlines():
+        kind, _, name = line.partition(": ")
+        if name and any(k in kind for k in ("VGA compatible controller", "3D controller", "Display controller")):
+            names.append(name.split(" (rev ")[0].strip())
+    return ", ".join(names)
 
 
 def _linux_ram() -> int:

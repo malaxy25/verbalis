@@ -147,3 +147,12 @@ def test_call_check_lists_program_names_only(monkeypatch):
     result = s.check_calls()
     assert result["calls"] == ["Teams"] and result["programs"] == ["teams", "voicemeeterpro"]
     assert "andrea" not in result["detail"]                      # no user folders in the diagnosis
+
+
+def test_speed_test_prefers_a_recording_of_at_least_a_minute(tmp_path):
+    """The first test on Windows took the newest recording: 31 s of silence, 0 words – nothing to compare."""
+    long = tmp_path / "2026-10-23_090921"
+    long.mkdir()
+    sf.write(str(long / "others.flac"), np.zeros(16000 * 70, dtype=np.float32), 16000)
+    _recording(tmp_path, "2026-10-23_090307")                 # newer, but only 3 s
+    assert acceleration.newest_audio(tmp_path) == long / "others.flac"
