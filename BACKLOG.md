@@ -133,7 +133,10 @@ code requirement (same certificate), checked in the release build with the real 
 - [ ] **Export** to Word/PDF (copy as Markdown exists). **[ux]**
 - [ ] **Import/export the correction list**, e.g. to share company terms within a team. **[tocco]**
 - [ ] **i18n** – UI in English as an option. **[ux]**
-- [ ] **GPU support.** Measured 22 Oct 2026: more CPU threads don't help (Intel Core Ultra: 4 threads
+- [ ] **GPU support.** **Measured 23 Oct 2026 (speed test, 120 s, gcoli turbo):** Mac M1: CPU 13.3 s (0.11×),
+  MLX 11.5 s – only 1.2× faster, 96 % same words (MLX greedy, CPU beam 5) → MLX not worth building into the
+  app for now. Windows i7-1165G7 + T500: CPU 48 s (0.4×), CUDA 36 s – 1.3×, 99 % same words (weak card).
+  Revisit with an RTX card or a newer Mac (M3/M4). Measured 22 Oct 2026: more CPU threads don't help (Intel Core Ultra: 4 threads
   0.66× real time, 8/12 threads slower). **Apple M chips:** `mlx:` in `verbalis compare` (MLX, experimental) –
   Andrea measures speed and WER on a real recording; if clearly faster at similar WER, build it into the app
   (model conversion hosted on our Hugging Face account, mlx-whisper needs torch → bigger Mac app).
