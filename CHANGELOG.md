@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.38 – 2026-10-23
+- **Fix: «Anzahl Personen auf dieser Spur» was missing** when no speakers had been told apart – e.g. the
+  test recording of the introduction («1 Person» per track) or with «Sprechertrennung» off. Now the speaker
+  box always offers the number of people and «Neu zuordnen».
+- **Fix (Mac, MLX):** the speed test failed with «[load_npz] Input must be a zip file» – the converted model
+  had a file name mlx-whisper 0.4.3 doesn't look for. An already converted model is renamed, not loaded again.
+- **Linux:** the window starts with Qt right away when GTK's Python bindings are missing (no more error
+  messages in the terminal); the diagnosis shows the graphics card.
+- **Speed test:** uses the newest recording of at least one minute (a short, silent one gave no result).
+- Measured: on a Mac M1 the graphics chip (MLX) is only 1.2× faster than the CPU, on an Nvidia T500 1.3× –
+  MLX stays a test for now, CUDA stays on.
+
 ## 0.7.37 – 2026-10-23
 - **Downloads under fixed names:** every release also has `Verbalis-Windows.exe` and `Verbalis-Mac.dmg`, so
   links like `…/releases/latest/download/Verbalis-Windows.exe` always lead to the newest version. frehner.tech
