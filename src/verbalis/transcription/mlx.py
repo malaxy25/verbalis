@@ -184,10 +184,25 @@ def mlx_key(key: str) -> str:
     return key
 
 
+# mlx-whisper 0.4.3 loads only weights.safetensors (or weights.npz); newer versions also model.safetensors
+WEIGHTS = "weights.safetensors"
+
+
+def _converted(target: Path) -> bool:
+    """Is the model converted already? 0.7.36 saved model.safetensors, which 0.4.3 can't find
+    («[load_npz] Input must be a zip file» on the first Mac test) – renamed instead of converting again."""
+    if (target / WEIGHTS).exists():
+        return True
+    if (target / "model.safetensors").exists():
+        (target / "model.safetensors").replace(target / WEIGHTS)
+        return True
+    return False
+
+
 def convert(model: str) -> Path:
     """Convert a Transformers Whisper model once; returns the MLX folder."""
     target = mlx_folder(model)
-    if (target / "model.safetensors").exists():
+    if _converted(target):
         return target
     import mlx.core as mx
     from mlx.utils import tree_flatten
@@ -226,7 +241,7 @@ def convert(model: str) -> Path:
     partial = target.with_name(target.name + ".partial")
     shutil.rmtree(partial, ignore_errors=True)
     partial.mkdir(parents=True)
-    mx.save_safetensors(str(partial / "model.safetensors"), dict(tree_flatten(whisper.parameters())))
+    mx.save_safetensors(str(partial / WEIGHTS), dict(tree_flatten(whisper.parameters())))
     (partial / "config.json").write_text(json.dumps({**dims, "model_type": "whisper"}, indent=2), encoding="utf-8")
     partial.replace(target)
     return target

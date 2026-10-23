@@ -75,3 +75,16 @@ def test_silence_only_sends_nothing(monkeypatch, tmp_path):
     import faster_whisper.vad as vad
     monkeypatch.setattr(vad, "get_speech_timestamps", lambda audio, options: [])
     assert mlx.MlxTranscriber("x/y").transcribe(np.zeros(16000, dtype=np.float32)) == []
+
+
+def test_model_converted_by_0_7_36_is_renamed_not_converted_again(tmp_path, monkeypatch):
+    """First Mac test (0.7.36): «[load_npz] Input must be a zip file» – the conversion saved
+    model.safetensors, but mlx-whisper 0.4.3 only loads weights.safetensors."""
+    monkeypatch.setenv("VERBALIS_HOME", str(tmp_path))
+    folder = mlx.mlx_folder("gcoli/whisper-large-v3-turbo-swiss-german-mit")
+    folder.mkdir(parents=True)
+    (folder / "model.safetensors").write_bytes(b"weights")
+    (folder / "config.json").write_text("{}")
+    assert mlx.convert("gcoli/whisper-large-v3-turbo-swiss-german-mit") == folder   # no mlx needed: nothing to convert
+    assert (folder / "weights.safetensors").read_bytes() == b"weights"
+    assert not (folder / "model.safetensors").exists()

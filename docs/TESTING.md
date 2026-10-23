@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-302 tests in 31 files.
+303 tests in 31 files.
 
 ### `test_acceleration.py` (10)
 
@@ -295,7 +295,7 @@ Migration from «Mitschrift» (≤ 0.6) to Verbalis.
 - **Existing new files are not overwritten**
 - **Missing custom folder falls back to default**
 
-### `test_mlx.py` (5)
+### `test_mlx.py` (6)
 
 MLX on Apple M chips (experimental): model conversion names, times after the silence filter, missing package.
 
@@ -304,6 +304,7 @@ MLX on Apple M chips (experimental): model conversion names, times after the sil
 - **Without mlx whisper a clear message**
 - **Only speech is transcribed and times point into the recording**
 - **Silence only sends nothing**
+- **Model converted by 0 7 36 is renamed not converted again** – First Mac test (0.7.36): «[load_npz] Input must be a zip file» – the conversion saved
 
 ### `test_models.py` (21)
 
