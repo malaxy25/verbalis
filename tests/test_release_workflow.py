@@ -50,6 +50,20 @@ def test_tag_only_after_a_successful_windows_build():
     assert names.index("Create the version tag on the tested commit") < names.index("Publish GitHub Release")
 
 
+def test_fixed_download_names_are_never_taken_for_an_update():
+    """frehner.tech links to fixed names (releases/latest/download/…) because the GitHub API it used for the
+    version is limited to 60 calls per hour and IP – the page showed 0.7.30 while 0.7.36 was out. The
+    updater must still only take the versioned files."""
+    from verbalis import updates
+
+    step = next(s for s in JOBS["publish"]["steps"] if s.get("name") == "Copies under fixed names for download links")
+    names = ["Verbalis-Windows.exe", "Verbalis-Mac.dmg"]
+    for name in names:
+        assert name in step["run"]
+        assert not any(name.lower().endswith(suffix) for suffix in updates.ASSET_SUFFIX.values())
+        assert not updates.expected_name({"installer_name": name, "latest": "0.7.37"})
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="the decision step is a bash script")
 @pytest.mark.parametrize("version, changelog, expected", [
     ("1.0.0", True, "release=false"),    # tag exists already: nothing to do

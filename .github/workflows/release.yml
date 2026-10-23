@@ -327,6 +327,18 @@ jobs:
           PY
           ls -l dist
 
+      # frehner.tech links to releases/latest/download/<fixed name>: always the newest version, even when
+      # the GitHub API (60 calls per hour and IP) doesn't answer. These names must not end like the update
+      # files (updates.ASSET_SUFFIX), or the app's updater could pick them.
+      - name: Copies under fixed names for download links
+        run: |
+          set -euo pipefail
+          cp dist/Verbalis-*-setup.exe dist/Verbalis-Windows.exe
+          if ls dist/Verbalis-*-macos-arm64.dmg >/dev/null 2>&1; then
+            cp dist/Verbalis-*-macos-arm64.dmg dist/Verbalis-Mac.dmg
+          fi
+          ls -l dist
+
       - name: Create the version tag on the tested commit
         env:
           VERSION: ${{ needs.version.outputs.version }}

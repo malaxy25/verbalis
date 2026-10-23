@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-297 tests in 31 files.
+298 tests in 31 files.
 
 ### `test_acceleration.py` (9)
 
@@ -350,7 +350,7 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Device that never opens is not retried**
 - **User is told once that a device is gone**
 
-### `test_release_workflow.py` (6)
+### `test_release_workflow.py` (7)
 
 The release workflow: only after green tests, only for a new version, exactly the tested commit.
 
@@ -359,6 +359,7 @@ The release workflow: only after green tests, only for a new version, exactly th
 - **Release starts after tests not on tags**
 - **Every job builds the tested commit**
 - **Tag only after a successful windows build**
+- **Fixed download names are never taken for an update** – frehner.tech links to fixed names (releases/latest/download/…) because the GitHub API it used for the
 - **Decision step**
 
 ### `test_robustness.py` (13)

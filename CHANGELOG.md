@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.37 – 2026-10-23
+- **Downloads under fixed names:** every release also has `Verbalis-Windows.exe` and `Verbalis-Mac.dmg`, so
+  links like `…/releases/latest/download/Verbalis-Windows.exe` always lead to the newest version. frehner.tech
+  showed 0.7.30 while 0.7.36 was out, because GitHub answers only 60 version queries per hour and network.
+  The app's updates still use the files with the version in their name.
+
 ## 0.7.36 – 2026-10-23
 - **Experimental tests in Einstellungen → Diagnose**, so new systems can be tested without the command
   line; the results go into «Diagnose kopieren» and «Problem melden» (numbers only, never text):
