@@ -250,6 +250,7 @@ def write_meta(folder: Path, start: datetime, duration_s: float, samplerate: int
                 "device": devices.get(t.name, ""),
                 "length_s": round(t.written_frames / samplerate, 1),
                 "padded_silence_s": round(t.padded_frames / samplerate, 2),
+                **({"reconnects": t.reconnects, "devices_used": t.devices} if getattr(t, "reconnects", 0) else {}),
             }
             for t in tracks
         },

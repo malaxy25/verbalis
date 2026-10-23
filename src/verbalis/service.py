@@ -65,6 +65,7 @@ CALL_OVER_AFTER_S = 30.0      # the call app hasn't used the microphone this lon
 END_WARNING_S = 5 * 60        # notice this long before the maximum recording time is reached
 EXTEND_S = 30 * 60            # «+30 Min.»
 UI_FOCUS_S = 2.0              # the window counts as «in front» if it said so this recently
+LOST_DEVICE_AFTER_S = 3.0     # a device gone this long during a recording is reported (reconnects are often quicker)
 PREVIEW_IDLE_S = 3.0          # level meters before a recording: close the devices when the UI stops asking
 MB = 1024 * 1024              # as shown in Windows Explorer
 log = logging.getLogger(__name__)
@@ -175,9 +176,10 @@ class Service:
 
     @staticmethod
     def _default_recorder(microphone, loopback, folder):
+        from .audio.devices import replacement
         from .audio.recorder import TwoTrackRecorder
 
-        return TwoTrackRecorder(microphone, loopback, folder)
+        return TwoTrackRecorder(microphone, loopback, folder, replace=replacement)
 
     @staticmethod
     def _default_monitor(microphone, loopback):
@@ -868,6 +870,24 @@ class Service:
             if sys.platform == "darwin" else " Sonst ein anderes Gerät wählen."
         self._recording_error = (f"Von {devices} kommen bisher keine Audiodaten an. Die Aufnahme läuft weiter "
                                  "und holt den Ton nach, sobald er kommt." + hint)
+
+    def _check_lost_device(self, rec, info: dict) -> None:
+        """Call with the lock held. Tell the user once per loss that a device is gone and the recording goes on."""
+        lost = [s for s in rec.status() if getattr(s, "lost_since", None) is not None]
+        reported = info.setdefault("lost_reported", set())
+        for s in lost:
+            key = (s.name, s.lost_since)
+            if key in reported or time.monotonic() - s.lost_since < LOST_DEVICE_AFTER_S:
+                continue
+            reported.add(key)
+            label = pipeline.TRACK_LABELS.get(s.name, s.name)
+            WHAT = {"me": "das Mikrofon", "others": "den Systemton"}
+            device = s.devices[-1] if getattr(s, "devices", None) else info["devices"].get(s.name, "?")
+            log.warning("%s device «%s» lost during recording %s", label, device, info["id"])
+            self._recording_error = (
+                f"Das Gerät für {WHAT[s.name]} «{device}» ist weg (z.B. Headset ausgeschaltet oder nach dem Call in "
+                "einen anderen Modus gewechselt). Die Aufnahme läuft weiter: Verbalis nimmt wieder auf, sobald "
+                "das Gerät oder das Standardgerät wieder da ist; die Lücke bleibt still.")
 
     def _new_folder(self, start: datetime) -> Path:
         """A new, empty recording folder – never an existing one (two starts in the same second)."""
@@ -1926,6 +1946,7 @@ class Service:
                 if rec.paused or others is None or _db(others.level_rms) > SOUND_DB:
                     self._others_last_sound = now
                 self._check_no_data(rec, info)
+                self._check_lost_device(rec, info)
                 recording = {
                     "id": info["id"],
                     "duration_s": round(rec.active_seconds(), 1),

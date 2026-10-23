@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.35 – 2026-10-23
+- **Fix: a recording no longer ends when an audio device disappears.** A headset switched off or
+  unplugged, or a Bluetooth headset leaving hands-free mode at the end of a Teams call, ended the
+  recording with «Gerätefehler: Error 0x100000001». Now the track reconnects – to the same device once it
+  is back, otherwise to the default device – and the other track records on; the gap stays silent. The app
+  says that the device is gone and the recording continues. meta.json notes reconnects and devices used.
+  The error message, if a device can't be reconnected, names the real cause.
+- **Nvidia graphics card (experimental, Windows and Linux):** `verbalis gpu` shows whether Verbalis can use
+  it, `verbalis gpu --install` downloads NVIDIA's cuBLAS and cuDNN once (about 1.3 GB, checked). Then the
+  app transcribes on the graphics card, with an automatic fall-back to the CPU on any GPU error.
+  With the installed app on Windows: `%LOCALAPPDATA%\Programs\Verbalis\verbalis-cli.exe gpu --install`.
+- **Mac with M chip (experimental, development version):** `verbalis compare … mlx:MODEL` measures
+  transcription on the graphics chip with MLX against today's CPU transcription.
+
 ## 0.7.34 – 2026-10-22
 - **Linux (experimental):** Verbalis runs from the repository or with `pipx install` straight from GitHub
   (README «Linux (experimental)»); there is no installer and no automatic update yet. The app says so next

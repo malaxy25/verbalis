@@ -169,6 +169,25 @@ def select(microphone: str | None = None, speakers: str | None = None) -> Device
     return DeviceSelection(microphone=mic, speakers=spk, loopback=loopback_for(sc, spk))
 
 
+def replacement(track: str, lost: Any) -> Any:
+    """A device to continue a track whose device disappeared during a recording.
+
+    The same device once it is back (same name), otherwise the system default – e.g. after a
+    Bluetooth headset left hands-free mode at the end of a call. None: nothing there yet.
+    macOS: the system-audio tap or virtual device is simply tried again.
+    """
+    sc = soundcard_module()
+    name = getattr(lost, "name", None)
+    if track == "me":
+        mics = sc.all_microphones()
+        return next((m for m in mics if m.name == name), None) or _default(sc.default_microphone, mics)
+    if sys.platform == "darwin":
+        return lost
+    speakers = sc.all_speakers()
+    spk = next((s for s in speakers if s.name == name), None) or _default(sc.default_speaker, speakers)
+    return loopback_for(sc, spk) if spk is not None else None
+
+
 def print_devices() -> None:  # CLI output (German)
     sc = soundcard_module()
     default_mic = sc.default_microphone().name

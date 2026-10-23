@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-284 tests in 30 files.
+288 tests in 30 files.
 
 ### `test_app.py` (8)
 
@@ -314,7 +314,7 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Subfolder model** – gcoli kept the CTranslate2 version in ct2/ (until 0.7.28) – Verbalis must load that, not the repo root.
 - **Default model is gcoli for new installations only** – 0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model.
 
-### `test_recorder.py` (13)
+### `test_recorder.py` (17)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -331,6 +331,10 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Audio that starts late is padded in sync** – The permission is granted after a moment: the silence before is filled in, the track stays in sync.
 - **Measure tells a working from a silent device** – Diagnosis: which device delivers, how loud, and whether it can be closed.
 - **Recorder and meters with the microphone only**
+- **Lost device reconnects and keeps recording** – 0.7.34: a headset leaving hands-free mode after a Teams call ended the recording
+- **Lost device without replacement gives a readable error** – The closing error (0x100000001) hid the real one (0x88890004 = device disconnected).
+- **Device that never opens is not retried**
+- **User is told once that a device is gone**
 
 ### `test_release_workflow.py` (6)
 

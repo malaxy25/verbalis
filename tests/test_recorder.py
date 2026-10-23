@@ -362,3 +362,112 @@ def test_recorder_and_meters_with_the_microphone_only(tmp_path):
     time.sleep(0.2)
     assert set(monitor.levels()) == {"me"}
     monitor.stop()
+
+
+class LosingDevice:
+    """Delivers `blocks` blocks, then fails like a disconnected headset – also when closing."""
+
+    def __init__(self, name, clock, stop, blocks, then_stop=False):
+        self.name, self.clock, self.stop, self.blocks, self.then_stop = name, clock, stop, blocks, then_stop
+
+    @contextmanager
+    def recorder(self, samplerate, blocksize=None):
+        device, count = self, {"n": 0}
+
+        class Rec:
+            def record(self, numframes):
+                count["n"] += 1
+                if count["n"] > device.blocks:
+                    if device.then_stop:
+                        device.stop.set()
+                        return np.zeros((numframes, 1), dtype=np.float32)
+                    raise RuntimeError("Error 0x88890004")          # AUDCLNT_E_DEVICE_INVALIDATED
+                device.clock.t += numframes / samplerate
+                return np.full((numframes, 1), 0.1, dtype=np.float32)
+
+        try:
+            yield Rec()
+        finally:
+            if not device.then_stop:
+                raise RuntimeError("Error 0x100000001")              # closing the lost device fails too
+
+
+def test_lost_device_reconnects_and_keeps_recording(tmp_path, monkeypatch):
+    """0.7.34: a headset leaving hands-free mode after a Teams call ended the recording
+    («Gerätefehler: Error 0x100000001»). Now the track continues with the replacement device."""
+    from verbalis.audio import recorder
+
+    monkeypatch.setattr(recorder, "RECONNECT_WAIT_S", 0.01)
+    clock, stop = FakeClock(), threading.Event()
+    headset = LosingDevice("Headset (Hands-Free)", clock, stop, blocks=5)
+    speakers = LosingDevice("Headset (Stereo)", clock, stop, blocks=5, then_stop=True)
+    asked = []
+
+    def replace(track, lost):
+        asked.append((track, lost.name))
+        clock.t += 2.0              # the device was away for 2 s
+        return speakers
+
+    path = tmp_path / "others.wav"
+    track = Track("others", headset, path, stop, t0=0.0, samplerate=SR, clock=clock, replace=replace)
+    track.run()
+
+    assert track.status.error is None
+    assert asked == [("others", "Headset (Hands-Free)")]
+    assert track.status.reconnects == 1 and track.status.lost_since is None
+    assert track.status.devices == ["Headset (Hands-Free)", "Headset (Stereo)"]
+    info = sf.info(str(path))
+    assert abs(info.frames / SR - clock.t) < 0.15                  # the 2 s gap is filled with silence
+    assert abs(track.status.padded_frames / SR - 2.0) < 0.15
+
+
+def test_lost_device_without_replacement_gives_a_readable_error(tmp_path):
+    """The closing error (0x100000001) hid the real one (0x88890004 = device disconnected)."""
+    clock, stop = FakeClock(), threading.Event()
+    track = Track("others", LosingDevice("Jabra", clock, stop, blocks=3), tmp_path / "o.wav", stop, t0=0.0,
+                  samplerate=SR, clock=clock)
+    track.run()
+    assert "«Jabra» wurde getrennt" in str(track.status.error)
+    assert stop.is_set()
+
+
+def test_device_that_never_opens_is_not_retried(tmp_path):
+    class Broken:
+        name = "Broken"
+
+        @contextmanager
+        def recorder(self, samplerate, blocksize=None, channels=None):
+            raise OSError("no such device")
+            yield
+
+    stop = threading.Event()
+    calls = []
+    track = Track("me", Broken(), tmp_path / "m.wav", stop, t0=0.0, samplerate=SR,
+                  replace=lambda t, d: calls.append(t))
+    track.run()
+    assert isinstance(track.status.error, OSError) and calls == []
+
+
+def test_user_is_told_once_that_a_device_is_gone(monkeypatch):
+    from types import SimpleNamespace
+
+    from test_service import make_service
+    from verbalis import service as service_module
+
+    s = make_service()
+    now = time.monotonic()
+    lost = SimpleNamespace(name="others", lost_since=now - 10, devices=["Jabra Evolve2 65"])
+    rec = SimpleNamespace(status=lambda: [SimpleNamespace(name="me", lost_since=None), lost])
+    info = {"id": "x", "devices": {"others": "Jabra Evolve2 65"}}
+    s._check_lost_device(rec, info)
+    assert "den Systemton «Jabra Evolve2 65» ist weg" in s._recording_error
+    assert "läuft weiter" in s._recording_error
+    s._recording_error = None
+    s._check_lost_device(rec, info)
+    assert s._recording_error is None                       # once per loss
+    lost.lost_since = now - 0.5                             # lost again, but just now: maybe back in a moment
+    s._check_lost_device(rec, info)
+    assert s._recording_error is None
+    monkeypatch.setattr(service_module, "LOST_DEVICE_AFTER_S", 0.1)
+    s._check_lost_device(rec, info)
+    assert "ist weg" in s._recording_error

@@ -9,6 +9,11 @@ data for a while (e.g. a driver glitch), we pad the gap with silence. This
 keeps the timestamps of both tracks comparable – important for merging the
 transcripts later.
 
+Lost device: if a device disappears during a recording (headset switched off or unplugged, a
+Bluetooth headset leaving hands-free mode after a call – Windows: 0x88890004), the track keeps
+the file open and reconnects: to the same device once it is back, otherwise to the system
+default. The gap is filled with silence like any other. The other track records on.
+
 Pause: while paused, the tracks keep reading from the devices (so no stale
 audio piles up in the driver buffers) but write nothing. The paused time is
 subtracted from the elapsed time, so no silence is padded for it – the
@@ -36,6 +41,25 @@ BLOCK_SECONDS = 0.1
 GAP_TOLERANCE_SECONDS = 0.25
 TRACKS = ("me", "others")
 READ_WAIT_S = 0.25        # wait at most this long for audio, then return nothing (never wait forever)
+RECONNECT_WAIT_S = 1.0    # a lost device: try again every second
+
+# Windows audio errors (HRESULT) → German text for the user
+DEVICE_ERRORS = {
+    "0x88890004": "wurde getrennt (z.B. Headset ausgeschaltet, ausgesteckt oder nach dem Call in einen "
+                  "anderen Modus gewechselt)",
+}
+
+
+class DeviceLost(RuntimeError):
+    """Reading from a device that worked failed – it was disconnected or changed."""
+
+
+def readable(error: BaseException, device_name: str) -> BaseException:
+    """A known device error as a German sentence; anything else unchanged."""
+    for code, text in DEVICE_ERRORS.items():
+        if code in str(error):
+            return RuntimeError(f"Das Audiogerät «{device_name}» {text}.")
+    return error
 
 
 class _Reader:
@@ -112,6 +136,9 @@ class TrackStatus:
     padded_frames: int = 0
     level_rms: float = 0.0
     error: BaseException | None = None
+    lost_since: float | None = None   # the device disappeared and isn't back yet (clock time)
+    reconnects: int = 0               # how often the device was lost and opened again
+    devices: list[str] = field(default_factory=list)   # devices recorded from, in order
 
 
 class Track(threading.Thread):
@@ -126,9 +153,11 @@ class Track(threading.Thread):
         clock: Callable[[], float] = time.monotonic,
         paused: Callable[[], bool] = lambda: False,
         paused_time: Callable[[], float] = lambda: 0.0,
+        replace: Callable[[str, Any], Any] | None = None,
     ):
         super().__init__(name=f"track-{name}", daemon=True)
         self.device = device
+        self.replace = replace          # (track, lost device) → device to continue with, or None
         self.stop_event = stop
         self.t0 = t0
         self.samplerate = samplerate
@@ -143,7 +172,7 @@ class Track(threading.Thread):
             self._record()
         except BaseException as e:  # report errors to the main thread
             log.error("Track %s failed", self.status.name, exc_info=True)   # full traceback in the log
-            self.status.error = e
+            self.status.error = readable(e, getattr(self.device, "name", "?"))
             self.stop_event.set()
 
     # Channels to ask for when a device's own format can't be read: the microphone in mono,
@@ -164,7 +193,8 @@ class Track(threading.Thread):
         recording fail there. record(numframes=…) returns exactly that many frames on both.
         """
         size = {"blocksize": block} if sys.platform == "win32" else {}
-        with ExitStack() as stack:
+        stack = ExitStack()
+        try:
             try:
                 rec = stack.enter_context(self.device.recorder(samplerate=self.samplerate, **size))
             except AssertionError:
@@ -180,32 +210,77 @@ class Track(threading.Thread):
                         "nicht aufnehmen kann (z.B. ein Bluetooth-Headset im Telefonie-Modus). Bitte ein anderes "
                         "Gerät wählen oder das Headset per Kabel/USB-Adapter verbinden.") from e
             yield rec
+        finally:
+            try:   # a lost device also fails to close – that error would hide the real one
+                stack.close()
+            except Exception:
+                log.warning("Track %s: closing the device failed", self.status.name, exc_info=True)
 
     def _record(self) -> None:
         block = int(self.samplerate * BLOCK_SECONDS)
         s = self.status
+        opened = False
         with sf.SoundFile(   # "x": never overwrite an existing recording
             s.path, "x", samplerate=self.samplerate, channels=1, subtype="PCM_16"
-        ) as file, self._open_device(block) as rec:
-            reader = _Reader(rec, getattr(self.device, "name", "?"))
-            while not self.stop_event.is_set():
+        ) as file:
+            while True:
+                try:
+                    with self._open_device(block) as rec:
+                        opened = True
+                        name = getattr(self.device, "name", "?")
+                        if not s.devices or s.devices[-1] != name:
+                            s.devices.append(name)
+                        if s.lost_since is not None:
+                            log.info("Track %s: recording again from «%s» after %.1f s", s.name, name,
+                                     self.clock() - s.lost_since)
+                            s.lost_since = None
+                            s.reconnects += 1
+                        self._write(rec, file, block)
+                    return
+                except Exception as e:
+                    # reconnect only a device that worked and then failed – not one that never opened
+                    # (wrong format), not a full disk
+                    lost = isinstance(e, DeviceLost) or (opened and s.lost_since is not None)
+                    if not lost or self.replace is None:
+                        raise
+                    if s.lost_since is None:
+                        s.lost_since = self.clock()
+                        s.level_rms = 0.0
+                        log.warning("Track %s: device lost (%s) – reconnecting", s.name, e, exc_info=True)
+                if self.stop_event.wait(RECONNECT_WAIT_S):
+                    return
+                try:
+                    device = self.replace(s.name, self.device)
+                except Exception:
+                    log.warning("Track %s: no device to continue with yet", s.name, exc_info=True)
+                    device = None
+                if device is not None:
+                    self.device = device
+
+    def _write(self, rec, file, block: int) -> None:
+        s = self.status
+        reader = _Reader(rec, getattr(self.device, "name", "?"))
+        while not self.stop_event.is_set():
+            try:
                 data = reader.read(block)
-                if self.paused() or not len(data):   # nothing came: filled with silence once audio arrives
-                    s.level_rms = 0.0
-                    continue
-                mono = data.mean(axis=1) if data.ndim == 2 else data
-                mono = mono.astype(np.float32, copy=False)
+            except Exception as e:
+                raise DeviceLost(str(e)) from e
+            if self.paused() or not len(data):   # nothing came: filled with silence once audio arrives
+                s.level_rms = 0.0
+                continue
+            mono = data.mean(axis=1) if data.ndim == 2 else data
+            mono = mono.astype(np.float32, copy=False)
 
-                elapsed = self.clock() - self.t0 - self.paused_time()
-                gap = missing_frames(elapsed, self.samplerate, s.written_frames, len(mono))
-                if gap:
-                    file.write(np.zeros(gap, dtype=np.float32))
-                    s.written_frames += gap
-                    s.padded_frames += gap
+            elapsed = self.clock() - self.t0 - self.paused_time()
+            gap = missing_frames(elapsed, self.samplerate, s.written_frames, len(mono))
+            if gap:
+                file.write(np.zeros(gap, dtype=np.float32))
+                s.written_frames += gap
+                s.padded_frames += gap
 
-                file.write(mono)
-                s.written_frames += len(mono)
-                s.level_rms = float(np.sqrt(np.mean(mono**2))) if len(mono) else 0.0
+            file.write(mono)
+            s.written_frames += len(mono)
+            s.level_rms = float(np.sqrt(np.mean(mono**2))) if len(mono) else 0.0
 
 
 class MeterTrack(Track):
@@ -270,6 +345,7 @@ class TwoTrackRecorder:
     stop_event: threading.Event = field(default_factory=threading.Event)
     tracks: list[Track] = field(default_factory=list)
     t0: float = 0.0
+    replace: Callable[[str, Any], Any] | None = None   # a lost device → the device to continue with
     _paused_total: float = 0.0
     _paused_since: float | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
@@ -277,7 +353,7 @@ class TwoTrackRecorder:
     def start(self) -> None:
         self.folder.mkdir(parents=True, exist_ok=True)
         self.t0 = time.monotonic()
-        common = dict(paused=lambda: self.paused, paused_time=self.paused_time)
+        common = dict(paused=lambda: self.paused, paused_time=self.paused_time, replace=self.replace)
         self.tracks = [
             Track("me", self.microphone, self.folder / "me.wav", self.stop_event, self.t0, self.samplerate, **common),
         ]
