@@ -33,6 +33,21 @@ console.log(JSON.stringify(text(rows[0].children[0])));
     assert run(script).startswith("Anzahl Personen auf dieser Spur (Systemton)")
 
 
+def test_number_of_people_offered_without_speakers():
+    """Ubuntu, 0.7.36: the test recording of the introduction is transcribed with «1 Person» per track, so no
+    speakers were told apart – and without speakers the box with «Anzahl Personen» didn't appear at all."""
+    script = STUBS + functions("speakerCountRows", "speakersPanel") + """
+const t = { speakers: {}, segments: [{ track: "others", start: 0, end: 3 }, { track: "me", start: 4, end: 6 }] };
+const panel = speakersPanel({ id: "x", audio: true }, t);
+const rows = panel.children.slice(2);
+console.log(JSON.stringify([text(panel.children[1]), rows.map((r) => text(r.children[0]))]));
+"""
+    hint, labels = run(script)
+    assert "nicht unterschieden" in hint
+    assert [label.strip() for label in labels] == ["Anzahl Personen auf dieser Spur (Mikrofon)",
+                                                    "Anzahl Personen auf dieser Spur (Systemton)"]
+
+
 def test_generated_names_are_recognised():
     """A name Verbalis gave is cleared on focus so the field lists all participants; a typed name is kept."""
     script = functions("generatedName") + """

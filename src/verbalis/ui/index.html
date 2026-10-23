@@ -1450,7 +1450,17 @@ function asideHost(segments, index) {
 
 function speakersPanel(a, t) {
   const entries = Object.entries(t.speakers || {});
-  if (!entries.length) return null;
+  if (!entries.length) {
+    // no speakers told apart (e.g. «1 Person» per track, as in the test recording of the introduction): still
+    // offer the number of people, otherwise there was no way to tell them apart afterwards
+    const rows = speakerCountRows(a, t, {});
+    if (!rows.length) return null;
+    return element("section", { class: "speakers-panel", "aria-label": "Sprecher" },
+      element("h3", {}, "Sprecher"),
+      element("p", { class: "hint" }, "Die Sprecher wurden nicht unterschieden. Sprechen mehrere Personen auf einer Spur: "
+        + "Anzahl eintragen und «Neu zuordnen»."),
+      ...rows);
+  }
   const talk = {};
   for (const s of t.segments) if (s.speaker_id) talk[s.speaker_id] = (talk[s.speaker_id] || 0) + (s.end - s.start);
   const typed = {};          // what is in the name fields right now – the merge lists show these
@@ -1534,7 +1544,9 @@ function generatedName(name, trackName) {
 /* «Anzahl Personen auf dieser Spur» + «Neu zuordnen»: diarize this track again with a known number of
    people – without transcribing again. Corrections stay, given names go to the most similar new speaker. */
 function speakerCountRows(a, t, talk) {
-  const tracks = [...new Set(Object.values(t.speakers || {}).map((info) => info.track))];
+  const used = new Set([...Object.values(t.speakers || {}).map((info) => info.track),
+    ...(t.segments || []).map((s) => s.track)]);
+  const tracks = ["me", "others"].filter((track) => used.has(track));
   return tracks.map((track) => {
     const current = Object.entries(t.speakers).filter(([id, info]) => info.track === track && talk[id]).length;
     const input = element("input", { type: "number", min: "1", max: "30", value: String(Math.max(current, 1)),
