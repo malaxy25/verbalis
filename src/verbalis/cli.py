@@ -483,6 +483,10 @@ def cmd_selftest(_args) -> int:
         if sys.platform == "darwin":   # see verbalis/__init__.py: the Mac app's Python has no certificates
             path = os.environ.get("SSL_CERT_FILE", "")
             assert path and os.path.exists(path), f"Zertifikatsliste fehlt ({path or 'SSL_CERT_FILE leer'})"
+        if sys.platform == "win32":    # see verbalis/__init__.py: Windows checks the certificates itself
+            import ssl
+            import truststore
+            assert ssl.SSLContext is truststore.SSLContext, "Windows-Zertifikatsspeicher nicht aktiv"
 
     check("Zertifikate für HTTPS", certificates)
     check("Rechtschreibung (spylls)", lambda: importlib.import_module("spylls.hunspell"))

@@ -53,4 +53,5 @@ soxr==1.1.0               # via verbalis (pyproject.toml)
 spylls==0.1.7             # via verbalis (pyproject.toml)
 tokenizers==0.23.2        # via faster-whisper
 tqdm==4.70.1              # via faster-whisper, huggingface-hub
+truststore==0.10.5 ; sys_platform == 'win32'  # via verbalis (pyproject.toml)
 typing-extensions==4.16.0  # via anyio, huggingface-hub, pywebview, soundfile

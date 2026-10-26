@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.39 – 2026-10-26
+- **Fix (Windows): «GitHub ist nicht erreichbar … CERTIFICATE_VERIFY_FAILED»** on some PCs – Python only knew
+  the root certificates already in the Windows store (Windows loads them on demand; company roots for TLS
+  inspection were missing too). Windows now checks HTTPS certificates itself (truststore), like Edge does –
+  for the update check and all downloads (models, dictionary).
+
 ## 0.7.38 – 2026-10-23
 - **Fix: «Anzahl Personen auf dieser Spur» was missing** when no speakers had been told apart – e.g. the
   test recording of the introduction («1 Person» per track) or with «Sprechertrennung» off. Now the speaker

@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-303 tests in 31 files.
+304 tests in 31 files.
 
 ### `test_acceleration.py` (10)
 
@@ -488,7 +488,7 @@ The introduction in the UI: its last step. Runs the tour functions of index.html
 
 - **Test recording is deleted once and the step stays** – 0.7.30 draft: after «Probeaufnahme löschen» the button stayed (the step count shrank and the card was
 
-### `test_updates.py` (27)
+### `test_updates.py` (28)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -508,6 +508,7 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Download checks sha256 and size**
 - **Check reads the github digest and name**
 - **Mac app finds certificates** – 0.7.19 bug on macOS: the update check failed with «CERTIFICATE_VERIFY_FAILED» – the Python
+- **Windows checks certificates itself** – 0.7.31 bug on a colleague's Windows PC: the update check failed with «CERTIFICATE_VERIFY_FAILED
 - **Certificate path inherited from the moved app is replaced** – 0.7.28 on a new Mac: after Verbalis moved itself from the translocated copy into «Programme», the
 - **App started from downloads is recognised** – 0.7.21 on macOS: «Verbalis darf /private/var/folders/… nicht ändern» – the app had been started
 - **Mac app in a locked folder offers the download** – 0.7.22 on a Mac without admin rights: «Verbalis darf /Applications nicht ändern» – and no way on.

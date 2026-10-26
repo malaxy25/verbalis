@@ -34,6 +34,23 @@ def _certificates_on_macos(platform: str | None = None) -> None:
 _OWN_CERT_MARK = "VERBALIS_SSL_CERT_FILE_SET"
 
 
-_certificates_on_macos()
+def _certificates_on_windows(platform: str | None = None) -> None:
+    """Python on Windows only reads the root certificates already in the Windows store. Windows fills
+    that store on demand (when a browser first needs a root) and IT may add company roots for
+    TLS inspection – so on some PCs the update check failed with «CERTIFICATE_VERIFY_FAILED» (0.7.31).
+    truststore lets Windows itself check the certificate, the same way Edge does."""
+    import sys
 
-__version__ = "0.7.38"
+    if (platform or sys.platform) != "win32":
+        return
+    try:
+        import truststore
+    except ImportError:
+        return
+    truststore.inject_into_ssl()
+
+
+_certificates_on_macos()
+_certificates_on_windows()
+
+__version__ = "0.7.39"

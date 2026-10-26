@@ -214,6 +214,23 @@ def test_mac_app_finds_certificates(monkeypatch, tmp_path):
     assert os.environ["SSL_CERT_FILE"] == str(company)       # a certificate file set by IT wins
 
 
+def test_windows_checks_certificates_itself(monkeypatch):
+    """0.7.31 bug on a colleague's Windows PC: the update check failed with «CERTIFICATE_VERIFY_FAILED
+    unable to get local issuer certificate» – Python only knew the roots already in the Windows store.
+    truststore now lets Windows check the certificate itself."""
+    import sys
+    import types
+
+    import verbalis
+    calls = []
+    monkeypatch.setitem(sys.modules, "truststore", types.SimpleNamespace(inject_into_ssl=lambda: calls.append(1)))
+    verbalis._certificates_on_windows("darwin")
+    verbalis._certificates_on_windows("linux")
+    assert calls == []
+    verbalis._certificates_on_windows("win32")
+    assert calls == [1]
+
+
 def test_certificate_path_inherited_from_the_moved_app_is_replaced(monkeypatch, tmp_path):
     """0.7.28 on a new Mac: after Verbalis moved itself from the translocated copy into «Programme», the
     restarted app inherited SSL_CERT_FILE pointing into the vanished copy – the model download failed with
