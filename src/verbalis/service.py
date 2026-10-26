@@ -33,8 +33,8 @@ from . import __version__, feedback, hardware, pipeline, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
-from .transcript import (clean_text, is_default_name, joined_words, segment_from_dict, split_times,
-                         to_markdown)
+from .transcript import (clean_text, complete_speakers, is_default_name, joined_words, segment_from_dict,
+                         split_times, to_markdown)
 from .transcription.models import verbalis_home
 
 VALID_ID = re.compile(r"^[\w\-]+$")
@@ -1561,7 +1561,14 @@ class Service:
         path = folder / "transcript.json"
         if not path.exists():
             raise ValueError("Für diese Aufnahme gibt es noch kein Transkript.")
-        return folder, json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self._complete_speakers(folder, data)
+        return folder, data
+
+    def _complete_speakers(self, folder: Path, data: dict) -> None:
+        """A speaker for every track and the single participant's name (see transcript.complete_speakers)."""
+        if complete_speakers(data, pipeline.read_meta(folder).get("participants")):
+            self._write_transcript(folder, data)
 
     def speakers(self, recording_id: str) -> list[dict]:
         """Speakers told apart in this transcript, with how long each talks."""
@@ -2040,6 +2047,8 @@ class Service:
             if meta.get("project"):
                 transcript["header"]["Projekt"] = meta["project"]
             self._write_transcript(folder, transcript)
+        if "participants" in changes and (folder / "transcript.json").exists():
+            self._transcript_data(recording_id)   # the single participant of a track names its speaker
         return pipeline.details(pipeline.read_meta(folder))
 
     def projects(self) -> list[str]:
@@ -2060,6 +2069,7 @@ class Service:
             data = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))
         except FileNotFoundError:
             return None
+        self._complete_speakers(folder, data)
         md = folder / "transcript.md"
         data["markdown"] = md.read_text(encoding="utf-8") if md.exists() else ""
         for seg in data["segments"]:

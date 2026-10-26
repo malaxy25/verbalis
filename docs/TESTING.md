@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-304 tests in 31 files.
+306 tests in 31 files.
 
 ### `test_acceleration.py` (10)
 
@@ -190,7 +190,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Soundcard without the windows warning class** – 0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
 - **Microphone only choice has no second device**
 
-### `test_diarization.py` (22)
+### `test_diarization.py` (24)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -206,6 +206,8 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Speaker split setting sets the threshold** – «Sprechertrennung: Eher weniger Personen» clusters with the higher threshold – Teams calls split one
 - **Asides setting is kept and checked**
 - **Rename merge and reassign**
+- **Track without diarization gets a speaker to name** – 0.7.38: without speaker diarization (switched off, «1 Person») the paragraphs had no speaker id – the
+- **Single participant names the speaker** – Option agreed with Andrea (0.7.39): with exactly one participant entered for a track, its only speaker gets
 - **Speaker sample is playable wav**
 - **Reference and compare use the track not the name**
 - **Merging never loses a given name** – 0.7.17: merging «Hans Muster» into the unnamed «Gegenüber 1» kept «Gegenüber 1» – the name was lost.

@@ -75,7 +75,7 @@ window.pywebview = { api: {
   audio_usage: () => ok({ audio_mb: 412.3 }),
   delete_audio: () => ok(null),
   plan_recording: () => { const id = "2026-10-20_140000"; recs.unshift({ id, start: "2026-10-20T14:00:00+02:00", duration_s: null, status: "planned", audio: false, audio_mb: 0, title: "Aufnahme Mo 20.10., 14:00", project: "", participants: {}, notes: "" }); return ok(id); },
-  update_details: (id, data) => { const r = recs.find((x) => x.id === id); if (r) Object.assign(r, data, data.participants ? { participants: Object.fromEntries(Object.entries(data.participants).map(([k, v]) => [k, Array.isArray(v) ? v : String(v).split(/[\n,]/).map((x) => x.trim()).filter(Boolean)])) } : {}); window.__details = [id, data]; return ok({}); },
+  update_details: (id, data) => { const r = recs.find((x) => x.id === id); if (r) Object.assign(r, data, data.participants ? { participants: Object.fromEntries(Object.entries(data.participants).map(([k, v]) => [k, Array.isArray(v) ? v : String(v).split(/[\n,]/).map((x) => x.trim()).filter(Boolean)])) } : {}); window.__details = [id, data]; return ok({ participants: (r && r.participants) || {} }); },
   projects: () => ok(["tocco Release", "Verbalis"]),
   extend_recording: () => { window.__extended = true; return ok(null); },
   keep_recording: () => { window.__kept_recording = true; return ok(null); },

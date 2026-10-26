@@ -1252,11 +1252,12 @@ function detailsPanel(a, open = false) {
   const saved = element("span", { class: "saved", "aria-live": "polite" });
   const save = async (data) => {
     try {
-      await call("update_details", a.id, data);
+      const details = await call("update_details", a.id, data);
       saved.textContent = "gespeichert";
       setTimeout(() => { saved.textContent = ""; }, 2000);
       state.listSignature = "";
       await loadList();
+      return details;
     } catch (e) { showMessage(e.message); }
   };
   const title = element("input", { type: "text", class: "title-input", "aria-label": "Name der Aufnahme",
@@ -1293,8 +1294,12 @@ function detailsPanel(a, open = false) {
     field.addEventListener("change", () => onSave(field.value));
     return element("label", { class: "field" }, element("span", {}, label), field);
   };
-  const participants = (track, text) => area(text, lines(track),
-    (value) => save({ participants: { ...(a.participants || {}), [track]: value } }));
+  const participants = (track, text) => area(text, lines(track), async (value) => {
+    const details = await save({ participants: { ...(a.participants || {}), [track]: value } });
+    if (!details) return;
+    a.participants = details.participants || {};
+    if (a.status === "done") await refreshSpeakers(a);
+  });
   const more = element("details", { class: "details-more" },
     element("summary", {}, "Teilnehmende und Notizen"),
     element("div", { class: "details-grid" },
@@ -1532,6 +1537,20 @@ function speakersPanel(a, t) {
       ...((a.participants || {})[track] || []).map((n) => element("option", { value: n })))),
     ...speakerCountRows(a, t, talk),
   );
+}
+
+/* After the participants changed: the speaker box lists them, and a track's single participant may have named
+   its speaker – update the box and the names in the text without rebuilding the view (focus and scrolling stay). */
+async function refreshSpeakers(a) {
+  let t;
+  try { t = await call("transcript", a.id); } catch (_) { return; }
+  const old = document.querySelector("#content .speakers-panel");
+  if (!t || state.selected !== a.id || !old) return;
+  const panel = speakersPanel(a, t);
+  if (panel) old.replaceWith(panel);
+  for (const [id, info] of Object.entries(t.speakers || {})) {
+    document.querySelectorAll(`.paragraph [data-speaker-id="${CSS.escape(id)}"]`).forEach((el) => { el.textContent = info.name; });
+  }
 }
 
 /* A name diarization gave («Gegenüber 2», «Person 3», or the track's name), not one the user typed

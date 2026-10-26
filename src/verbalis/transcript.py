@@ -203,6 +203,42 @@ def is_default_name(name: str, track_name: str) -> bool:
     return bool(track_name) and re.fullmatch(re.escape(track_name) + r"( \d+)?", name) is not None
 
 
+def complete_speakers(data: dict, participants: dict[str, list[str]] | None = None) -> bool:
+    """Every track gets a speaker the speaker box can name (0.7.39). Returns whether `data` changed.
+
+    Without diarization (switched off, «1 Person») a track's paragraphs had no speaker id: the speaker box could
+    only offer «Anzahl Personen», so «Gegenüber» could not be renamed. Such a track now gets one speaker «<track>-1».
+    The only speaker of a track with only one participant entered for it gets that participant's name – as long as
+    the speaker still has the name Verbalis gave, so a name typed in the speaker box stays."""
+    segments = data.get("segments") or []
+    speakers = data.setdefault("speakers", {})
+    tracks = data.get("tracks") or {}
+    changed = False
+    for track in dict.fromkeys(s.get("track") for s in segments):
+        own = [s for s in segments if s.get("track") == track]
+        if not track or any(s.get("speaker_id") for s in own):
+            continue
+        sid = f"{track}-1"
+        speakers[sid] = {"name": own[0].get("speaker") or tracks.get(track) or "", "track": track}
+        for s in own:
+            s["speaker_id"], s["speaker"] = sid, speakers[sid]["name"]
+        changed = True
+    for track, names in (participants or {}).items():
+        on_track = [sid for sid, info in speakers.items() if info.get("track") == track
+                    and any(s.get("speaker_id") == sid for s in segments)]
+        if len(names) != 1 or len(on_track) != 1:
+            continue
+        sid = on_track[0]
+        if speakers[sid]["name"] == names[0] or not is_default_name(speakers[sid]["name"], tracks.get(track, "")):
+            continue
+        speakers[sid]["name"] = names[0]
+        for s in segments:
+            if s.get("speaker_id") == sid:
+                s["speaker"] = names[0]
+        changed = True
+    return changed
+
+
 def speakers_of(paragraphs: list[Segment]) -> dict[str, dict]:
     """speaker id → {"name", "track"} for paragraphs from speaker diarization, in order of appearance."""
     found: dict[str, dict] = {}

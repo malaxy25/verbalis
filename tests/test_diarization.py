@@ -214,7 +214,47 @@ def test_rename_merge_and_reassign(no_real_diarization):
 
     s.rename_speakers(rid, {"others-2": "Hans Muster"})
     remaining = s.merge_speakers(rid, "others-2", first)
-    assert [sp["id"] for sp in remaining] == [first]
+    assert [sp["id"] for sp in remaining if sp["track"] == "others"] == [first]
+
+
+def test_track_without_diarization_gets_a_speaker_to_name(no_real_diarization):
+    """0.7.38: without speaker diarization (switched off, «1 Person») the paragraphs had no speaker id – the
+    speaker box only offered «Anzahl Personen», «Gegenüber» could not be renamed. Every track now gets a speaker,
+    also in transcripts written before."""
+    s, rid = service_with_speakers(no_real_diarization)
+    folder, data = s._transcript_data(rid)
+    for seg in data["segments"]:              # as written by 0.7.38 without diarization
+        seg["speaker"], seg["speaker_id"] = data["tracks"][seg["track"]], None
+    data["speakers"] = {}
+    (folder / "transcript.json").write_text(json.dumps(data), encoding="utf-8")
+
+    assert {sp["id"]: sp["name"] for sp in s.speakers(rid)} == {"me-1": data["tracks"]["me"],
+                                                                  "others-1": data["tracks"]["others"]}
+    s.rename_speakers(rid, {"others-1": "Claudia Gibolli"})
+    shown = s.transcript(rid)
+    assert {seg["speaker"] for seg in shown["segments"] if seg["track"] == "others"} == {"Claudia Gibolli"}
+    assert "Claudia Gibolli:**" in shown["markdown"]
+
+
+def test_single_participant_names_the_speaker(no_real_diarization):
+    """Option agreed with Andrea (0.7.39): with exactly one participant entered for a track, its only speaker gets
+    that name – also when the participant is entered later. A name typed in the speaker box is never replaced."""
+    s, rid = service_with_speakers(no_real_diarization)
+    folder, data = s._transcript_data(rid)
+    for seg in data["segments"]:              # one speaker per track, names given by Verbalis
+        seg["speaker"], seg["speaker_id"] = data["tracks"][seg["track"]], f"{seg['track']}-1"
+    data["speakers"] = {f"{t}-1": {"name": name, "track": t} for t, name in data["tracks"].items()}
+    s._write_transcript(folder, data)
+
+    s.update_details(rid, {"participants": {"others": "Claudia Gibolli\nMarc Muster"}})
+    assert {sp["id"]: sp["name"] for sp in s.speakers(rid)}["others-1"] == data["tracks"]["others"]   # two: choose
+    s.update_details(rid, {"participants": {"others": "Claudia Gibolli"}})
+    assert {sp["id"]: sp["name"] for sp in s.speakers(rid)}["others-1"] == "Claudia Gibolli"
+    assert "Claudia Gibolli:**" in (folder / "transcript.md").read_text(encoding="utf-8")
+
+    s.rename_speakers(rid, {"others-1": "Frau Gibolli"})      # can still be changed by hand
+    s.update_details(rid, {"participants": {"others": "Claudia Gibolli"}})
+    assert {sp["id"]: sp["name"] for sp in s.speakers(rid)}["others-1"] == "Frau Gibolli"
 
 
 def test_speaker_sample_is_playable_wav(no_real_diarization):
@@ -337,7 +377,7 @@ def test_reassign_with_known_number_of_people_keeps_given_names(no_real_diarizat
     speakers = s.speakers(rid)
     names = sorted(sp["name"] for sp in speakers if sp["track"] == "others")
     assert names == ["Gegenüber 2", "Hans Muster"]                    # the given name survived
-    assert {sp["track"] for sp in speakers} == {"others"}
+    assert [sp["id"] for sp in speakers if sp["track"] == "me"] == ["me-1"]   # the own track: its one speaker
     with pytest.raises(ValueError, match="Anzahl"):
         s.reassign_speakers(rid, "others", 0)
 

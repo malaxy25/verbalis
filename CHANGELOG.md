@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.40 – 2026-10-26
+- **Speaker box also without speaker diarization:** when the voices of a track were not told apart («1 Person»,
+  or switched off), the box only offered «Anzahl Personen» and «Gegenüber» could not be renamed. Now every track
+  has a speaker with name field, list of participants and sample – also in older transcripts.
+- **One participant names the speaker:** with exactly one name entered for a track under «Teilnehmende», its
+  only speaker gets that name automatically (also when entered later). It can still be changed in the speaker box.
+
 ## 0.7.39 – 2026-10-26
 - **Fix (Windows): «GitHub ist nicht erreichbar … CERTIFICATE_VERIFY_FAILED»** on some PCs – Python only knew
   the root certificates already in the Windows store (Windows loads them on demand; company roots for TLS
