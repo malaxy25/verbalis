@@ -6,6 +6,9 @@
   has a speaker with name field, list of participants and sample – also in older transcripts.
 - **One participant names the speaker:** with exactly one name entered for a track under «Teilnehmende», its
   only speaker gets that name automatically (also when entered later). It can still be changed in the speaker box.
+- **More room for the transcript:** the speaker box is grouped by track with «Personen [n] Neu zuordnen» next to the
+  speakers, and closed to one line with the names once every speaker has a name (click to open). Its explanation
+  is behind «?». Title, project and date share one line; the project is no longer shown twice.
 
 ## 0.7.39 – 2026-10-26
 - **Fix (Windows): «GitHub ist nicht erreichbar … CERTIFICATE_VERIFY_FAILED»** on some PCs – Python only knew

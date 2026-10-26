@@ -270,7 +270,9 @@
   .call-notice span { flex: 1 1 24em; }
   .target-hint { grid-column: 1 / -1; margin: 0; font-size: 14px; color: var(--limmat); font-weight: 600; }
   .target-hint[hidden] { display: none; }
-  .details-panel { max-width: 52em; display: grid; gap: 10px; margin-bottom: 16px; }
+  .details-panel { max-width: 66em; display: grid; gap: 10px; margin-bottom: 12px; }
+  .details-top { display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: end; }
+  .details-top .title-input { flex: 1 1 12em; width: auto; min-width: 0; }
   .title-input {
     font-size: 22px; font-weight: 600; letter-spacing: -0.01em; border: 1px solid transparent; border-radius: 6px;
     padding: 2px 6px; margin-left: -7px; background: none; width: 100%;
@@ -404,9 +406,9 @@
   .progress .remaining { color: var(--ink); font-variant-numeric: tabular-nums; margin-bottom: 14px; }
   .progress.paused .bar div { background: var(--muted); }
 
-  .transcript-header { max-width: 52em; margin-bottom: 24px; }
+  .transcript-header { max-width: 66em; margin-bottom: 16px; }
   .transcript-header h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
-  .transcript-header dl { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0 0 16px; font-size: 13px; }
+  .transcript-header dl { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0 0 12px; font-size: 13px; }
   .transcript-header dt { color: var(--muted); display: inline; }
   .transcript-header dd { display: inline; margin: 0 0 0 6px; }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -420,11 +422,25 @@
   .who-button { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;
     text-decoration: underline dotted; text-underline-offset: 3px; }
   .who-select { font-size: 13px; max-width: 100%; }
-  .speakers-panel { max-width: 52em; box-sizing: border-box; margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
+  .speakers-panel { max-width: 66em; box-sizing: border-box; margin: 0 0 18px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 10px;
     background: var(--surface); display: grid; gap: 10px; }
+  details.speakers-panel { display: block; }
   .speakers-panel h3 { margin: 0; font-size: 15px; }
+  .speakers-panel > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+  .speakers-panel > summary::-webkit-details-marker { display: none; }
+  .speakers-panel > summary::before { content: "▸"; color: var(--muted); width: 1em; }
+  .speakers-panel[open] > summary::before { content: "▾"; }
+  .speaker-names { color: var(--muted); font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .speakers-panel[open] .speaker-names { display: none; }
+  .help { display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line);
+    font-size: 12px; color: var(--muted); cursor: help; }
+  .speakers-body { display: grid; gap: 10px; margin-top: 10px; }
+  .speaker-track { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; }
+  .speaker-track + .speaker-track { padding-top: 10px; border-top: 1px solid var(--line); }
+  .track-label { flex: 0 0 5.5em; padding-top: 8px; color: var(--muted); font-size: 13px; }
+  .speaker-track .speaker-list { flex: 1 1 22em; min-width: 0; }
   .speakers-panel .hint { margin: 0; color: var(--muted); font-size: 13px; }
-  .speaker-row { display: grid; grid-template-columns: auto minmax(10em, 1fr) auto auto; gap: 10px; align-items: center; }
+  .speaker-row { display: grid; grid-template-columns: auto minmax(8em, 1fr) auto minmax(0, 12em); gap: 10px; align-items: center; }
   .speaker-row .talk { color: var(--muted); font-size: 13px; white-space: nowrap; }
   .play-button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2);
     cursor: pointer; color: var(--ink); }
@@ -432,7 +448,8 @@
   .play-button:disabled { cursor: not-allowed; color: var(--muted); opacity: .6; }
   .speaker-list { display: grid; gap: 8px; max-height: 320px; overflow-y: auto; padding: 2px 4px 2px 2px; }
   .speaker-row input { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
-  .speaker-row select { max-width: 14em; }
+  .speaker-row select { width: 100%; min-width: 0; }
+  .speaker-row > * { min-width: 0; }   /* the merge list shrinks instead of being cut off next to «Personen» */
   .speaker-row .saved { color: var(--muted); font-size: 12px; }
 
   /* «⋯» menu of a recording */
@@ -483,9 +500,10 @@
   .partial { margin-top: 28px; }
   .partial h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
   .partial .hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
-  .speaker-count { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding-top: 6px; border-top: 1px solid var(--line); }
-  .speaker-count input { width: 4em; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); text-align: right; }
+  .speaker-count { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding-top: 2px; font-size: 14px; }
+  .speaker-count input { width: 3.5em; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); text-align: right; }
   .speaker-count small { color: var(--muted); font-size: 13px; flex-basis: 100%; }
+  .speaker-count small:empty { display: none; }
   .people-fields { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 0 0 16px; }
   .people-fields label { display: grid; gap: 3px; color: var(--ink); }
   .people-fields span { font-weight: 600; font-size: 14px; }
@@ -1310,11 +1328,12 @@ function detailsPanel(a, open = false) {
   if (open || a.status === "planned" || (a.notes || "").trim()) more.open = true;   // notes stay in view
 
   return element("section", { class: "details-panel", "aria-label": "Angaben zur Aufnahme" },
-    title,
-    element("div", { class: "details-row" },
-      element("label", {}, element("span", {}, "Projekt"), project, projects),
-      element("label", {}, element("span", {}, a.status === "planned" ? "Geplant für" : "Aufgenommen"), when),
-      saved),
+    element("div", { class: "details-top" },   // title, project and date in one line when there is room
+      title,
+      element("div", { class: "details-row" },
+        element("label", {}, element("span", {}, "Projekt"), project, projects),
+        element("label", {}, element("span", {}, a.status === "planned" ? "Geplant für" : "Aufgenommen"), when),
+        saved)),
     more);
 }
 
@@ -1353,7 +1372,7 @@ async function renderTranscript(a) {
   const meName = (t.tracks && t.tracks.me) || null;
   const headerList = element("dl");
   for (const [k, v] of Object.entries(t.header || {})) {
-    if (k === "Aufnahme") continue;
+    if (k === "Aufnahme" || k === "Projekt") continue;   // the project is in the field above
     headerList.append(element("div", {}, element("dt", {}, k), element("dd", {}, v)));
   }
   headerList.append(element("div", {}, element("dt", {}, "Audio"), element("dd", {}, audioText(a))));
@@ -1374,8 +1393,7 @@ async function renderTranscript(a) {
     element("div", { class: "actions" },
       copyButton,
       a.audio ? retranscribeButton(a.id, !!t.edited) : null,
-      moreMenu(a),
-      element("span", { class: "edit-hint" }, "Zum Korrigieren einen Absatz anklicken."),
+      moreMenu(a),   // «Zum Korrigieren klicken» is the tooltip of every paragraph
     ),
   );
 
@@ -1458,13 +1476,13 @@ function speakersPanel(a, t) {
   if (!entries.length) {
     // no speakers told apart (e.g. «1 Person» per track, as in the test recording of the introduction): still
     // offer the number of people, otherwise there was no way to tell them apart afterwards
-    const rows = speakerCountRows(a, t, {});
-    if (!rows.length) return null;
+    const tracks = speakerTracks(t);
+    if (!tracks.length) return null;
     return element("section", { class: "speakers-panel", "aria-label": "Sprecher" },
       element("h3", {}, "Sprecher"),
       element("p", { class: "hint" }, "Die Sprecher wurden nicht unterschieden. Sprechen mehrere Personen auf einer Spur: "
         + "Anzahl eintragen und «Neu zuordnen»."),
-      ...rows);
+      ...tracks.map((track) => trackGroup(track, [], speakerCountRow(a, t, {}, track))));
   }
   const talk = {};
   for (const s of t.segments) if (s.speaker_id) talk[s.speaker_id] = (talk[s.speaker_id] || 0) + (s.end - s.start);
@@ -1484,12 +1502,16 @@ function speakersPanel(a, t) {
         document.querySelectorAll(`.paragraph [data-speaker-id="${CSS.escape(id)}"]`).forEach((el) => { el.textContent = value; });
         saved.textContent = "gespeichert";
         setTimeout(() => { saved.textContent = ""; }, 2000);
+        names.textContent = shownNames();
       } catch (e) { showMessage(e.message); }
     });
     return saving;
   }
 
-  const rows = entries.filter(([id]) => talk[id]).sort(([x], [y]) => talk[y] - talk[x]).map(([id, info]) => {
+  const sorted = entries.filter(([id]) => talk[id]).sort(([x], [y]) => talk[y] - talk[x]);
+  const shownNames = () => sorted.map(([id, info]) => t.speakers[id].name || info.name).join(", ");
+  const names = element("span", { class: "speaker-names" }, "");
+  const rows = sorted.map(([id, info]) => {
     typed[id] = info.name;
     const saved = element("span", { class: "saved", "aria-live": "polite" });
     const input = element("input", { type: "text", value: info.name, "aria-label": `Name für ${info.name}`, autocomplete: "off",
@@ -1527,16 +1549,46 @@ function speakersPanel(a, t) {
     return element("div", { class: "speaker-row" }, play, input,
       element("span", { class: "talk" }, `${timeText(talk[id])} Redezeit`, " ", saved), merge);
   });
-  return element("section", { class: "speakers-panel", "aria-label": "Sprecher" },
-    element("h3", {}, "Sprecher"),
-    element("p", { class: "hint" }, (a.audio ? "Mit ▶ eine Hörprobe anhören und den Namen eintragen – er wird gespeichert, sobald du das Feld verlässt. "
-      : "Namen eintragen – sie werden gespeichert, sobald du das Feld verlässt. Hörproben gibt es keine mehr, das Audio wurde gelöscht. ")
-      + "Wurde eine Person doppelt erkannt: «Gleiche Person wie …» wählen. Einzelne Absätze lassen sich über den Namen im Text umhängen."),
-    element("div", { class: "speaker-list" }, ...rows),
+  names.textContent = shownNames();
+  const hint = (a.audio ? "Mit ▶ eine Hörprobe anhören und den Namen eintragen – er wird gespeichert, sobald du das Feld verlässt. "
+    : "Namen eintragen – sie werden gespeichert, sobald du das Feld verlässt. Hörproben gibt es keine mehr, das Audio wurde gelöscht. ")
+    + "Wurde eine Person doppelt erkannt: «Gleiche Person wie …» wählen. Einzelne Absätze lassen sich über den Namen im Text umhängen. "
+    + "«Neu zuordnen» erkennt die Personen einer Spur neu, wenn die Anzahl nicht stimmt.";
+  const panel = element("details", { class: "speakers-panel", "aria-label": "Sprecher" },
+    element("summary", {}, element("h3", {}, "Sprecher"), names,
+      element("span", { class: "help", tabindex: "0", title: hint, "aria-label": hint }, "?")),
+    element("div", { class: "speakers-body" },
+      ...speakerTracks(t).map((track) => trackGroup(track,
+        rows.filter((_, i) => sorted[i][1].track === track), speakerCountRow(a, t, talk, track)))),
     ...["me", "others"].map((track) => element("datalist", { id: `people-${a.id}-${track}` },
       ...((a.participants || {})[track] || []).map((n) => element("option", { value: n })))),
-    ...speakerCountRows(a, t, talk),
   );
+  // closed once every speaker has a name; open while one is still «Gegenüber 2», «Person 1» … – or as last chosen
+  const chosen = (state.speakersOpen || {})[a.id];
+  panel.open = chosen !== undefined ? chosen : sorted.some(([, info]) => unnamedSpeaker(info.name, info.track, t.tracks));
+  panel.addEventListener("toggle", () => { state.speakersOpen = { ...(state.speakersOpen || {}), [a.id]: panel.open }; });
+  return panel;
+}
+
+/* A speaker still to be named: a name Verbalis gave – except the own track's single speaker, who has the user's name. */
+function unnamedSpeaker(name, track, tracks) {
+  const base = (tracks || {})[track];
+  return generatedName(name, base) && !(track === "me" && name === base);
+}
+
+/* The tracks of a transcript, microphone first. */
+function speakerTracks(t) {
+  const used = new Set([...Object.values(t.speakers || {}).map((info) => info.track),
+    ...(t.segments || []).map((s) => s.track)]);
+  return ["me", "others"].filter((track) => used.has(track));
+}
+
+/* One track in the speaker box: its speakers, and the number of people with «Neu zuordnen» next to them. */
+function trackGroup(track, rows, count) {
+  return element("div", { class: "speaker-track" },
+    element("div", { class: "track-label" }, TRACK_LABELS[track] || track),
+    element("div", { class: "speaker-list" }, ...rows),
+    count);
 }
 
 /* After the participants changed: the speaker box lists them, and a track's single participant may have named
@@ -1560,39 +1612,35 @@ function generatedName(name, trackName) {
   return /^Person \d+$/.test(name) || (!!trackName && new RegExp(`^${escaped}( \\d+)?$`).test(name));
 }
 
-/* «Anzahl Personen auf dieser Spur» + «Neu zuordnen»: diarize this track again with a known number of
+/* «Personen [n] Neu zuordnen» of one track: diarize this track again with a known number of
    people – without transcribing again. Corrections stay, given names go to the most similar new speaker. */
-function speakerCountRows(a, t, talk) {
-  const used = new Set([...Object.values(t.speakers || {}).map((info) => info.track),
-    ...(t.segments || []).map((s) => s.track)]);
-  const tracks = ["me", "others"].filter((track) => used.has(track));
-  return tracks.map((track) => {
-    const current = Object.entries(t.speakers).filter(([id, info]) => info.track === track && talk[id]).length;
-    const input = element("input", { type: "number", min: "1", max: "30", value: String(Math.max(current, 1)),
-      "aria-label": `Anzahl Personen im ${TRACK_LABELS[track] || track}`, inputmode: "numeric" });
-    const note = element("small", {}, a.audio
-      ? "Erkennt die Personen dieser Spur neu, ohne neu zu transkribieren. Korrekturen und vergebene Namen bleiben erhalten. Läuft im Hintergrund und kann einige Minuten dauern."
-      : "Das Audio dieser Aufnahme wurde gelöscht – neu zuordnen ist nicht mehr möglich.");
-    const button = element("button", { type: "button", class: "action" }, "Neu zuordnen");
-    button.disabled = input.disabled = !a.audio;
-    button.addEventListener("click", async () => {
-      const count = parseInt(input.value, 10);
-      if (!(count >= 1 && count <= 30)) { note.textContent = "Bitte eine Zahl zwischen 1 und 30 eingeben."; return; }
-      button.disabled = input.disabled = true;
-      button.textContent = "Wird neu zugeordnet …";
-      try {
-        await call("reassign_speakers", a.id, track, count);   // runs in the background with progress
-        state.listSignature = "";
-        await loadList();
-      } catch (e) {
-        showMessage(e.message);
-        button.disabled = input.disabled = false;
-        button.textContent = "Neu zuordnen";
-      }
-    });
-    return element("div", { class: "speaker-count" },
-      element("label", {}, `Anzahl Personen auf dieser Spur (${TRACK_LABELS[track] || track}) `, input), button, note);
+function speakerCountRow(a, t, talk, track) {
+  const current = Object.entries(t.speakers || {}).filter(([id, info]) => info.track === track && talk[id]).length;
+  const input = element("input", { type: "number", min: "1", max: "30", value: String(Math.max(current, 1)),
+    "aria-label": `Anzahl Personen im ${TRACK_LABELS[track] || track}`, inputmode: "numeric" });
+  // the explanation is the button's tooltip; the note only says what went wrong
+  const note = element("small", {}, a.audio ? "" : "Audio gelöscht – neu zuordnen nicht mehr möglich.");
+  const button = element("button", { type: "button", class: "action", title: a.audio
+    ? "Erkennt die Personen dieser Spur neu, ohne neu zu transkribieren. Korrekturen und vergebene Namen bleiben erhalten. Läuft im Hintergrund und kann einige Minuten dauern."
+    : "Das Audio dieser Aufnahme wurde gelöscht – neu zuordnen ist nicht mehr möglich." }, "Neu zuordnen");
+  button.disabled = input.disabled = !a.audio;
+  button.addEventListener("click", async () => {
+    const count = parseInt(input.value, 10);
+    if (!(count >= 1 && count <= 30)) { note.textContent = "Bitte eine Zahl zwischen 1 und 30 eingeben."; return; }
+    button.disabled = input.disabled = true;
+    button.textContent = "Wird neu zugeordnet …";
+    try {
+      await call("reassign_speakers", a.id, track, count);   // runs in the background with progress
+      state.listSignature = "";
+      await loadList();
+    } catch (e) {
+      showMessage(e.message);
+      button.disabled = input.disabled = false;
+      button.textContent = "Neu zuordnen";
+    }
   });
+  return element("div", { class: "speaker-count" },
+    element("label", {}, "Personen ", input), button, note);
 }
 
 function playSample(id, speakerId, button) {
