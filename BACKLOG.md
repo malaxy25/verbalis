@@ -4,6 +4,14 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
+## Current state (26 Oct 2026)
+
+- **Last session:** v0.7.39 (Windows checks HTTPS certificates itself) and v0.7.40 (speaker box grouped by track,
+  also without diarization). The status paragraph below still describes 0.7.38.
+- **Next step:** to agree with Andrea – open items below, in priority order.
+- **Open questions for Andrea:** none
+- **Prerequisites / start check:** none.
+
 ## 0.7.34 – next
 
 **Status 23 Oct 2026:** 0.7.38 released (speaker box without speakers, MLX file name, Linux Qt/lspci,
