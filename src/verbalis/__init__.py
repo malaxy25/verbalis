@@ -53,4 +53,4 @@ def _certificates_on_windows(platform: str | None = None) -> None:
 _certificates_on_macos()
 _certificates_on_windows()
 
-__version__ = "0.7.40"
+__version__ = "0.7.41"

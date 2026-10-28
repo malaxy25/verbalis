@@ -239,6 +239,76 @@ def complete_speakers(data: dict, participants: dict[str, list[str]] | None = No
     return changed
 
 
+MARK_WINDOW_S = 2.0    # a speaker mark names whoever talks within this many seconds around it …
+MARK_REACH_S = 10.0    # … otherwise the nearest paragraph of its track up to this far away
+
+
+def _marked_speaker(segments: list[dict], mark: dict) -> str | None:
+    """The speaker id a mark («jetzt spricht Basil» at 02:14) points to, or None."""
+    t = float(mark.get("t") or 0.0)
+    own = [s for s in segments if s.get("track") == mark.get("track") and s.get("speaker_id")]
+    talk: dict[str, float] = {}
+    for s in own:
+        shared = min(s["end"], t + MARK_WINDOW_S) - max(s["start"], t - MARK_WINDOW_S)
+        if shared > 0:
+            talk[s["speaker_id"]] = talk.get(s["speaker_id"], 0.0) + shared
+    if talk:
+        return max(talk, key=talk.get)
+
+    def distance(s):
+        return max(s["start"] - t, t - s["end"])
+
+    near = min(own, key=distance, default=None)
+    return near["speaker_id"] if near and distance(near) <= MARK_REACH_S else None
+
+
+def apply_marks(data: dict, marks: list[dict]) -> tuple[bool, list[str]]:
+    """Name speakers from the marks set during the recording (0.7.41). Returns (changed, problems).
+
+    A mark is {"t": seconds into the recording, "name", "track"}. Each one votes for the speaker who talks at that
+    moment; a speaker takes the name with the most votes – only while it still has the name Verbalis gave, so a
+    name typed in the speaker box stays. Several speakers of a track with the same name are one person that
+    diarization split up (common in Teams calls): they become one speaker. Two names on one speaker means
+    diarization joined two people; that is reported, the first name wins on a tie."""
+    segments = data.get("segments") or []
+    speakers = data.get("speakers") or {}
+    tracks = data.get("tracks") or {}
+    votes: dict[str, dict[str, int]] = {}
+    for mark in marks or []:
+        name = " ".join(str(mark.get("name") or "").split())
+        sid = _marked_speaker(segments, mark) if name else None
+        if sid in speakers:
+            votes.setdefault(sid, {})
+            votes[sid][name] = votes[sid].get(name, 0) + 1
+    changed, problems = False, []
+    for sid, names in votes.items():
+        name = max(names, key=names.get)
+        info = speakers[sid]
+        if len(names) > 1:
+            problems.append(" und ".join(f"«{n}»" for n in names) + f" klingen für Verbalis gleich – «{name}» "
+                            "wurde gewählt. Mit «Neu zuordnen» und der Anzahl Personen lässt sich das trennen.")
+        if info["name"] != name and is_default_name(info["name"], tracks.get(info.get("track"), "")):
+            info["name"] = name
+            changed = True
+    target: dict[tuple, str] = {}   # (track, name) → the first speaker with it; later ones join it
+    for sid in list(speakers):
+        info = speakers[sid]
+        key = (info.get("track"), info["name"])
+        if key not in target:
+            target[key] = sid
+        elif sid in votes or target[key] in votes:   # only speakers named by a mark are joined
+            for s in segments:
+                if s.get("speaker_id") == sid:
+                    s["speaker_id"] = target[key]
+            del speakers[sid]
+            changed = True
+    for s in segments:
+        if s.get("speaker_id") in speakers and s.get("speaker") != speakers[s["speaker_id"]]["name"]:
+            s["speaker"] = speakers[s["speaker_id"]]["name"]
+            changed = True
+    return changed, problems
+
+
 def speakers_of(paragraphs: list[Segment]) -> dict[str, dict]:
     """speaker id → {"name", "track"} for paragraphs from speaker diarization, in order of appearance."""
     found: dict[str, dict] = {}

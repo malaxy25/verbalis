@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.41 – 2026-10-28
+- **«Wer spricht gerade?» while recording:** below the recording details there is a button per participant
+  (grouped «Im Call» / «Am Mikrofon») and a field for a new name. A click marks that this person talks now. After
+  the transcription the speaker found at that moment gets the name – replacing notes like «Basil at 2 min». A
+  person that diarization split into several speakers (common in Teams calls) becomes one speaker when they carry
+  the same mark; two names on one voice are reported. Names typed in the speaker box are never overwritten, the
+  latest marks can be taken back with ×. Marks also apply after «Neu zuordnen».
+
 ## 0.7.40 – 2026-10-26
 - **Speaker box also without speaker diarization:** when the voices of a track were not told apart («1 Person»,
   or switched off), the box only offered «Anzahl Personen» and «Gegenüber» could not be renamed. Now every track

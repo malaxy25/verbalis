@@ -33,8 +33,8 @@ from . import __version__, feedback, hardware, pipeline, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
-from .transcript import (clean_text, complete_speakers, is_default_name, joined_words, segment_from_dict,
-                         split_times, to_markdown)
+from .transcript import (apply_marks, clean_text, complete_speakers, is_default_name, joined_words,
+                         segment_from_dict, split_times, to_markdown)
 from .transcription.models import verbalis_home
 
 VALID_ID = re.compile(r"^[\w\-]+$")
@@ -1354,6 +1354,7 @@ class Service:
                     self._path(recording_id), tr, s.model, names, progress, paused_time, corrections,
                     diarize=diarize, phase=phase, people={t: n for t, n in people.items() if n and n > 1},
                     threshold=threshold_for(s.speaker_split), asides=s.asides == "on")
+                self._apply_marks(recording_id)
                 if duration > 0 and compute > 0:
                     self._remember_factor(key, compute / duration)
             except ShuttingDown:
@@ -1687,6 +1688,58 @@ class Service:
         data["segments"] = _join_neighbours(data["segments"])
         self._write_transcript(folder, data)
         log.info("Speakers of %s/%s re-assigned to %d people", recording_id, track, count)
+        self._apply_marks(recording_id)
+
+    def mark_speaker(self, name: str, track: str = "others") -> list[dict]:
+        """«Jetzt spricht …» while recording: who talks at this moment. After the transcription the speaker found
+        there gets the name (transcript.apply_marks). A new name joins the participants of the track."""
+        name = _clean_text(name, 80)
+        if not name:
+            raise ValueError("Bitte einen Namen angeben.")
+        if track not in pipeline.TRACKS:
+            raise ValueError("Diese Spur gibt es nicht.")
+        with self._lock:   # stop_recording takes the lock too: a mark is on disk before meta.json is rewritten
+            if self._rec is None:
+                raise RuntimeError("Es läuft keine Aufnahme.")
+            folder = self._rec_info["folder"]
+            meta = pipeline.read_meta(folder)
+            marks = [*(meta.get("speaker_marks") or []),
+                     {"t": round(self._rec.active_seconds(), 1), "name": name, "track": track}]
+            participants = dict(meta.get("participants") or {})
+            if name.lower() not in (n.lower() for n in participants.get(track, [])):
+                participants[track] = [*participants.get(track, []), name]
+            pipeline.update_meta(folder, speaker_marks=marks, participants=participants)
+        return marks
+
+    def remove_speaker_mark(self, index: int) -> list[dict]:
+        """A mark set by mistake (wrong person) – only during the recording."""
+        with self._lock:
+            if self._rec is None:
+                raise RuntimeError("Es läuft keine Aufnahme.")
+            folder = self._rec_info["folder"]
+            marks = list(pipeline.read_meta(folder).get("speaker_marks") or [])
+            if 0 <= int(index) < len(marks):
+                del marks[int(index)]
+                pipeline.update_meta(folder, speaker_marks=marks)
+        return marks
+
+    def _apply_marks(self, recording_id: str) -> None:
+        """Name the speakers from the marks set during the recording; never fails the transcription."""
+        try:
+            folder = self._path(recording_id)
+            marks = pipeline.read_meta(folder).get("speaker_marks")
+            if not marks or not (folder / "transcript.json").exists():
+                return
+            folder, data = self._transcript_data(recording_id)
+            changed, problems = apply_marks(data, marks)
+            if changed:
+                data["segments"] = _join_neighbours(data["segments"])
+                self._write_transcript(folder, data)
+            if problems:
+                self._notice = " ".join(problems)
+            log.info("Speaker marks of %s applied (%d marks, %d problems)", recording_id, len(marks), len(problems))
+        except Exception:
+            log.exception("Applying the speaker marks of %s failed", recording_id)
 
     def set_paragraph_speaker(self, recording_id: str, index: int, speaker_id: str) -> None:
         """A paragraph was assigned to the wrong person."""
@@ -1998,6 +2051,8 @@ class Service:
                     "project": meta.get("project") or "",
                     "participants": meta.get("participants") or {},
                     "notes": meta.get("notes") or "",
+                    "speaker_marks": meta.get("speaker_marks") or [],
+                    "only_microphone": bool(meta.get("only_microphone")),
                 })
         return result
 

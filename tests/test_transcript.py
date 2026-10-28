@@ -2,7 +2,7 @@
 
 import json
 
-from verbalis.transcript import clean_text, merge, segment_dict, split_times, to_markdown
+from verbalis.transcript import apply_marks, clean_text, merge, segment_dict, split_times, to_markdown
 from verbalis.transcription.base import Segment
 
 
@@ -108,3 +108,46 @@ def test_line_breaks_are_kept():
     assert clean_text("  Erste   Zeile \n\n  zweite Zeile ") == "Erste Zeile\nzweite Zeile"
     md = to_markdown([Segment(0.0, 2.0, "Erste Zeile\nzweite Zeile", "Ich")], "Titel", {})
     assert "**[00:00] Ich:** Erste Zeile  \nzweite Zeile" in md
+
+
+def marked_transcript():
+    """Teams call: diarization split Basil into two speakers, Sandra is a third one."""
+    def seg(start, end, sid, name, track="others"):
+        return {"start": start, "end": end, "text": "…", "track": track, "speaker_id": sid, "speaker": name}
+
+    return {"tracks": {"me": "Andrea", "others": "Gegenüber"},
+            "speakers": {"me-1": {"name": "Andrea", "track": "me"},
+                         "others-1": {"name": "Gegenüber 1", "track": "others"},
+                         "others-2": {"name": "Gegenüber 2", "track": "others"},
+                         "others-3": {"name": "Gegenüber 3", "track": "others"}},
+            "segments": [seg(0, 10, "me-1", "Andrea", "me"), seg(10, 30, "others-1", "Gegenüber 1"),
+                         seg(30, 50, "others-2", "Gegenüber 2"), seg(50, 70, "others-3", "Gegenüber 3"),
+                         seg(80, 90, "others-1", "Gegenüber 1")]}
+
+
+def test_speaker_marks_name_speakers_and_join_a_split_person():
+    """0.7.41: «Wer spricht gerade?» – a mark names the speaker talking then; one person split into two
+    speakers by diarization (both marked «Basil») becomes one speaker."""
+    data = marked_transcript()
+    marks = [{"t": 12.0, "name": "Basil", "track": "others"}, {"t": 33.5, "name": "Basil", "track": "others"},
+             {"t": 75.0, "name": "Sandra", "track": "others"}]     # 5 s after Sandra stopped: the nearest paragraph
+    changed, problems = apply_marks(data, marks)
+    assert changed and problems == []
+    assert {sid: s["name"] for sid, s in data["speakers"].items()} ==         {"me-1": "Andrea", "others-1": "Basil", "others-3": "Sandra"}
+    assert [s["speaker"] for s in data["segments"]] == ["Andrea", "Basil", "Basil", "Sandra", "Basil"]
+    assert [s["speaker_id"] for s in data["segments"]][1:3] == ["others-1", "others-1"]
+    assert apply_marks(data, marks) == (False, [])     # applying again changes nothing
+
+
+def test_speaker_marks_keep_names_typed_by_hand_and_report_two_people_on_one_voice():
+    data = marked_transcript()
+    data["speakers"]["others-2"]["name"] = "Peter"            # named in the speaker box
+    marks = [{"t": 40.0, "name": "Basil", "track": "others"},
+             {"t": 15.0, "name": "Sandra", "track": "others"}, {"t": 20.0, "name": "Tom", "track": "others"},
+             {"t": 200.0, "name": "Eva", "track": "others"},      # nobody talks near it: ignored
+             {"t": 25.0, "name": "Hans", "track": "me"}]          # no microphone paragraph near 25 s: ignored
+    changed, problems = apply_marks(data, marks)
+    assert data["speakers"]["others-2"]["name"] == "Peter"
+    assert data["speakers"]["others-1"]["name"] == "Sandra"      # a tie: the first mark wins
+    assert len(problems) == 1 and "«Sandra» und «Tom»" in problems[0]
+    assert data["speakers"]["me-1"]["name"] == "Andrea"

@@ -189,7 +189,7 @@ PLANNED = "planned"              # created in advance with its details, nothing 
 
 # What the user enters about a recording – kept when meta.json is rewritten at the end of a recording
 DETAIL_FIELDS = ("title", "project", "participants", "notes", "people", "keep_audio", "planned_start",
-                 "only_microphone")
+                 "only_microphone", "speaker_marks")
 WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
 

@@ -71,3 +71,23 @@ def test_details_are_saved_while_meta_json_is_being_read():
     threading.Timer(0.3, handle.close).start()
     s.update_details(rid, {"title": "Gespeichert trotz Lesen"})
     assert s.recordings()[0]["title"] == "Gespeichert trotz Lesen"
+
+
+def test_speaker_marks_during_the_recording_name_the_speaker():
+    """0.7.41: «Wer spricht gerade?» – marks set while recording survive its end and name the speaker."""
+    s = make_service()
+    with pytest.raises(RuntimeError, match="keine Aufnahme"):
+        s.mark_speaker("Basil")
+    rid = s.start_recording(consent=True)
+    s.mark_speaker("Sandra")
+    s.remove_speaker_mark(0)                                   # clicked by mistake
+    marks = s.mark_speaker("  Basil ", "others")
+    assert [(m["name"], m["track"]) for m in marks] == [("Basil", "others")] and marks[0]["t"] >= 5
+    assert s.recordings()[0]["participants"] == {"others": ["Sandra", "Basil"]}   # new names join the participants
+    with pytest.raises(ValueError):
+        s.mark_speaker(" ")
+    s.stop_recording()
+    assert wait_until(lambda: s.recordings()[0]["status"] == "done")
+    assert pipeline.read_meta(s._path(rid))["speaker_marks"] == marks
+    others = [sp for sp in s.speakers(rid) if sp["track"] == "others"]
+    assert [sp["name"] for sp in others] == ["Basil"]

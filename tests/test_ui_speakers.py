@@ -85,3 +85,20 @@ console.log(JSON.stringify([generatedName("Gegenüber 2", "Gegenüber"), generat
   generatedName("Ich (Test) 2", "Ich (Test)")]));
 """
     assert run(script) == [True, True, True, False, True]
+
+
+def test_speaker_marks_box_offers_the_participants_and_the_latest_marks():
+    """0.7.41: «Wer spricht gerade?» while recording – a button per participant, grouped by track, the latest marks."""
+    script = STUBS + functions("speakerMarks") + """
+const MARKS_SHOWN = 6;
+function timeText(s) { return String(s); }
+const marks = Array.from({ length: 8 }, (_, i) => ({ t: i * 60, name: i % 2 ? "Basil" : "Sandra", track: "others" }));
+const box = speakerMarks({ participants: { me: ["Andrea"], others: ["Basil", "Sandra"] }, speaker_marks: marks });
+const rows = box.children.filter((c) => c && c.attrs.class === "marks-row");
+const recent = box.children.find((c) => c && c.attrs.class === "marks-recent");
+console.log(JSON.stringify({ rows: rows.map((r) => r.children.map(text)), recent: recent.children.map(text) }));
+"""
+    result = run(script)
+    assert result["rows"][:2] == [["Im Call", "Basil", "Sandra"], ["Am Mikrofon", "Andrea"]]
+    assert result["rows"][2][-1] == "spricht jetzt"
+    assert result["recent"] == ["120 Sandra×", "180 Basil×", "240 Sandra×", "300 Basil×", "360 Sandra×", "420 Basil×"]

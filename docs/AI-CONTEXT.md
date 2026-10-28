@@ -107,6 +107,10 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   `verbalis speakers-test` (prints numbers only). sherpa-onnx holds the GIL while computing, so the app
   runs it in a separate process (`diarization.turns_for_file`, spawn; `freeze_support()` in the packaged
   entry scripts; tests set `SEPARATE_PROCESS = False` because they fake `find_turns`).
+- **Speaker marks** (0.7.41): «Wer spricht gerade?» during a recording stores `{t, name, track}` in `meta.json`
+  (`speaker_marks`, a DETAIL_FIELD). After the transcription (and after «Neu zuordnen») `transcript.apply_marks`
+  names the speaker talking at each mark and joins speakers of a track that got the same name. Diarization itself
+  is not changed – it needs the whole recording, so live assignment is not possible.
 - **Transcription starts by hand** by default since 0.7.18 (`auto_transcribe` setting): the number of
   people per track is entered first and stored in `meta.json` (`people`), used as `num_speakers`.
 - **Step-by-step transcription** (0.7.18, `pipeline.transcribe`): ~2-min pieces cut in speech pauses,

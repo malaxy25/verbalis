@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-307 tests in 31 files.
+311 tests in 31 files.
 
 ### `test_acceleration.py` (10)
 
@@ -168,7 +168,7 @@ Nvidia GPU (experimental): choosing the device, CPU fallback, downloading cuBLAS
 - **Install keeps only the libraries**
 - **Install with a wrong checksum installs nothing**
 
-### `test_details.py` (5)
+### `test_details.py` (6)
 
 Recording details (name, project, participants, notes) and planned recordings.
 
@@ -177,6 +177,7 @@ Recording details (name, project, participants, notes) and planned recordings.
 - **Planned recording is recorded into with its details**
 - **Planned recording can be deleted**
 - **Details are saved while meta json is being read** – Windows: replacing meta.json failed while another thread had it open for a moment (WinError 5/32).
+- **Speaker marks during the recording name the speaker** – 0.7.41: «Wer spricht gerade?» – marks set while recording survive its end and name the speaker.
 
 ### `test_devices.py` (7)
 
@@ -453,7 +454,7 @@ Step-by-step transcription: pieces cut in speech pauses, both tracks alternately
 - **Finished transcript removes the partial file**
 - **Service resumes cut off transcriptions at start**
 
-### `test_transcript.py` (12)
+### `test_transcript.py` (14)
 
 Merging both tracks into paragraphs and the Markdown output.
 
@@ -469,6 +470,8 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Split time comes from the words also after a correction**
 - **Split time without words is estimated from the text**
 - **Line breaks are kept**
+- **Speaker marks name speakers and join a split person** – 0.7.41: «Wer spricht gerade?» – a mark names the speaker talking then; one person split into two
+- **Speaker marks keep names typed by hand and report two people on one voice**
 
 ### `test_ui_list.py` (1)
 
@@ -476,7 +479,7 @@ The recording list in the UI: groups open and close. Runs the list functions of 
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
 
-### `test_ui_speakers.py` (4)
+### `test_ui_speakers.py` (5)
 
 The speaker box in the UI. Runs functions of index.html in Node.js.
 
@@ -484,6 +487,7 @@ The speaker box in the UI. Runs functions of index.html in Node.js.
 - **Number of people offered without speakers** – Ubuntu, 0.7.36: the test recording of the introduction is transcribed with «1 Person» per track, so no
 - **Speaker box closed once everybody has a name** – 0.7.40: the speaker box took much room above the transcript. It is closed (one line with the names) once every
 - **Generated names are recognised** – A name Verbalis gave is cleared on focus so the field lists all participants; a typed name is kept.
+- **Speaker marks box offers the participants and the latest marks** – 0.7.41: «Wer spricht gerade?» while recording – a button per participant, grouped by track, the latest marks.
 
 ### `test_ui_tour.py` (1)
 
