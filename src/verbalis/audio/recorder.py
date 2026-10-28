@@ -34,6 +34,8 @@ from typing import Any, Callable
 import numpy as np
 import soundfile as sf
 
+from ..priority import boost_thread
+
 log = logging.getLogger(__name__)
 
 SAMPLERATE = 48_000
@@ -168,6 +170,7 @@ class Track(threading.Thread):
 
     def run(self) -> None:
         try:
+            boost_thread()   # audio first, also while transcribing during the recording (live.py)
             _init_com()
             self._record()
         except BaseException as e:  # report errors to the main thread

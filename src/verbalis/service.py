@@ -135,6 +135,9 @@ class Service:
 
         self._rec = None
         self._rec_info: dict = {}
+        # transcribing while recording (live.py): recording id → LiveTranscription, until the job takes it over
+        self._live: dict = {}
+        self._live_done: dict[str, threading.Thread] = {}   # its finish() after the recording ended
         self._recording_error: str | None = None
         self._others_last_sound = 0.0   # when the others track last had sound (monotonic)
 
@@ -891,6 +894,7 @@ class Service:
 
             self._rec = rec
             self._recording_error = None
+            self._start_live(folder)
             self._others_last_sound = time.monotonic()
             self._rec_info = {"id": folder.name, "folder": folder, "start": start, "consent": consent,
                               "devices": names, "limit_s": self._s.max_recording_s,
@@ -901,6 +905,66 @@ class Service:
             if (microphone, speakers) != (self._s.microphone, self._s.speakers):
                 self.save_settings({"microphone": microphone, "speakers": speakers})
             return folder.name
+
+    # ------------------------------------------------------------ transcribing while recording (live.py)
+
+    def _start_live(self, folder: Path) -> None:
+        """With the setting on: transcribe this recording while it is recorded. Not while another transcription
+        waits for the recording to end (it holds the model) and not with a model that still has to be downloaded."""
+        from .live import LiveTranscription
+
+        s = self._s
+        if s.live_transcribe != "on" or self._job is not None:
+            if s.live_transcribe == "on":
+                log.info("No live transcription of %s: another transcription is waiting", folder.name)
+            return
+
+        def prepare():
+            from .transcription.models import is_local, repo_for
+
+            if repo_for(s.model) is not None and not is_local(s.model):
+                raise RuntimeError("Das Modell ist noch nicht heruntergeladen – es wird nach der Aufnahme geladen.")
+            tr = self._get_model(s.model)
+            tr.beam_size = s.beam_size
+            tr.keywords = self._keywords(s.keywords, CorrectionList.load()) or None
+            return tr
+
+        live = LiveTranscription(folder, {"me": s.name, "others": s.others}, s.model, prepare)
+        self._live[folder.name] = live
+        live.start()
+        log.info("Live transcription of %s started", folder.name)
+
+    def _finish_live(self, recording_id: str) -> None:
+        """The recording ended: plan the rest in the background (it may wait for the piece in progress)."""
+        with self._lock:
+            live = self._live.pop(recording_id, None)
+            if live is None:
+                return
+            done = threading.Thread(target=self._finish_live_safely, args=(recording_id, live), daemon=True,
+                                    name="live-finish")
+            self._live_done[recording_id] = done
+        done.start()
+
+    def _finish_live_safely(self, recording_id: str, live) -> None:
+        try:
+            live.finish()
+        except Exception:
+            log.exception("Finishing the live transcription of %s failed", recording_id)
+            (live.folder / "transcript.live.json").unlink(missing_ok=True)
+
+    def _take_live(self, recording_id: str) -> None:
+        """Before a transcription: wait until every live transcription has let go of the model (the one of a
+        recording just ended may still finish its piece), then continue from this recording's live part."""
+        from . import live
+
+        with self._lock:
+            pending = dict(self._live_done)
+        for rid, done in pending.items():
+            done.join()
+            with self._lock:
+                self._live_done.pop(rid, None)
+        if live.take_over(self._path(recording_id)):
+            log.info("Transcription of %s continues from the live transcription", recording_id)
 
     def pause_recording(self) -> None:
         with self._lock:
@@ -923,6 +987,7 @@ class Service:
                 return None
             self._rec, self._rec_info = None, {}
         state = self._finish(rec, info, reason)
+        self._finish_live(info["id"])
         if note:
             pipeline.update_meta(info["folder"], ended_by=note)
             self._notice = note
@@ -1308,6 +1373,7 @@ class Service:
                     "factor": self._factor(key),
                 }
             try:
+                self._take_live(recording_id)   # before compressing: it reads the WAV files
                 self._compress_safely(self._path(recording_id))
                 self._ensure_model(s.model)
                 with self._lock:
@@ -1384,9 +1450,16 @@ class Service:
         except Exception:  # not critical – the WAV gets transcribed instead
             log.exception("Compressing %s failed", folder.name)
 
+    def _live_status(self, recording_id: str) -> dict | None:
+        live = self._live.get(recording_id)
+        if live is None:
+            return None
+        return {"done_s": round(live.done_s), "recorded_s": round(live.available_s), "problem": live.problem}
+
     def _protected(self) -> set[str]:
         with self._lock:
-            return {i for i in (self._rec_info.get("id"), self._job and self._job["id"], *self._queued) if i}
+            return {i for i in (self._rec_info.get("id"), self._job and self._job["id"], *self._queued,
+                                *self._live, *self._live_done) if i}
 
     def _cleanup_safely(self) -> None:
         try:
@@ -2176,6 +2249,7 @@ class Service:
                     "others_silent_s": round(now - self._others_last_sound),
                     "others_device": info["devices"]["others"],
                     "only_microphone": others is None,
+                    "live": self._live_status(info["id"]),
                     "call_over": info.get("call_app") if info.get("call_over")
                     and not info.get("call_over_dismissed") else None,
                 }
@@ -2221,6 +2295,8 @@ class Service:
             rec, info = self._rec, self._rec_info
             self._rec, self._rec_info = None, {}
             self._finish(rec, info)
+        for live in list(self._live.values()):   # its progress stays on disk; the next transcription uses it
+            live.stop()
         self._queue.put(None)
         if wait_s:
             self._worker.join(wait_s)

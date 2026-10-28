@@ -303,6 +303,7 @@
   .marks-row .action.marked { color: var(--muted); }
   .marks.done h3 { color: var(--limmat); }
   .marks-row input { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); width: 12em; }
+  .live-status { color: var(--limmat); font-weight: 600; }
   .marks-recent { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 13px; }
   .marks-recent button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0 2px; }
   .marks-recent button:hover { color: var(--ink); }
@@ -830,6 +831,8 @@
             <span>Nach der Aufnahme</span>
             <label class="consent-like"><input type="checkbox" name="auto_transcribe"> Sofort automatisch transkribieren</label>
             <small>Ausgeschaltet: Nach dem Meeting zuerst die Anzahl Personen erfassen und dann mit «Transkribieren» starten – die Sprecher werden so zuverlässiger erkannt.</small>
+            <label class="consent-like"><input type="checkbox" name="live_transcribe"> Schon während der Aufnahme transkribieren (experimentell)</label>
+            <small>Das Transkript ist kurz nach dem Ende fertig – es fehlen nur noch die letzten Minuten und die Sprechererkennung. Braucht während des Calls Rechenleistung; die Aufnahme und andere Programme haben Vorrang.</small>
           </div>
           <fieldset>
             <legend>Tempo</legend>
@@ -1194,6 +1197,7 @@ async function renderContent(force = false) {
     case "recording":
       content.replaceChildren(detailsPanel(a), speakerMarks(a), element("div", { class: "empty" },
         element("h2", {}, "Aufnahme läuft"),
+        element("p", { class: "live-status", id: "live-status", hidden: "" }),
         element("p", {}, state.settings.auto_transcribe === "on"
           ? "Das Transkript wird nach dem Beenden der Aufnahme automatisch erstellt."
           : "Nach dem Beenden: Anzahl Personen prüfen und «Transkribieren» wählen. Name, Projekt und Teilnehmende lassen sich schon jetzt erfassen."),
@@ -2046,7 +2050,22 @@ async function previewLevels() {
   } catch (_) { /* devices not readable – the recording itself reports it */ }
 }
 
+/* «Schon während der Aufnahme transkribieren»: how far it is (Service._live_status). */
+function liveText(live) {
+  if (!live) return "";
+  if (live.problem) return `Transkription während der Aufnahme gestoppt: ${live.problem} Sie läuft nach dem Ende wie gewohnt.`;
+  if (!live.done_s) return "Wird schon während der Aufnahme transkribiert – das erste Stück nach gut zwei Minuten.";
+  const behind = Math.max(0, live.recorded_s - live.done_s);
+  return `Bis ${timeText(live.done_s)} transkribiert` + (behind > 300
+    ? ` – ${Math.round(behind / 60)} Min. im Rückstand, der Rest folgt nach dem Ende.` : " – nach dem Ende fehlen nur noch wenige Minuten.");
+}
+
 function showRecording(recording) {
+  const status = document.getElementById("live-status");
+  if (status) {
+    status.textContent = liveText(recording && recording.live);
+    status.hidden = !status.textContent;
+  }
   const running = !!recording;
   if (running !== state.running) {
     state.running = running;
@@ -2816,6 +2835,7 @@ async function openSettings(tab) {
   form.elements.diarize_me.checked = e.diarize_me === "on";
   form.elements.asides.checked = e.asides !== "off";
   form.elements.auto_transcribe.checked = e.auto_transcribe === "on";
+  form.elements.live_transcribe.checked = e.live_transcribe === "on";
   form.elements.call_detection.checked = e.call_detection !== "off";
   $("audio-hint").textContent = AUDIO_HINT;
   call("audio_usage").then((sp) => {
@@ -3184,6 +3204,7 @@ function collectSettings() {
   data.diarize_me = form.elements.diarize_me.checked ? "on" : "off";
   data.asides = form.elements.asides.checked ? "on" : "off";
   data.auto_transcribe = form.elements.auto_transcribe.checked ? "on" : "off";
+  data.live_transcribe = form.elements.live_transcribe.checked ? "on" : "off";
   data.call_detection = form.elements.call_detection.checked ? "on" : "off";
   const choice = chosenModel();
   data.model = choice === CUSTOM ? (form.elements.model_custom ? form.elements.model_custom.value.trim() : "") : choice;

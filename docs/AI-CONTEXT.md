@@ -107,6 +107,13 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   `verbalis speakers-test` (prints numbers only). sherpa-onnx holds the GIL while computing, so the app
   runs it in a separate process (`diarization.turns_for_file`, spawn; `freeze_support()` in the packaged
   entry scripts; tests set `SEPARATE_PROCESS = False` because they fake `find_turns`).
+- **Live transcription** (0.7.42, `live.py`, setting `live_transcribe`, off): a thread transcribes the growing
+  WAVs (header sizes are wrong until closed – it parses the RIFF chunks itself) in the pieces of
+  `pipeline.transcribe`, progress in `transcript.live.json`. After the stop `plan_rest` cuts the rest up to the real
+  end; the next job renames it to `transcript.partial.json` (`take_over`) and continues. Own file name because
+  partials are resumed automatically at start, recordings waiting for «Anzahl Personen» must not be. Shares the
+  model with the worker (which pauses during a recording; no live run if a job is waiting). Windows: process
+  BELOW_NORMAL while it runs, recorder threads HIGHEST (`priority.py`).
 - **Speaker marks** (0.7.41): «Wer spricht gerade?» during a recording stores `{t, name, track}` in `meta.json`
   (`speaker_marks`, a DETAIL_FIELD). After the transcription (and after «Neu zuordnen») `transcript.apply_marks`
   names the speaker talking at each mark and joins speakers of a track that got the same name. Diarization itself

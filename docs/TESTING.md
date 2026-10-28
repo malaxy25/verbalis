@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-314 tests in 32 files.
+319 tests in 33 files.
 
 ### `test_acceleration.py` (10)
 
@@ -265,6 +265,16 @@ Linux (experimental): call detection via pactl, notifications via notify-send, o
 - **Hide closes the open notification**
 - **Without notify send there are no notifications**
 - **Second app on linux is refused**
+
+### `test_live.py` (5)
+
+Transcribing while recording (live.py): pieces of the growing WAV files, handed over to the normal transcription.
+
+- **Reads a wav that is still being written** – The header sizes of a WAV are only written when it is closed – the live transcription must not rely on them.
+- **Live pieces are continued by the normal transcription**
+- **Live progress of a crash is planned when taken over** – Verbalis closed during the recording: the live file was never finished, its pieces still count.
+- **Service transcribes during the recording when switched on**
+- **No live transcription when switched off**
 
 ### `test_logs.py` (5)
 

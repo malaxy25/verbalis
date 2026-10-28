@@ -34,6 +34,7 @@ class Settings:
     max_recording_min: str = "120"    # end a recording after N minutes (notice 5 min before); empty = never
     auto_transcribe: str = "off"      # "on" = transcribe right after recording; "off" = start it by hand
                                       # (after entering the number of people)
+    live_transcribe: str = "off"      # "on" = transcribe already while recording (experimental, live.py)
     last_seen_version: str = ""       # version whose «what's new» was shown last
     tour: str = ""                    # "done" once the introduction was finished or closed
 
@@ -93,6 +94,8 @@ class Settings:
             s.speaker_split = "normal"
         if s.auto_transcribe not in ("on", "off"):
             s.auto_transcribe = "off"
+        if s.live_transcribe not in ("on", "off"):
+            s.live_transcribe = "off"
         if s.call_detection not in ("on", "off"):
             s.call_detection = "on"
         for name, default in (("audio_days", "3"), ("audio_max_mb", ""), ("max_recording_min", "120")):

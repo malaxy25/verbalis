@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.42 – 2026-10-28
+- **Transcribe while recording (experimental, setting «Schon während der Aufnahme transkribieren», off by
+  default):** the growing recording is transcribed in the same ~2-minute pieces as afterwards; after the end only
+  the last minutes and the speaker diarization are left. The recording view shows how far it is. On Windows
+  Verbalis runs «below normal» meanwhile – Teams and other programs come first – and the recorder threads keep
+  normal priority. If it can't keep up it falls behind; nothing is lost. The pieces are handed over to the normal
+  transcription (also after a crash), which still starts by hand when «Sofort automatisch transkribieren» is off.
+
 ## 0.7.41 – 2026-10-28
 - **«Wer spricht gerade?» while recording:** below the recording details there is a button per participant
   (grouped «Im Call» / «Am Mikrofon») and a field for a new name. A click marks that this person talks now. After
