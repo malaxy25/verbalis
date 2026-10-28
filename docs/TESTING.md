@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-311 tests in 31 files.
+314 tests in 32 files.
 
 ### `test_acceleration.py` (10)
 
@@ -334,6 +334,14 @@ Model names, download sources and subfolders, cache detection, updates, conversi
 - **Gcoli comes from our mirror** – 0.7.29: the default model is downloaded from our unchanged copy (files at the root), pinned and
 - **Subfolder model** – gcoli kept the CTranslate2 version in ct2/ (until 0.7.28) – Verbalis must load that, not the repo root.
 - **Default model is gcoli for new installations only** – 0.7.17: gcoli is the default for new installations; an existing settings.json keeps its model.
+
+### `test_presentation.py` (3)
+
+tools/presentation.py – prepares a presented talk for the /presentation-transcript skill.
+
+- **Pptx text and notes in presentation order**
+- **Scenes ignore a moving webcam tile and skip transitions**
+- **Whole run finds scenes and the offset between video and recording**
 
 ### `test_recorder.py` (17)
 

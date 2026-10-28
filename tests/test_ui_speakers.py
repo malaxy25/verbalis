@@ -92,13 +92,19 @@ def test_speaker_marks_box_offers_the_participants_and_the_latest_marks():
     script = STUBS + functions("speakerMarks") + """
 const MARKS_SHOWN = 6;
 function timeText(s) { return String(s); }
+const original = element;
+element = (...args) => Object.assign(original(...args), { classList: { toggle() {} } });
 const marks = Array.from({ length: 8 }, (_, i) => ({ t: i * 60, name: i % 2 ? "Basil" : "Sandra", track: "others" }));
-const box = speakerMarks({ participants: { me: ["Andrea"], others: ["Basil", "Sandra"] }, speaker_marks: marks });
-const rows = box.children.filter((c) => c && c.attrs.class === "marks-row");
-const recent = box.children.find((c) => c && c.attrs.class === "marks-recent");
-console.log(JSON.stringify({ rows: rows.map((r) => r.children.map(text)), recent: recent.children.map(text) }));
+const show = (box) => ({ title: text(box.children[0]),
+  rows: box.children.filter((c) => c && c.attrs.class === "marks-row").map((r) => r.children.map(text)),
+  recent: (box.children.find((c) => c && c.attrs.class === "marks-recent") || { children: [] }).children.map(text) });
+const participants = { me: ["Andrea"], others: ["Basil", "Sandra", "Peter"] };
+console.log(JSON.stringify([show(speakerMarks({ participants, speaker_marks: marks })),
+                            show(speakerMarks({ participants, speaker_marks: [...marks, { t: 9, name: "peter", track: "others" }] }))]));
 """
-    result = run(script)
-    assert result["rows"][:2] == [["Im Call", "Basil", "Sandra"], ["Am Mikrofon", "Andrea"]]
-    assert result["rows"][2][-1] == "spricht jetzt"
-    assert result["recent"] == ["120 Sandra×", "180 Basil×", "240 Sandra×", "300 Basil×", "360 Sandra×", "420 Basil×"]
+    some, every = run(script)
+    # marked people and a track's only participant (named automatically) get ✓
+    assert some["rows"][:2] == [["Im Call", "✓ Basil", "✓ Sandra", "Peter"], ["Am Mikrofon", "✓ Andrea"]]
+    assert some["rows"][2][-1] == "spricht jetzt" and some["title"] == "Wer spricht gerade?"
+    assert some["recent"] == ["120 Sandra×", "180 Basil×", "240 Sandra×", "300 Basil×", "360 Sandra×", "420 Basil×"]
+    assert every["title"] == "Wer spricht gerade? ✓ Alle markiert"

@@ -300,6 +300,8 @@
   .marks-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .marks-row > span { color: var(--muted); font-size: 13px; min-width: 7.5em; }
   .marks-row .action { padding: 5px 12px; }
+  .marks-row .action.marked { color: var(--muted); }
+  .marks.done h3 { color: var(--limmat); }
   .marks-row input { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); width: 12em; }
   .marks-recent { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 13px; }
   .marks-recent button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0 2px; }
@@ -1373,12 +1375,18 @@ function speakerMarks(a) {
   };
   const draw = () => {
     const rows = [];
+    let open = 0;   // participants still without a mark
     for (const [track, label] of [["others", "Im Call"], ["me", "Am Mikrofon"]]) {
       const names = (a.participants || {})[track] || [];
       if (!names.length) continue;
+      const marked = (n) => marks.some((m) => m.track === track && m.name.toLowerCase() === n.toLowerCase());
+      // a track's only participant names its speaker anyway (0.7.40): no mark needed
+      const done = (n) => names.length === 1 || marked(n);
+      open += names.filter((n) => !done(n)).length;
       rows.push(element("div", { class: "marks-row" }, element("span", {}, label),
-        ...names.map((n) => element("button", { type: "button", class: "action", title: `Jetzt spricht ${n}`,
-          onclick: () => mark(n, track) }, n))));
+        ...names.map((n) => element("button", { type: "button", class: done(n) ? "action marked" : "action",
+          title: marked(n) ? `Jetzt spricht ${n} (schon markiert)` : done(n) ? `${n} wird automatisch zugeordnet`
+            : `Jetzt spricht ${n}`, onclick: () => mark(n, track) }, done(n) ? `✓ ${n}` : n))));
     }
     const input = element("input", { type: "text", maxlength: "80", autocomplete: "off",
       placeholder: "Neuer Name", "aria-label": "Neuer Name – spricht jetzt" });
@@ -1392,10 +1400,14 @@ function speakerMarks(a) {
         onclick: async () => {
           try { marks = await call("remove_speaker_mark", first + i); draw(); } catch (e) { showMessage(e.message); }
         } }, "×")));
+    const allDone = rows.length && !open;
+    box.classList.toggle("done", Boolean(allDone));
     box.replaceChildren(
-      element("h3", {}, "Wer spricht gerade?"),
-      element("p", { class: "hint" }, "Klick auf einen Namen, wenn die Person spricht. Nach dem Transkribieren bekommt "
-        + "die Stimme an dieser Stelle den Namen – einmal pro Person genügt, mehrmals hilft bei ähnlichen Stimmen."),
+      element("h3", {}, allDone ? "Wer spricht gerade? ✓ Alle markiert" : "Wer spricht gerade?"),
+      element("p", { class: "hint" }, allDone
+        ? "Jede Person hat eine Marke – mehr braucht es nicht. Weitere Klicks helfen nur bei ähnlichen Stimmen."
+        : "Klick auf einen Namen, wenn die Person spricht. Nach dem Transkribieren bekommt die Stimme an dieser Stelle "
+          + "den Namen – einmal pro Person genügt."),
       ...rows,
       ...(recent.length ? [element("div", { class: "marks-recent" }, ...recent)] : []));
   };
