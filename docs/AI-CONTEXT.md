@@ -107,7 +107,7 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
   `verbalis speakers-test` (prints numbers only). sherpa-onnx holds the GIL while computing, so the app
   runs it in a separate process (`diarization.turns_for_file`, spawn; `freeze_support()` in the packaged
   entry scripts; tests set `SEPARATE_PROCESS = False` because they fake `find_turns`).
-- **Live transcription** (0.7.42, `live.py`, setting `live_transcribe`, off): a thread transcribes the growing
+- **Live transcription** (0.7.42, `live.py`, setting `live_transcribe`, on by default): a thread transcribes the growing
   WAVs (header sizes are wrong until closed – it parses the RIFF chunks itself) in the pieces of
   `pipeline.transcribe`, progress in `transcript.live.json`. After the stop `plan_rest` cuts the rest up to the real
   end; the next job renames it to `transcript.partial.json` (`take_over`) and continues. Own file name because

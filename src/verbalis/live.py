@@ -1,4 +1,4 @@
-"""Transcribe while recording (0.7.42, experimental; setting «Schon während der Aufnahme transkribieren»).
+"""Transcribe while recording (0.7.42, on by default; setting «Schon während der Aufnahme transkribieren»).
 
 While a recording runs, a background thread transcribes its WAV files piece by piece as they grow – the same
 ~2-minute pieces cut in speech pauses as `pipeline.transcribe`, in the same format. Its progress is kept in

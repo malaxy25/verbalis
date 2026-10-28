@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-325 tests in 33 files.
+326 tests in 33 files.
 
 ### `test_acceleration.py` (10)
 
@@ -269,7 +269,7 @@ Linux (experimental): call detection via pactl, notifications via notify-send, o
 - **Without notify send there are no notifications**
 - **Second app on linux is refused**
 
-### `test_live.py` (7)
+### `test_live.py` (8)
 
 Transcribing while recording (live.py): pieces of the growing WAV files, handed over to the normal transcription.
 
@@ -277,6 +277,7 @@ Transcribing while recording (live.py): pieces of the growing WAV files, handed 
 - **Live pieces are continued by the normal transcription**
 - **Live progress of a crash is planned when taken over** – Verbalis closed during the recording: the live file was never finished, its pieces still count.
 - **Service transcribes during the recording when switched on**
+- **Live transcription is on by default** – 28 Oct 2026: after a 51-minute Teams call the transcript was ready 2 minutes after the end – on by default.
 - **No live transcription when switched off**
 - **Live pieces of a track left out are dropped** – «0 Personen» for the system audio after it was transcribed live: the microphone pieces still count.
 - **Live transcription can be stopped during the recording**

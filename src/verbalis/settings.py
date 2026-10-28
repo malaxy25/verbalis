@@ -34,7 +34,7 @@ class Settings:
     max_recording_min: str = "120"    # end a recording after N minutes (notice 5 min before); empty = never
     auto_transcribe: str = "off"      # "on" = transcribe right after recording; "off" = start it by hand
                                       # (after entering the number of people)
-    live_transcribe: str = "off"      # "on" = transcribe already while recording (experimental, live.py)
+    live_transcribe: str = "on"       # "on" = transcribe already while recording (live.py; on since 0.7.42)
     last_seen_version: str = ""       # version whose «what's new» was shown last
     tour: str = ""                    # "done" once the introduction was finished or closed
 

@@ -97,7 +97,8 @@ def devices(microphone, speakers):
 
 
 def make_service(**kwargs):
-    s = Settings(name="Andrea", model="test-model", auto_transcribe=kwargs.pop("auto_transcribe", "on"))
+    s = Settings(name="Andrea", model="test-model", auto_transcribe=kwargs.pop("auto_transcribe", "on"),
+                 live_transcribe=kwargs.pop("live_transcribe", "off"))   # on by default, off in most tests
     kwargs.setdefault("transcriber_factory", FakeTranscriber)
     return Service(settings=s, recorder_factory=FakeRecorder, select_devices=devices,
                    list_devices=lambda: {}, **kwargs)

@@ -101,8 +101,14 @@ def test_service_transcribes_during_the_recording_when_switched_on():
     assert wait_until(lambda: s.recordings()[0]["status"] == "done")
 
 
+def test_live_transcription_is_on_by_default():
+    """28 Oct 2026: after a 51-minute Teams call the transcript was ready 2 minutes after the end – on by default."""
+    from verbalis.settings import Settings
+    assert Settings().live_transcribe == "on"
+
+
 def test_no_live_transcription_when_switched_off():
-    s = make_service()
+    s = make_service(live_transcribe="off")
     s.start_recording(consent=True)
     assert s.state()["recording"]["live"] is None and not s._live
     s.stop_recording()

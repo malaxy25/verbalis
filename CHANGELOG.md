@@ -1,13 +1,15 @@
 # Changelog
 
 ## 0.7.42 – 2026-10-28
-- **Transcribe while recording (experimental, setting «Schon während der Aufnahme transkribieren», off by
-  default):** the growing recording is transcribed in the same ~2-minute pieces as afterwards; after the end only
+- **Transcribe while recording (setting «Schon während der Aufnahme transkribieren», on by default):** the
+  growing recording is transcribed in the same ~2-minute pieces as afterwards; after the end only
   the last minutes and the speaker diarization are left. The recording view shows how far it is. On Windows
   Verbalis runs «below normal» meanwhile – Teams and other programs come first – and the recorder threads keep
   normal priority. If it can't keep up it falls behind; nothing is lost. The pieces are handed over to the normal
   transcription (also after a crash), which still starts by hand when «Sofort automatisch transkribieren» is off.
-  «Anhalten» next to the status stops it for this recording; the finished pieces stay.
+  «Anhalten» next to the status stops it for this recording; the finished pieces stay. First real test: a
+  51-minute Teams call, transcript ready 2 minutes after the end (before: 20–35 minutes); about 0.4 s of computing
+  per second of audio while Teams ran.
 - **«0 Personen» leaves a track out:** e.g. the system audio recorded by mistake at a meeting on site. The
   transcript header says «Nicht transkribiert: Systemton». Before, only 1–30 were accepted.
 - **Participants decide the speaker diarization** when no number is entered (also with automatic
