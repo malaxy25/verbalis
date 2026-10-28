@@ -91,6 +91,7 @@ def test_speaker_marks_box_offers_the_participants_and_the_latest_marks():
     """0.7.41: «Wer spricht gerade?» while recording – a button per participant, grouped by track, the latest marks."""
     script = STUBS + functions("speakerMarks") + """
 const MARKS_SHOWN = 6;
+const state = {};
 function timeText(s) { return String(s); }
 const original = element;
 element = (...args) => Object.assign(original(...args), { classList: { toggle() {} } });
@@ -108,3 +109,23 @@ console.log(JSON.stringify([show(speakerMarks({ participants, speaker_marks: mar
     assert some["rows"][2][-1] == "spricht jetzt" and some["title"] == "Wer spricht gerade?"
     assert some["recent"] == ["120 Sandra×", "180 Basil×", "240 Sandra×", "300 Basil×", "360 Sandra×", "420 Basil×"]
     assert every["title"] == "Wer spricht gerade? ✓ Alle markiert"
+
+
+def test_speaker_marks_box_shows_yourself_at_the_microphone():
+    """28 Oct 2026: Andrea marked himself during a call – not needed, the microphone is named after him anyway.
+    With nobody listed at the microphone, his own name is shown there with ✓."""
+    script = STUBS + functions("speakerMarks") + """
+const MARKS_SHOWN = 6;
+const state = {};
+function timeText(s) { return String(s); }
+const original = element;
+element = (...args) => Object.assign(original(...args), { classList: { toggle() {} } });
+state.settings = { name: "Andrea" };
+const rows = (a) => speakerMarks(a).children.filter((c) => c && c.attrs.class === "marks-row")
+  .map((r) => r.children.map(text));
+console.log(JSON.stringify([rows({ participants: { others: ["Basil"] } }),
+                            rows({ participants: { others: ["Basil"] }, only_microphone: true })]));
+"""
+    call, on_site = run(script)
+    assert call[:2] == [["Im Call", "✓ Basil"], ["Am Mikrofon", "✓ Andrea"]]
+    assert on_site[1][0] == ""                                  # only a microphone: nobody assumed there

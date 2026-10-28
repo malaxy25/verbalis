@@ -13,6 +13,10 @@
 - **Participants decide the speaker diarization** when no number is entered (also with automatic
   transcription): two or more names under «Am Mikrofon» = a meeting on site, told apart into that many people,
   without switching on «Mikrofon: verschiedene Personen unterscheiden»; one name = nobody to tell apart.
+- **Your own name at the microphone:** «Wer spricht gerade?» shows you under «Am Mikrofon» with ✓ – no need to
+  mark yourself. Typing your own name as a new name marks the microphone, no longer the system audio (where it
+  named the other person's voice too and counted you as a second person in the call). The status line during the
+  recording no longer adds «nach dem Ende fehlen nur noch wenige Minuten». The introduction mentions the marks.
 
 ## 0.7.41 – 2026-10-28
 - **«Wer spricht gerade?» while recording:** below the recording details there is a button per participant

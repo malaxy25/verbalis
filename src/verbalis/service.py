@@ -1786,6 +1786,8 @@ class Service:
                 raise RuntimeError("Es läuft keine Aufnahme.")
             folder = self._rec_info["folder"]
             meta = pipeline.read_meta(folder)
+            if name.lower() == self._s.name.lower() and not meta.get("only_microphone"):
+                track = "me"   # 28 Oct 2026: your own name typed as «Neuer Name» landed on the system audio
             marks = [*(meta.get("speaker_marks") or []),
                      {"t": round(self._rec.active_seconds(), 1), "name": name, "track": track}]
             participants = dict(meta.get("participants") or {})

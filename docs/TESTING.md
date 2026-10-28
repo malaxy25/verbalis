@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-323 tests in 33 files.
+325 tests in 33 files.
 
 ### `test_acceleration.py` (10)
 
@@ -168,7 +168,7 @@ Nvidia GPU (experimental): choosing the device, CPU fallback, downloading cuBLAS
 - **Install keeps only the libraries**
 - **Install with a wrong checksum installs nothing**
 
-### `test_details.py` (8)
+### `test_details.py` (9)
 
 Recording details (name, project, participants, notes) and planned recordings.
 
@@ -178,6 +178,7 @@ Recording details (name, project, participants, notes) and planned recordings.
 - **Planned recording can be deleted**
 - **Details are saved while meta json is being read** – Windows: replacing meta.json failed while another thread had it open for a moment (WinError 5/32).
 - **Speaker marks during the recording name the speaker** – 0.7.41: «Wer spricht gerade?» – marks set while recording survive its end and name the speaker.
+- **Own name marks the microphone** – 28 Oct 2026: Andrea typed his own name as «Neuer Name» in a Teams call – the mark went to the system audio,
 - **Zero people leaves a track out** – 28 Oct 2026: a meeting on site with the system audio recorded by mistake – «0» people for the system audio
 - **Speaker plan from numbers participants and settings**
 
@@ -501,7 +502,7 @@ The recording list in the UI: groups open and close. Runs the list functions of 
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
 
-### `test_ui_speakers.py` (5)
+### `test_ui_speakers.py` (6)
 
 The speaker box in the UI. Runs functions of index.html in Node.js.
 
@@ -510,6 +511,7 @@ The speaker box in the UI. Runs functions of index.html in Node.js.
 - **Speaker box closed once everybody has a name** – 0.7.40: the speaker box took much room above the transcript. It is closed (one line with the names) once every
 - **Generated names are recognised** – A name Verbalis gave is cleared on focus so the field lists all participants; a typed name is kept.
 - **Speaker marks box offers the participants and the latest marks** – 0.7.41: «Wer spricht gerade?» while recording – a button per participant, grouped by track, the latest marks.
+- **Speaker marks box shows yourself at the microphone** – 28 Oct 2026: Andrea marked himself during a call – not needed, the microphone is named after him anyway.
 
 ### `test_ui_tour.py` (1)
 

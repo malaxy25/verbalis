@@ -93,6 +93,16 @@ def test_speaker_marks_during_the_recording_name_the_speaker():
     assert [sp["name"] for sp in others] == ["Basil"]
 
 
+def test_own_name_marks_the_microphone():
+    """28 Oct 2026: Andrea typed his own name as «Neuer Name» in a Teams call – the mark went to the system audio,
+    named Basil's voice «Andrea» too and made him a second participant in the call."""
+    s = make_service()
+    s.start_recording(consent=True)
+    marks = s.mark_speaker(s._s.name.upper())
+    assert marks[0]["track"] == "me" and "others" not in s.recordings()[0]["participants"]
+    s.stop_recording()
+
+
 def test_zero_people_leaves_a_track_out():
     """28 Oct 2026: a meeting on site with the system audio recorded by mistake – «0» people for the system audio
     was refused (only 1–30). Now 0 leaves the track out of the transcript; both 0 is refused."""

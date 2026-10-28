@@ -1381,8 +1381,12 @@ function speakerMarks(a) {
   const draw = () => {
     const rows = [];
     let open = 0;   // participants still without a mark
+    // you are at the microphone unless others are listed there: shown with ✓, no need to mark yourself
+    const me = (state.settings || {}).name;
+    const own = me && me !== "Ich" && !a.only_microphone ? [me] : [];
     for (const [track, label] of [["others", "Im Call"], ["me", "Am Mikrofon"]]) {
-      const names = (a.participants || {})[track] || [];
+      const listed = (a.participants || {})[track] || [];
+      const names = listed.length || track === "others" ? listed : own;
       if (!names.length) continue;
       const marked = (n) => marks.some((m) => m.track === track && m.name.toLowerCase() === n.toLowerCase());
       // a track's only participant names its speaker anyway (0.7.40): no mark needed
@@ -2059,8 +2063,8 @@ function liveText(live) {
   if (live.problem) return `Transkription während der Aufnahme gestoppt: ${live.problem} Sie läuft nach dem Ende wie gewohnt.`;
   if (!live.done_s) return "Wird schon während der Aufnahme transkribiert – das erste Stück nach gut zwei Minuten.";
   const behind = Math.max(0, live.recorded_s - live.done_s);
-  return `Bis ${timeText(live.done_s)} transkribiert` + (behind > 300
-    ? ` – ${Math.round(behind / 60)} Min. im Rückstand, der Rest folgt nach dem Ende.` : " – nach dem Ende fehlen nur noch wenige Minuten.");
+  return `Bis ${timeText(live.done_s)} transkribiert`
+    + (behind > 300 ? ` – ${Math.round(behind / 60)} Min. im Rückstand, der Rest folgt nach dem Ende.` : "");
 }
 
 function showRecording(recording) {
@@ -3438,7 +3442,8 @@ const TOUR_STEPS = [
     targets: () => [$("panel-speakers").querySelector(".field")],
     body: () => [
       tourParagraph("Verbalis unterscheidet die Stimmen. Bei einem Teams-Call mit mehreren Personen heissen sie zuerst "
-        + "«Gegenüber 1», «Gegenüber 2» … – im Transkript gibst du ihnen Namen."),
+        + "«Gegenüber 1», «Gegenüber 2» … – im Transkript gibst du ihnen Namen. Schneller geht es während der "
+        + "Aufnahme: bei «Wer spricht gerade?» einmal pro Person auf den Namen klicken, wenn sie spricht."),
       tourParagraph("Am zuverlässigsten wird es, wenn du vor dem Transkribieren angibst, wie viele Personen auf jeder Spur "
         + "sprechen – bei einer Besprechung vor Ort, bei der alle am selben Mikrofon sind, z.B. «Personen am Mikrofon: 3». "
         + "Die Stimmen heissen dann «Person 1», «Person 2» …"),
