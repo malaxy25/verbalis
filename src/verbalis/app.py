@@ -94,6 +94,9 @@ class Api:
     def resume_recording(self):
         return self._call(self._s.resume_recording)
 
+    def stop_live(self):
+        return self._call(self._s.stop_live)
+
     def mark_speaker(self, name, track="others"):
         return self._call(self._s.mark_speaker, name, track)
 

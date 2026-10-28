@@ -7,6 +7,12 @@
   Verbalis runs «below normal» meanwhile – Teams and other programs come first – and the recorder threads keep
   normal priority. If it can't keep up it falls behind; nothing is lost. The pieces are handed over to the normal
   transcription (also after a crash), which still starts by hand when «Sofort automatisch transkribieren» is off.
+  «Anhalten» next to the status stops it for this recording; the finished pieces stay.
+- **«0 Personen» leaves a track out:** e.g. the system audio recorded by mistake at a meeting on site. The
+  transcript header says «Nicht transkribiert: Systemton». Before, only 1–30 were accepted.
+- **Participants decide the speaker diarization** when no number is entered (also with automatic
+  transcription): two or more names under «Am Mikrofon» = a meeting on site, told apart into that many people,
+  without switching on «Mikrofon: verschiedene Personen unterscheiden»; one name = nobody to tell apart.
 
 ## 0.7.41 – 2026-10-28
 - **«Wer spricht gerade?» while recording:** below the recording details there is a button per participant

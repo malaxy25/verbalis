@@ -586,7 +586,7 @@ def test_transcription_waits_for_the_user_by_default():
     assert wait_until(lambda: s.recordings()[0]["status"] == "done")
     assert s.recordings()[0]["people"] == {"me": 2, "others": None}
     with pytest.raises(ValueError, match="Anzahl"):
-        s.transcribe(rid, {"me": "0"})
+        s.transcribe(rid, {"me": "31"})
 
 
 def test_audio_clip_mixes_both_tracks():

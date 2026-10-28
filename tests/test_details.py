@@ -91,3 +91,35 @@ def test_speaker_marks_during_the_recording_name_the_speaker():
     assert pipeline.read_meta(s._path(rid))["speaker_marks"] == marks
     others = [sp for sp in s.speakers(rid) if sp["track"] == "others"]
     assert [sp["name"] for sp in others] == ["Basil"]
+
+
+def test_zero_people_leaves_a_track_out():
+    """28 Oct 2026: a meeting on site with the system audio recorded by mistake – «0» people for the system audio
+    was refused (only 1–30). Now 0 leaves the track out of the transcript; both 0 is refused."""
+    s = make_service(auto_transcribe="off")
+    rid = s.start_recording(consent=True)
+    s.stop_recording()
+    with pytest.raises(ValueError, match="Mindestens eine Spur"):
+        s.transcribe(rid, {"me": "0", "others": "0"})
+    s.transcribe(rid, {"me": "", "others": "0"})
+    assert wait_until(lambda: s.recordings()[0]["status"] == "done")
+    data = json.loads((s._path(rid) / "transcript.json").read_text(encoding="utf-8"))
+    assert set(data["tracks"]) == {"me"} and {seg["track"] for seg in data["segments"]} == {"me"}
+    assert data["header"]["Nicht transkribiert"] == "Systemton (0 Personen angegeben)"
+    assert pipeline.read_meta(s._path(rid))["people"] == {"me": None, "others": 0}
+
+
+def test_speaker_plan_from_numbers_participants_and_settings():
+    from verbalis.service import speaker_plan
+    from verbalis.settings import Settings
+
+    s = Settings(diarize_others="on", diarize_me="off")
+    assert speaker_plan(s, {}) == ({"others": True, "me": False}, {}, [])
+    # two names at the microphone: a meeting on site, told apart into two – without changing the setting
+    assert speaker_plan(s, {"participants": {"me": ["Andrea", "Basil"], "others": ["Eva"]}}) == \
+        ({"others": False, "me": True}, {"me": 2}, [])
+    # a number entered decides over the participants; 0 leaves the track out
+    assert speaker_plan(s, {"participants": {"me": ["Andrea", "Basil"]}, "people": {"me": 3, "others": 0}}) == \
+        ({"others": True, "me": True}, {"me": 3}, ["others"])
+    assert speaker_plan(s, {"participants": {"me": ["Andrea"]}, "people": {"me": None}}) == \
+        ({"others": True, "me": False}, {}, [])

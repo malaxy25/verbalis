@@ -934,6 +934,16 @@ class Service:
         live.start()
         log.info("Live transcription of %s started", folder.name)
 
+    def stop_live(self) -> None:
+        """«Anhalten» in the recording view: no more pieces during this recording. The finished ones stay;
+        the rest is transcribed after the end as usual."""
+        with self._lock:
+            live = self._live.get(self._rec_info.get("id"))
+        if live is not None:
+            live.stopped = True
+            live.stop()
+            log.info("Live transcription of %s stopped by the user", live.folder.name)
+
     def _finish_live(self, recording_id: str) -> None:
         """The recording ended: plan the rest in the background (it may wait for the piece in progress)."""
         with self._lock:
@@ -1190,9 +1200,11 @@ class Service:
                     clean[track] = None
                     continue
                 number = int(value)
-                if not 1 <= number <= MAX_PEOPLE:
-                    raise ValueError(f"Bitte bei der Anzahl Personen eine Zahl zwischen 1 und {MAX_PEOPLE} eingeben.")
+                if not 0 <= number <= MAX_PEOPLE:
+                    raise ValueError(f"Bitte bei der Anzahl Personen eine Zahl zwischen 0 und {MAX_PEOPLE} eingeben.")
                 clean[track] = number
+            if all(clean[t] == 0 or not pipeline.audio_file(folder, t) for t in pipeline.TRACKS):
+                raise ValueError("Mindestens eine Spur muss transkribiert werden – 0 Personen heisst «weglassen».")
             pipeline.update_meta(folder, people=clean)
         with self._lock:
             if recording_id in self._queued or (self._job and self._job["id"] == recording_id):
@@ -1411,15 +1423,12 @@ class Service:
 
                 from .diarization import threshold_for
 
-                diarize = {"others": s.diarize_others == "on", "me": s.diarize_me == "on"}
-                people = pipeline.read_meta(self._path(recording_id)).get("people") or {}
-                for track, number in people.items():   # a given number decides: 1 = nobody to tell apart
-                    if number:
-                        diarize[track] = number > 1
+                diarize, people, left_out = speaker_plan(s, pipeline.read_meta(self._path(recording_id)))
+                names = {t: n for t, n in names.items() if t not in left_out}
                 _, compute, duration = pipeline.create_transcript(
                     self._path(recording_id), tr, s.model, names, progress, paused_time, corrections,
-                    diarize=diarize, phase=phase, people={t: n for t, n in people.items() if n and n > 1},
-                    threshold=threshold_for(s.speaker_split), asides=s.asides == "on")
+                    diarize=diarize, phase=phase, people=people,
+                    threshold=threshold_for(s.speaker_split), asides=s.asides == "on", left_out=left_out)
                 self._apply_marks(recording_id)
                 if duration > 0 and compute > 0:
                     self._remember_factor(key, compute / duration)
@@ -1454,7 +1463,8 @@ class Service:
         live = self._live.get(recording_id)
         if live is None:
             return None
-        return {"done_s": round(live.done_s), "recorded_s": round(live.available_s), "problem": live.problem}
+        return {"done_s": round(live.done_s), "recorded_s": round(live.available_s), "problem": live.problem,
+                "stopped": live.stopped}
 
     def _protected(self) -> set[str]:
         with self._lock:
@@ -2300,6 +2310,31 @@ class Service:
         self._queue.put(None)
         if wait_s:
             self._worker.join(wait_s)
+
+
+def speaker_plan(s: Settings, meta: dict) -> tuple[dict[str, bool], dict[str, int], list[str]]:
+    """Per track: tell speakers apart?, the known number of people (only when > 1), and the tracks left out.
+
+    A number entered before transcribing decides: 0 = leave the track out (e.g. system audio recorded by mistake
+    at a meeting on site), 1 = nobody to tell apart, more = tell apart into that many. Without a number the
+    participants entered for the track decide the same way (0.7.42: two names under «Am Mikrofon» = a meeting
+    on site, without changing the setting); without either, the settings."""
+    diarize = {"others": s.diarize_others == "on", "me": s.diarize_me == "on"}
+    given, listed = meta.get("people") or {}, meta.get("participants") or {}
+    people, left_out = {}, []
+    for track in pipeline.TRACKS:
+        number = given.get(track)
+        if number is None and listed.get(track):
+            number = len(listed[track])
+        if number is None:
+            continue
+        if number == 0:
+            left_out.append(track)
+            continue
+        diarize[track] = number > 1
+        if number > 1:
+            people[track] = number
+    return diarize, people, left_out
 
 
 def _join_neighbours(segments: list[dict], max_pause: float = 2.0) -> list[dict]:

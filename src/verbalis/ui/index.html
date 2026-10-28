@@ -303,7 +303,8 @@
   .marks-row .action.marked { color: var(--muted); }
   .marks.done h3 { color: var(--limmat); }
   .marks-row input { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); width: 12em; }
-  .live-status { color: var(--limmat); font-weight: 600; }
+  .live-status { color: var(--limmat); font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .live-status[hidden] { display: none; }
   .marks-recent { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 13px; }
   .marks-recent button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0 2px; }
   .marks-recent button:hover { color: var(--ink); }
@@ -1425,11 +1426,11 @@ function speakerMarks(a) {
 function peopleFields(a) {
   const known = a.people || {};
   const input = (track, label) => {
-    const field = element("input", { type: "number", min: "1", max: "30", placeholder: "automatisch",
+    const field = element("input", { type: "number", min: "0", max: "30", placeholder: "automatisch",
       inputmode: "numeric", "aria-label": label });
     const listed = ((a.participants || {})[track] || []).length;   // from the participants entered
     const apart = state.settings[`diarize_${track}`] === "on";
-    field.value = known[track] ? String(known[track]) : listed ? String(listed) : apart ? "" : "1";
+    field.value = known[track] != null ? String(known[track]) : listed ? String(listed) : apart ? "" : "1";
     return field;
   };
   const me = input("me", "Personen am Mikrofon");
@@ -1438,7 +1439,7 @@ function peopleFields(a) {
     element("label", {}, element("span", {}, "Personen am Mikrofon"), me,
       element("small", {}, "z.B. 2 bei einer Besprechung vor Ort")),
     element("label", {}, element("span", {}, "Personen im Systemton"), others,
-      element("small", {}, "die anderen im Teams-Call")),
+      element("small", {}, "die anderen im Teams-Call – 0 = weglassen, z.B. vor Ort aus Versehen mit aufgenommen")),
   );
   return { box, values: () => ({ me: me.value.trim(), others: others.value.trim() }) };
 }
@@ -2053,6 +2054,8 @@ async function previewLevels() {
 /* «Schon während der Aufnahme transkribieren»: how far it is (Service._live_status). */
 function liveText(live) {
   if (!live) return "";
+  if (live.stopped) return "Transkription während der Aufnahme angehalten – die fertigen Stücke bleiben, der Rest "
+    + "folgt nach dem Ende.";
   if (live.problem) return `Transkription während der Aufnahme gestoppt: ${live.problem} Sie läuft nach dem Ende wie gewohnt.`;
   if (!live.done_s) return "Wird schon während der Aufnahme transkribiert – das erste Stück nach gut zwei Minuten.";
   const behind = Math.max(0, live.recorded_s - live.done_s);
@@ -2063,8 +2066,16 @@ function liveText(live) {
 function showRecording(recording) {
   const status = document.getElementById("live-status");
   if (status) {
-    status.textContent = liveText(recording && recording.live);
-    status.hidden = !status.textContent;
+    const live = recording && recording.live;
+    const text = liveText(live);
+    if (text !== status.dataset.text) {   // redraw only on change: the button must stay clickable
+      status.dataset.text = text;
+      status.replaceChildren(element("span", {}, text), live && !live.stopped && !live.problem
+        ? element("button", { type: "button", class: "link-button", onclick: async () => {
+          try { await call("stop_live"); } catch (e) { showMessage(e.message); }
+        } }, "Anhalten") : null);
+    }
+    status.hidden = !text;
   }
   const running = !!recording;
   if (running !== state.running) {

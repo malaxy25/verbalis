@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-319 tests in 33 files.
+323 tests in 33 files.
 
 ### `test_acceleration.py` (10)
 
@@ -168,7 +168,7 @@ Nvidia GPU (experimental): choosing the device, CPU fallback, downloading cuBLAS
 - **Install keeps only the libraries**
 - **Install with a wrong checksum installs nothing**
 
-### `test_details.py` (6)
+### `test_details.py` (8)
 
 Recording details (name, project, participants, notes) and planned recordings.
 
@@ -178,6 +178,8 @@ Recording details (name, project, participants, notes) and planned recordings.
 - **Planned recording can be deleted**
 - **Details are saved while meta json is being read** – Windows: replacing meta.json failed while another thread had it open for a moment (WinError 5/32).
 - **Speaker marks during the recording name the speaker** – 0.7.41: «Wer spricht gerade?» – marks set while recording survive its end and name the speaker.
+- **Zero people leaves a track out** – 28 Oct 2026: a meeting on site with the system audio recorded by mistake – «0» people for the system audio
+- **Speaker plan from numbers participants and settings**
 
 ### `test_devices.py` (7)
 
@@ -266,7 +268,7 @@ Linux (experimental): call detection via pactl, notifications via notify-send, o
 - **Without notify send there are no notifications**
 - **Second app on linux is refused**
 
-### `test_live.py` (5)
+### `test_live.py` (7)
 
 Transcribing while recording (live.py): pieces of the growing WAV files, handed over to the normal transcription.
 
@@ -275,6 +277,8 @@ Transcribing while recording (live.py): pieces of the growing WAV files, handed 
 - **Live progress of a crash is planned when taken over** – Verbalis closed during the recording: the live file was never finished, its pieces still count.
 - **Service transcribes during the recording when switched on**
 - **No live transcription when switched off**
+- **Live pieces of a track left out are dropped** – «0 Personen» for the system audio after it was transcribed live: the microphone pieces still count.
+- **Live transcription can be stopped during the recording**
 
 ### `test_logs.py` (5)
 

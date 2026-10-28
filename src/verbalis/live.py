@@ -108,6 +108,7 @@ class LiveTranscription:
         self.state = {"version": 1, "model": model, "names": names, "until_s": None, "compute_s": 0.0,
                       "tracks": {}}
         self.problem: str | None = None    # why it stopped working (shown in the app)
+        self.stopped = False               # «Anhalten» in the app
         self.available_s = 0.0             # audio recorded so far (the shorter track)
 
     def start(self) -> None:

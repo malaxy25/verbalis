@@ -361,10 +361,14 @@ def _load_partial(path: Path | None, model: str, names: dict[str, str], until_s:
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         log.warning("Partial transcript %s unreadable – starting over", path)
         return None
-    if (state.get("version") != 1 or state.get("model") != model or state.get("names") != names
-            or state.get("until_s") != until_s):
+    saved = state.get("names") or {}
+    if (state.get("version") != 1 or state.get("model") != model or state.get("until_s") != until_s
+            or any(saved.get(t) != n for t, n in names.items())):
         log.info("Partial transcript %s was made with other settings – starting over", path)
         return None
+    for track in set(saved) - set(names):   # a track left out now («0 Personen»): its pieces are not needed
+        state["tracks"].pop(track, None)
+    state["names"] = dict(names)
     return state
 
 
@@ -542,8 +546,10 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
                       corrections: "CorrectionList | None" = None, diarize: dict[str, bool] | None = None,
                       phase: Callable[[str], None] | None = None,
                       people: dict[str, int] | None = None,
-                      threshold: float | None = None, asides: bool = True) -> tuple[Path, float, float]:
-    """Returns (path, compute_s, recording_s). diarize: track → tell speakers apart."""
+                      threshold: float | None = None, asides: bool = True,
+                      left_out: list[str] | None = None) -> tuple[Path, float, float]:
+    """Returns (path, compute_s, recording_s). diarize: track → tell speakers apart.
+    left_out: tracks not transcribed on purpose («0 Personen») – the header says so."""
     problems: list[str] = []
     paragraphs, compute, recording = transcribe(folder, transcriber, names, progress=progress,
                                                 paused_time=paused_time, diarize=diarize, phase=phase,
@@ -553,7 +559,9 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
     meta = read_meta(folder)
     if meta.get("project"):
         h["Projekt"] = meta["project"]
-    if missing := missing_tracks(folder):
+    if left_out:
+        h["Nicht transkribiert"] = ", ".join(TRACK_LABELS.get(t, t) for t in left_out) + " (0 Personen angegeben)"
+    if missing := [t for t in missing_tracks(folder) if t not in (left_out or [])]:
         h["Hinweis"] = "Unvollständig – keine Aufnahme von: " + ", ".join(names.get(t, t) for t in missing)
     if meta.get("state") in (INCOMPLETE, STOP_TIMEOUT, INTERRUPTED):
         h["Aufnahme"] = (h.get("Aufnahme") or "") + " (nicht vollständig aufgenommen)"

@@ -106,3 +106,27 @@ def test_no_live_transcription_when_switched_off():
     s.start_recording(consent=True)
     assert s.state()["recording"]["live"] is None and not s._live
     s.stop_recording()
+
+
+def test_live_pieces_of_a_track_left_out_are_dropped(tmp_path):
+    """«0 Personen» for the system audio after it was transcribed live: the microphone pieces still count."""
+    folder = tmp_path / "2026-10-28_100000"
+    folder.mkdir()
+    sf.write(folder / "me.wav", speech(100), RATE, subtype="PCM_16")
+    state = {"version": 1, "model": "m", "names": {"me": "Andrea", "others": "Gegenüber"}, "until_s": None,
+             "compute_s": 1.0, "tracks": {t: {"duration": 100.0, "cuts": [], "done": 1, "segments": [
+                 {"start": 0.0, "end": 1.0, "text": f"Live {t}", "words": None}]} for t in ("me", "others")}}
+    (folder / pipeline.PARTIAL).write_text(json.dumps(state), encoding="utf-8")
+    tr = CountingTranscriber()
+    paragraphs, _, _ = pipeline.transcribe(folder, tr, {"me": "Andrea"}, partial=folder / pipeline.PARTIAL, model="m")
+    assert tr.pieces == [] and [p.text for p in paragraphs] == ["Live me"]
+
+
+def test_live_transcription_can_be_stopped_during_the_recording():
+    s = make_service(auto_transcribe="off")
+    s.save_settings({"live_transcribe": "on"})
+    s.start_recording(consent=True)
+    assert wait_until(lambda: s.state()["recording"]["live"] is not None)
+    s.stop_live()
+    assert s.state()["recording"]["live"]["stopped"] is True
+    s.stop_recording()
