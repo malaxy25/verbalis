@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import tarfile
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -399,3 +400,11 @@ def test_diarization_runs_in_its_own_process_and_reports_errors(tmp_path, monkey
     with pytest.raises(RuntimeError) as error:
         diarization.turns_for_file(tmp_path / "fehlt.flac")
     assert "fehlt.flac" in str(error.value)
+
+
+def test_segmentation_steps_half_a_window():
+    """30 Oct 2026: diarization took 34 minutes after an 81-minute call – sherpa-onnx's default step of a tenth of
+    the 10-s window computes every moment ten times. Half a window: 3.6 minutes, 99.6 % the same speakers."""
+    config = diarization._config(Path("models"), diarization.THRESHOLD)
+    assert config.segmentation.pyannote.window_shift_ratio == pytest.approx(0.5)
+    assert config.embedding.num_threads <= 4      # 8 threads were slower than 4 on a 14-core PC

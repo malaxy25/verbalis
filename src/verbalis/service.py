@@ -1816,15 +1816,19 @@ class Service:
             if not marks or not (folder / "transcript.json").exists():
                 return
             folder, data = self._transcript_data(recording_id)
-            changed, problems = apply_marks(data, marks)
+            changed, doubts = apply_marks(data, marks)   # doubts: shown in the speaker box, to listen to
             if changed:
                 data["segments"] = _join_neighbours(data["segments"])
                 self._write_transcript(folder, data)
-            if problems:
-                self._notice = " ".join(problems)
-            log.info("Speaker marks of %s applied (%d marks, %d problems)", recording_id, len(marks), len(problems))
+            log.info("Speaker marks of %s applied (%d marks, %d doubts)", recording_id, len(marks), len(doubts))
         except Exception:
             log.exception("Applying the speaker marks of %s failed", recording_id)
+
+    def dismiss_mark_doubts(self, recording_id: str) -> None:
+        """«×» on the doubts about speaker marks: listened to, all right."""
+        folder, data = self._transcript_data(recording_id)
+        if data.pop("mark_doubts", None) is not None:
+            self._write_transcript(folder, data)
 
     def set_paragraph_speaker(self, recording_id: str, index: int, speaker_id: str) -> None:
         """A paragraph was assigned to the wrong person."""

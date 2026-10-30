@@ -93,6 +93,22 @@ def test_speaker_marks_during_the_recording_name_the_speaker():
     assert [sp["name"] for sp in others] == ["Basil"]
 
 
+def test_unclear_speaker_marks_stay_with_the_recording_until_dismissed():
+    """0.7.43: unclear marks were a global notice («klingen für Verbalis gleich»), shown whatever recording was
+    open. Now they are stored in its transcript (to listen to in the speaker box) until «×»."""
+    s = make_service()
+    rid = s.start_recording(consent=True)
+    s.mark_speaker("Basil")
+    s.mark_speaker("Sandra")
+    s.stop_recording()
+    assert wait_until(lambda: s.recordings()[0]["status"] == "done")
+    doubts = s.transcript(rid)["mark_doubts"]
+    assert [d["name"] for d in doubts] == ["Sandra"] and doubts[0]["heard"] == "Basil"
+    assert s.state()["notice"] is None
+    s.dismiss_mark_doubts(rid)
+    assert "mark_doubts" not in s.transcript(rid)
+
+
 def test_own_name_marks_the_microphone():
     """28 Oct 2026: Andrea typed his own name as «Neuer Name» in a Teams call – the mark went to the system audio,
     named Basil's voice «Andrea» too and made him a second participant in the call."""

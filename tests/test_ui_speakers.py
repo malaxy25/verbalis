@@ -39,7 +39,7 @@ console.log(JSON.stringify(row.children[0].children[1].attrs["aria-label"]));
 def test_number_of_people_offered_without_speakers():
     """Ubuntu, 0.7.36: the test recording of the introduction is transcribed with «1 Person» per track, so no
     speakers were told apart – and without speakers the box with «Anzahl Personen» didn't appear at all."""
-    script = STUBS + functions("speakerCountRow", "speakersPanel", "speakerTracks", "trackGroup") + """
+    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "speakerTracks", "trackGroup") + """
 const t = { speakers: {}, segments: [{ track: "others", start: 0, end: 3 }, { track: "me", start: 4, end: 6 }] };
 const panel = speakersPanel({ id: "x", audio: true }, t);
 const groups = panel.children.slice(2);
@@ -54,7 +54,7 @@ def test_speaker_box_closed_once_everybody_has_a_name():
     """0.7.40: the speaker box took much room above the transcript. It is closed (one line with the names) once every
     speaker has a name, open while one is still «Gegenüber 2» or «Person 1»; the number of people is next to the
     speakers of its track."""
-    script = STUBS + functions("speakerCountRow", "speakersPanel", "speakerTracks", "trackGroup", "unnamedSpeaker",
+    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "speakerTracks", "trackGroup", "unnamedSpeaker",
                                "generatedName") + """
 const state = {};
 function timeText(s) { return String(s); }
@@ -75,6 +75,31 @@ console.log(JSON.stringify([named.tag, named.open, text(named.children[0].childr
     assert tag == "details" and named_open is False and names == "Andrea, Claudia Gibolli, Marc Muster"
     assert still_open is True
     assert (label, rows, count.strip()) == ("Systemton", 2, "Personen")
+
+
+def test_unclear_speaker_marks_shown_with_the_moment_to_listen_to():
+    """0.7.43: «… klingen für Verbalis gleich» was a global notice without saying where – now the speaker box lists
+    each unclear mark with ▶ for that moment (from 5 s before) and opens itself."""
+    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "speakerTracks", "trackGroup",
+                               "unnamedSpeaker", "generatedName") + """
+const state = {};
+function timeText(s) { return `t${Math.floor(s)}`; }
+const played = [];
+function call(name, ...args) { played.push([name, ...args]); return Promise.resolve({ url: "" }); }
+function playAudio(key, fetch) { fetch(); }
+const panel = speakersPanel({ id: "x", audio: true }, { tracks: { others: "Gegenüber" },
+  segments: [{ track: "others", speaker_id: "others-1", start: 0, end: 5 }],
+  speakers: { "others-1": { name: "maurice", track: "others" } },
+  mark_doubts: [{ t: 4563.1, name: "lara", heard: "maurice" }] });
+const box = panel.children[1].children[0];
+const item = box.children[0].children[2].children[0];
+item.children[1].attrs.onclick({ currentTarget: {} });
+console.log(JSON.stringify([panel.open, box.attrs.class, text(item), played]));
+"""
+    opened, cls, item, played = run(script)
+    assert opened is True and cls == "mark-doubts"
+    assert item.startswith("Bei t4563 war «lara» markiert, Verbalis hört dort «maurice».")
+    assert played == [["audio_clip", "x", 4558.1, 4573.1]]
 
 
 def test_generated_names_are_recognised():

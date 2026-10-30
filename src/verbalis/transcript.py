@@ -262,34 +262,37 @@ def _marked_speaker(segments: list[dict], mark: dict) -> str | None:
     return near["speaker_id"] if near and distance(near) <= MARK_REACH_S else None
 
 
-def apply_marks(data: dict, marks: list[dict]) -> tuple[bool, list[str]]:
-    """Name speakers from the marks set during the recording (0.7.41). Returns (changed, problems).
+DOUBT_SHARE = 0.25     # a second name on one speaker is a doubt from this share of its marks (or 2 marks) on
+
+
+def apply_marks(data: dict, marks: list[dict]) -> tuple[bool, list[dict]]:
+    """Name speakers from the marks set during the recording (0.7.41). Returns (changed, doubts).
 
     A mark is {"t": seconds into the recording, "name", "track"}. Each one votes for the speaker who talks at that
     moment; a speaker takes the name with the most votes – only while it still has the name Verbalis gave, so a
     name typed in the speaker box stays. Several speakers of a track with the same name are one person that
-    diarization split up (common in Teams calls): they become one speaker. Two names on one speaker means
-    diarization joined two people; that is reported, the first name wins on a tie."""
+    diarization split up (common in Teams calls): they become one speaker. Two names on one speaker can mean
+    diarization joined two people – or just a mark set a moment early or late. Only the unclear cases become
+    doubts, stored as data["mark_doubts"] with the moment to listen to: the losing name has 2 marks or
+    DOUBT_SHARE of them, or no speaker of its own (0.7.43: one stray mark out of six alarmed the user)."""
     segments = data.get("segments") or []
     speakers = data.get("speakers") or {}
     tracks = data.get("tracks") or {}
-    votes: dict[str, dict[str, int]] = {}
+    votes: dict[str, dict[str, list[float]]] = {}   # speaker id → name → times of its marks
     for mark in marks or []:
         name = " ".join(str(mark.get("name") or "").split())
         sid = _marked_speaker(segments, mark) if name else None
         if sid in speakers:
-            votes.setdefault(sid, {})
-            votes[sid][name] = votes[sid].get(name, 0) + 1
-    changed, problems = False, []
+            votes.setdefault(sid, {}).setdefault(name, []).append(float(mark.get("t") or 0.0))
+    changed, contested = False, []
     for sid, names in votes.items():
-        name = max(names, key=names.get)
+        name = max(names, key=lambda n: len(names[n]))
         info = speakers[sid]
-        if len(names) > 1:
-            problems.append(" und ".join(f"«{n}»" for n in names) + f" klingen für Verbalis gleich – «{name}» "
-                            "wurde gewählt. Mit «Neu zuordnen» und der Anzahl Personen lässt sich das trennen.")
         if info["name"] != name and is_default_name(info["name"], tracks.get(info.get("track"), "")):
             info["name"] = name
             changed = True
+        if len(names) > 1:
+            contested.append((info["name"], name, names))
     target: dict[tuple, str] = {}   # (track, name) → the first speaker with it; later ones join it
     for sid in list(speakers):
         info = speakers[sid]
@@ -306,7 +309,21 @@ def apply_marks(data: dict, marks: list[dict]) -> tuple[bool, list[str]]:
         if s.get("speaker_id") in speakers and s.get("speaker") != speakers[s["speaker_id"]]["name"]:
             s["speaker"] = speakers[s["speaker_id"]]["name"]
             changed = True
-    return changed, problems
+    in_use = {info["name"] for info in speakers.values()}
+    doubts = []
+    for heard, chosen, names in contested:
+        total = sum(len(times) for times in names.values())
+        for name, times in names.items():
+            if name not in (chosen, heard) and (len(times) >= 2 or len(times) / total >= DOUBT_SHARE or name not in in_use):
+                doubts += [{"t": round(t, 1), "name": name, "heard": heard} for t in times]
+    doubts.sort(key=lambda d: d["t"])
+    if doubts != (data.get("mark_doubts") or []):
+        if doubts:
+            data["mark_doubts"] = doubts
+        else:
+            data.pop("mark_doubts", None)
+        changed = True
+    return changed, doubts
 
 
 def speakers_of(paragraphs: list[Segment]) -> dict[str, dict]:

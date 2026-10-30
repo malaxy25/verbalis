@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-326 tests in 33 files.
+330 tests in 33 files.
 
 ### `test_acceleration.py` (10)
 
@@ -168,7 +168,7 @@ Nvidia GPU (experimental): choosing the device, CPU fallback, downloading cuBLAS
 - **Install keeps only the libraries**
 - **Install with a wrong checksum installs nothing**
 
-### `test_details.py` (9)
+### `test_details.py` (10)
 
 Recording details (name, project, participants, notes) and planned recordings.
 
@@ -178,6 +178,7 @@ Recording details (name, project, participants, notes) and planned recordings.
 - **Planned recording can be deleted**
 - **Details are saved while meta json is being read** – Windows: replacing meta.json failed while another thread had it open for a moment (WinError 5/32).
 - **Speaker marks during the recording name the speaker** – 0.7.41: «Wer spricht gerade?» – marks set while recording survive its end and name the speaker.
+- **Unclear speaker marks stay with the recording until dismissed** – 0.7.43: unclear marks were a global notice («klingen für Verbalis gleich»), shown whatever recording was
 - **Own name marks the microphone** – 28 Oct 2026: Andrea typed his own name as «Neuer Name» in a Teams call – the mark went to the system audio,
 - **Zero people leaves a track out** – 28 Oct 2026: a meeting on site with the system audio recorded by mistake – «0» people for the system audio
 - **Speaker plan from numbers participants and settings**
@@ -194,7 +195,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Soundcard without the windows warning class** – 0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
 - **Microphone only choice has no second device**
 
-### `test_diarization.py` (24)
+### `test_diarization.py` (25)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -222,6 +223,7 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Reassign with known number of people keeps given names**
 - **Speakers test prints only numbers**
 - **Diarization runs in its own process and reports errors** – 0.7.18 bug: sherpa-onnx blocks Python while it computes – the app froze during «Neu zuordnen».
+- **Segmentation steps half a window** – 30 Oct 2026: diarization took 34 minutes after an 81-minute call – sherpa-onnx's default step of a tenth of
 
 ### `test_evaluation.py` (6)
 
@@ -478,7 +480,7 @@ Step-by-step transcription: pieces cut in speech pauses, both tracks alternately
 - **Finished transcript removes the partial file**
 - **Service resumes cut off transcriptions at start**
 
-### `test_transcript.py` (14)
+### `test_transcript.py` (15)
 
 Merging both tracks into paragraphs and the Markdown output.
 
@@ -496,6 +498,7 @@ Merging both tracks into paragraphs and the Markdown output.
 - **Line breaks are kept**
 - **Speaker marks name speakers and join a split person** – 0.7.41: «Wer spricht gerade?» – a mark names the speaker talking then; one person split into two
 - **Speaker marks keep names typed by hand and report two people on one voice**
+- **One stray speaker mark is no doubt but a repeated one is** – 0.7.43: 5 marks «Maurice» and one «Lara» a moment too late on the same voice gave the alarming notice
 
 ### `test_ui_list.py` (1)
 
@@ -503,13 +506,14 @@ The recording list in the UI: groups open and close. Runs the list functions of 
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
 
-### `test_ui_speakers.py` (6)
+### `test_ui_speakers.py` (7)
 
 The speaker box in the UI. Runs functions of index.html in Node.js.
 
 - **Speaker count names the track** – 0.7.32: «Anzahl Personen auf dieser Spur ()» – the label used a variable that no longer existed.
 - **Number of people offered without speakers** – Ubuntu, 0.7.36: the test recording of the introduction is transcribed with «1 Person» per track, so no
 - **Speaker box closed once everybody has a name** – 0.7.40: the speaker box took much room above the transcript. It is closed (one line with the names) once every
+- **Unclear speaker marks shown with the moment to listen to** – 0.7.43: «… klingen für Verbalis gleich» was a global notice without saying where – now the speaker box lists
 - **Generated names are recognised** – A name Verbalis gave is cleared on focus so the field lists all participants; a typed name is kept.
 - **Speaker marks box offers the participants and the latest marks** – 0.7.41: «Wer spricht gerade?» while recording – a button per participant, grouped by track, the latest marks.
 - **Speaker marks box shows yourself at the microphone** – 28 Oct 2026: Andrea marked himself during a call – not needed, the microphone is named after him anyway.

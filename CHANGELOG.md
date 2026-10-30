@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.43 – 2026-10-30
+- **Unclear speaker marks with the moment to listen to:** two names on one voice were a global notice
+  («… klingen für Verbalis gleich») without saying where – even for one stray mark out of six, e.g. a click while
+  the other person was still talking. Now only unclear cases count (the second name has 2 marks or a quarter of
+  them, or no speaker of its own). They are stored with the recording and listed in its speaker box: «Bei 1:16:03
+  war «Lara» markiert, Verbalis hört dort «Maurice».» with ▶ to listen from 5 seconds before; × hides them.
+- **Speaker diarization several times faster:** the segmentation looked at every moment ten times (10-second
+  windows, 1 second apart); now half a window apart. An 81-minute call needed 34 minutes of diarization after the
+  end (partly next to another Teams call); with the new step 3.6 minutes, the same speaker for 99.6 % of the talk
+  time. More than 4 threads were slower.
+
 ## 0.7.42 – 2026-10-28
 - **Transcribe while recording (setting «Schon während der Aufnahme transkribieren», on by default):** the
   growing recording is transcribed in the same ~2-minute pieces as afterwards; after the end only

@@ -60,6 +60,10 @@ MERGE_DISTANCE = 0.8     # … if their voice prints are at most this far apart 
 PROFILE_S = 30.0         # seconds of audio per voice print
 MERGE_PROFILE_S = 120.0  # … when joining down to a known number of people (more audio: 75 % instead of 71 % right)
 SAMPLERATE = 16_000
+WINDOW_SHIFT = 0.5       # step of the 10-s segmentation windows, as a share of the window. sherpa-onnx's 0.1 took
+                         # 0.4 s per second of audio – 34 min after an 81-min call. 0.5 on that whole call: 3.6 min,
+                         # 99.6 % of the talk time the same speaker (15 min of it: 2.3–3.9× faster, 98 %; 0.75/1.0:
+                         # a bit faster, 97.7/97.2 %); measured 30 Oct 2026
 
 
 def threshold_for(speaker_split: str) -> float:
@@ -122,7 +126,7 @@ def _config(folder: Path, threshold: float):
     return sherpa_onnx.OfflineSpeakerDiarizationConfig(
         segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
             pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
-                model=str(folder / SEGMENTATION["file"])), num_threads=threads),
+                model=str(folder / SEGMENTATION["file"]), window_shift_ratio=WINDOW_SHIFT), num_threads=threads),
         embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(folder / EMBEDDING["file"]),
                                                                num_threads=threads),
         clustering=sherpa_onnx.FastClusteringConfig(num_clusters=-1, threshold=threshold),

@@ -131,8 +131,8 @@ def test_speaker_marks_name_speakers_and_join_a_split_person():
     data = marked_transcript()
     marks = [{"t": 12.0, "name": "Basil", "track": "others"}, {"t": 33.5, "name": "Basil", "track": "others"},
              {"t": 75.0, "name": "Sandra", "track": "others"}]     # 5 s after Sandra stopped: the nearest paragraph
-    changed, problems = apply_marks(data, marks)
-    assert changed and problems == []
+    changed, doubts = apply_marks(data, marks)
+    assert changed and doubts == [] and "mark_doubts" not in data
     assert {sid: s["name"] for sid, s in data["speakers"].items()} ==         {"me-1": "Andrea", "others-1": "Basil", "others-3": "Sandra"}
     assert [s["speaker"] for s in data["segments"]] == ["Andrea", "Basil", "Basil", "Sandra", "Basil"]
     assert [s["speaker_id"] for s in data["segments"]][1:3] == ["others-1", "others-1"]
@@ -146,8 +146,28 @@ def test_speaker_marks_keep_names_typed_by_hand_and_report_two_people_on_one_voi
              {"t": 15.0, "name": "Sandra", "track": "others"}, {"t": 20.0, "name": "Tom", "track": "others"},
              {"t": 200.0, "name": "Eva", "track": "others"},      # nobody talks near it: ignored
              {"t": 25.0, "name": "Hans", "track": "me"}]          # no microphone paragraph near 25 s: ignored
-    changed, problems = apply_marks(data, marks)
+    changed, doubts = apply_marks(data, marks)
     assert data["speakers"]["others-2"]["name"] == "Peter"
     assert data["speakers"]["others-1"]["name"] == "Sandra"      # a tie: the first mark wins
-    assert len(problems) == 1 and "«Sandra» und «Tom»" in problems[0]
+    assert doubts == [{"t": 20.0, "name": "Tom", "heard": "Sandra"}] == data["mark_doubts"]
     assert data["speakers"]["me-1"]["name"] == "Andrea"
+
+
+def test_one_stray_speaker_mark_is_no_doubt_but_a_repeated_one_is():
+    """0.7.43: 5 marks «Maurice» and one «Lara» a moment too late on the same voice gave the alarming notice
+    «klingen für Verbalis gleich» although Lara had her own speaker. Now only unclear cases are doubts – with the
+    moment to listen to – and they are stored in the transcript instead of a global notice."""
+    def run(extra):
+        data = marked_transcript()
+        marks = [{"t": 12.0, "name": "Lara", "track": "others"},
+                 *({"t": t, "name": "Maurice", "track": "others"} for t in (31, 35, 40, 45, 48)), *extra]
+        return data, apply_marks(data, marks)[1]
+
+    data, doubts = run([{"t": 42.0, "name": "Lara", "track": "others"}])     # 1 of 6: a stray mark
+    assert doubts == [] and data["speakers"]["others-2"]["name"] == "Maurice"
+    data, doubts = run([{"t": 42.0, "name": "Lara", "track": "others"}, {"t": 46.0, "name": "Lara", "track": "others"}])
+    assert doubts == [{"t": 42.0, "name": "Lara", "heard": "Maurice"}, {"t": 46.0, "name": "Lara", "heard": "Maurice"}]
+    data = marked_transcript()       # the losing name has no speaker of its own: diarization joined two people
+    marks = [*({"t": t, "name": "Maurice", "track": "others"} for t in (31, 35, 40, 45, 48)),
+             {"t": 42.0, "name": "Eva", "track": "others"}]
+    assert apply_marks(data, marks)[1] == [{"t": 42.0, "name": "Eva", "heard": "Maurice"}]

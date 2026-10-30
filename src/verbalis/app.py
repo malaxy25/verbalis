@@ -115,6 +115,9 @@ class Api:
     def audio_clip(self, recording_id, start, end):
         return self._call(self._s.audio_clip, recording_id, start, end)
 
+    def dismiss_mark_doubts(self, recording_id):
+        return self._call(self._s.dismiss_mark_doubts, recording_id)
+
     def pause(self):
         return self._call(self._s.pause)
 

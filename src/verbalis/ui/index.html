@@ -451,6 +451,11 @@
   .help { display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line);
     font-size: 12px; color: var(--muted); cursor: help; }
   .speakers-body { display: grid; gap: 10px; margin-top: 10px; }
+  .mark-doubts { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 14px; }
+  .mark-doubts > div { flex: 1; }
+  .mark-doubts ul { margin: 4px 0 0; padding-left: 18px; }
+  .mark-doubts .close { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
+  .mark-doubts .close:hover { color: var(--ink); }
   .speaker-track { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; }
   .speaker-track + .speaker-track { padding-top: 10px; border-top: 1px solid var(--line); }
   .track-label { flex: 0 0 5.5em; padding-top: 8px; color: var(--muted); font-size: 13px; }
@@ -1645,7 +1650,7 @@ function speakersPanel(a, t) {
   const panel = element("details", { class: "speakers-panel", "aria-label": "Sprecher" },
     element("summary", {}, element("h3", {}, "Sprecher"), names,
       element("span", { class: "help", tabindex: "0", title: hint, "aria-label": hint }, "?")),
-    element("div", { class: "speakers-body" },
+    element("div", { class: "speakers-body" }, ...markDoubts(a, t),
       ...speakerTracks(t).map((track) => trackGroup(track,
         rows.filter((_, i) => sorted[i][1].track === track), speakerCountRow(a, t, talk, track)))),
     ...["me", "others"].map((track) => element("datalist", { id: `people-${a.id}-${track}` },
@@ -1653,9 +1658,33 @@ function speakersPanel(a, t) {
   );
   // closed once every speaker has a name; open while one is still «Gegenüber 2», «Person 1» … – or as last chosen
   const chosen = (state.speakersOpen || {})[a.id];
-  panel.open = chosen !== undefined ? chosen : sorted.some(([, info]) => unnamedSpeaker(info.name, info.track, t.tracks));
+  panel.open = chosen !== undefined ? chosen
+    : (t.mark_doubts || []).length > 0 || sorted.some(([, info]) => unnamedSpeaker(info.name, info.track, t.tracks));
   panel.addEventListener("toggle", () => { state.speakersOpen = { ...(state.speakersOpen || {}), [a.id]: panel.open }; });
   return panel;
+}
+
+/* Speaker marks Verbalis is unsure about (transcript.apply_marks): «Lara» was marked where it hears Maurice. Each one
+   with ▶ to listen to that moment – a mark set a bit late, or two people joined into one voice? [] without doubts. */
+function markDoubts(a, t) {
+  const doubts = t.mark_doubts || [];
+  if (!doubts.length) return [];
+  const close = element("button", { type: "button", class: "close", title: "Angehört, passt", "aria-label": "Hinweis schliessen",
+    onclick: async () => {
+      try { await call("dismiss_mark_doubts", a.id); t.mark_doubts = []; box.remove(); } catch (e) { showMessage(e.message); }
+    } }, "×");
+  const items = doubts.map((d, i) => {
+    const play = element("button", { type: "button", class: "play-passage", "aria-label": `Stelle bei ${timeText(d.t)} anhören`,
+      title: a.audio ? "Die Stelle anhören (ab 5 Sekunden vorher)" : "Das Audio dieser Aufnahme wurde gelöscht.",
+      onclick: (event) => playAudio(`doubt:${i}`, () => call("audio_clip", a.id, Math.max(d.t - 5, 0), d.t + 10), event.currentTarget) }, "▶");
+    play.disabled = !a.audio;
+    return element("li", {}, `Bei ${timeText(d.t)} war «${d.name}» markiert, Verbalis hört dort «${d.heard}».`, play);
+  });
+  const box = element("div", { class: "mark-doubts", role: "note" },
+    element("div", {}, element("strong", {}, "Unklar: "),
+      "Stimmt die Markierung, hat Verbalis zwei Personen als eine erkannt – dann mit der Anzahl Personen «Neu zuordnen».",
+      element("ul", {}, ...items)), close);
+  return [box];
 }
 
 /* A speaker still to be named: a name Verbalis gave – except the own track's single speaker, who has the user's name. */
