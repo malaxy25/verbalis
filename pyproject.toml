@@ -13,13 +13,13 @@ dependencies = [
     "soxr>=0.3",
     "pywebview>=5",
     "spylls>=0.1.7",
-    "sherpa-onnx>=1.12",          # speaker diarization (Apache 2.0)
+    "sherpa-onnx>=2.0.1",          # speaker diarization (Apache 2.0)
     "certifi",                    # CA certificates for HTTPS in the Mac app (its Python has none)
     "truststore; sys_platform == 'win32'",   # HTTPS checked by Windows itself (company roots, roots loaded on demand)
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pyyaml"]   # pyyaml: tests read the release workflow
+dev = ["pytest>=9.2.0", "pyyaml"]   # pyyaml: tests read the release workflow
 # Linux (experimental): the Qt window instead of the system's GTK packages
 qt = ["pywebview[qt]>=5"]
 # Mac with M chip (experimental, for measuring): transcription on the GPU with MLX – verbalis compare … mlx:MODEL
@@ -27,7 +27,7 @@ mac-gpu = ["mlx-whisper>=0.4.3; sys_platform == 'darwin' and platform_machine ==
 # Only needed to build the Windows installer (see packaging/ and .github/workflows/release.yml)
 build = ["pyinstaller>=6.10", "pillow; sys_platform == 'darwin'"]  # Pillow converts the icon for macOS
 # Only needed to convert Hugging Face models (e.g. Swiss German fine-tunes)
-convert = ["transformers>=4.40", "torch", "accelerate", "huggingface_hub"]
+convert = ["transformers>=5.22.0", "torch", "accelerate", "huggingface_hub"]
 
 [project.scripts]
 verbalis = "verbalis.cli:main"
