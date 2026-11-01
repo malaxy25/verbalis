@@ -127,7 +127,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
           Get-ChildItem dist\Verbalis-*-setup.exe | ForEach-Object { "{0}  {1:N0} MB" -f $_.Name, ($_.Length / 1MB) }
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: Verbalis-${{ needs.version.outputs.version }}-windows
           path: dist/Verbalis-*-setup.exe
@@ -271,7 +271,7 @@ jobs:
             "dist/Verbalis-${{ needs.version.outputs.version }}-macos-arm64.dmg"
           ls -lh dist/*.dmg
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: Verbalis-${{ needs.version.outputs.version }}-macos
           path: |
@@ -289,7 +289,7 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.sha }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: Verbalis-*
           path: dist
