@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.44 – 2026-11-03
+- **Search in transcripts (Ctrl+F, or the magnifier next to «+»):** a narrow bar above the transcript with the
+  hit count («2 von 5»), ↑/↓ or Enter / Shift+Enter to jump, Esc to close. Case and accents don't matter, «ä» =
+  «ae», «ö» = «oe», «ü» = «ue»; several words must all be in the same paragraph. Hits are marked without changing
+  the text, so correcting and splitting work as before. The switch «Alle Aufnahmen» shows the recordings found in
+  the sidebar instead of the list (newest first, up to three passages each, also by title, project and
+  participants); a click opens the recording at that passage. Everything stays on the computer; search terms are
+  not logged. Suggested by Lara.
+- **Monthly model check:** when new Swiss German models were found, the step failed instead of opening the
+  issue (GitHub runs it with `bash -e`, which ended the step at the tool's exit code 1).
+
 ## 0.7.43 – 2026-10-30
 - **Unclear speaker marks with the moment to listen to:** two names on one voice were a global notice
   («… klingen für Verbalis gleich») without saying where – even for one stray mark out of six, e.g. a click while

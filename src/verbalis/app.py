@@ -109,6 +109,9 @@ class Api:
     def transcript(self, recording_id):
         return self._call(self._s.transcript, recording_id)
 
+    def search(self, query):
+        return self._call(self._s.search, query)
+
     def transcribe(self, recording_id, people=None):
         return self._call(self._s.transcribe, recording_id, people)
 

@@ -64,13 +64,13 @@ in the README and in `BACKLOG.md`):
 
 **User interface:** the HTML/JavaScript UI can be opened in any browser with a fake
 backend: `python tools/ui_preview.py` writes `tools/ui-preview/preview.html`
-(scenarios via `#transcript`, `#recording`, `#paused`, `#news`, `#notice`, `#empty`, `#dev`, `#nomic`, `#linux`).
+(scenarios via `#transcript`, `#recording`, `#paused`, `#news`, `#notice`, `#empty`, `#dev`, `#nomic`, `#linux`; the search: Ctrl+F in `#transcript`).
 During development every UI change was clicked through this way with Playwright.
 
 ## Catalogue
 
 <!-- catalog:start -->
-330 tests in 33 files.
+338 tests in 34 files.
 
 ### `test_acceleration.py` (10)
 
@@ -383,7 +383,7 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Device that never opens is not retried**
 - **User is told once that a device is gone**
 
-### `test_release_workflow.py` (7)
+### `test_release_workflow.py` (8)
 
 The release workflow: only after green tests, only for a new version, exactly the tested commit.
 
@@ -394,6 +394,7 @@ The release workflow: only after green tests, only for a new version, exactly th
 - **Tag only after a successful windows build**
 - **Fixed download names are never taken for an update** – frehner.tech links to fixed names (releases/latest/download/…) because the GitHub API it used for the
 - **Decision step**
+- **Monthly model check keeps the exit code of its tools** – 0.7.43: GitHub runs steps with `bash -e`, so `report=$(python3 tools/find_new_models.py)` ended the step
 
 ### `test_robustness.py` (13)
 
@@ -412,6 +413,18 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Low disk space warns and finally stops the recording**
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
+
+### `test_search.py` (7)
+
+Search in transcripts: the rules (verbalis/search.py, the same in index.html) and «Alle Aufnahmen».
+
+- **Search rules**
+- **Accents and sharp s**
+- **Window uses the same rules as python** – The open transcript is searched in the window: it must find exactly what «Alle Aufnahmen» finds.
+- **Snippet is cut around the first hit**
+- **Search across recordings newest first**
+- **Search sees edits and skips broken transcripts**
+- **Search shows at most three snippets**
 
 ### `test_service.py` (42)
 

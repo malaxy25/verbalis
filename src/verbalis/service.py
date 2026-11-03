@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import __version__, feedback, hardware, pipeline, updates
+from . import __version__, feedback, hardware, pipeline, search, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
@@ -145,6 +145,7 @@ class Service:
         self._queued: list[str] = []
         self._job: dict | None = None
         self._errors: dict[str, str] = {}
+        self._search_cache: dict[str, tuple] = {}   # recording id → (file stamp, paragraphs)
         self._transcriber = None
         self._transcriber_model: str | None = None
         self._manual_pause = False
@@ -2219,6 +2220,51 @@ class Service:
         for seg in data["segments"]:
             seg.pop("words", None)   # only needed here in Python (splitting), not in the window
         return data
+
+    def search(self, query: str) -> list[dict]:
+        """All recordings with a paragraph containing every word of `query` (or with them in the title, project
+        or participants), newest first, each with up to three snippets. The search terms are not logged."""
+        words = search.terms(query)
+        base = self._s.recordings
+        if not words or not base.exists():
+            return []
+        started = time.monotonic()
+        result = []
+        for folder in sorted(base.iterdir(), reverse=True):
+            if not folder.is_dir() or not VALID_ID.match(folder.name) or not pipeline.is_recording_folder(folder):
+                continue
+            meta = pipeline.read_meta(folder)
+            title = meta.get("title") or pipeline.default_title(_parse_time(meta.get("start"))
+                                                                or pipeline.recording_start(folder))
+            found = search.find(self._search_segments(folder), words)
+            in_details = bool(search.spans(search.details_text(meta, title), words))
+            if found or in_details:
+                result.append({"id": folder.name, "title": title, "start": meta.get("start") or folder.name,
+                               "project": meta.get("project") or "", "places": len(found),
+                               "hits": sum(f["hits"] for f in found), "in_details": in_details,
+                               "snippets": found[:search.MAX_SNIPPETS]})
+        log.info("Search across recordings: %d of them with hits, %.2f s", len(result), time.monotonic() - started)
+        return result
+
+    def _search_segments(self, folder: Path) -> list[dict]:
+        """The paragraphs of a transcript, kept in memory until transcript.json changes."""
+        path = folder / "transcript.json"
+        try:
+            stat = path.stat()
+        except OSError:
+            return []
+        stamp = (stat.st_mtime_ns, stat.st_size)
+        cached = self._search_cache.get(folder.name)
+        if cached and cached[0] == stamp:
+            return cached[1]
+        try:
+            segments = [{"text": seg.get("text") or "", "start": seg.get("start", 0), "speaker": seg.get("speaker")}
+                        for seg in json.loads(path.read_text(encoding="utf-8")).get("segments", [])]
+        except (OSError, ValueError, AttributeError):
+            log.warning("Search: %s/transcript.json could not be read", folder.name)
+            return []
+        self._search_cache[folder.name] = (stamp, segments)
+        return segments
 
     def delete_recording(self, recording_id: str) -> None:
         """Delete a recording completely: audio, transcript, metadata."""

@@ -92,3 +92,14 @@ def test_decision_step(tmp_path, version, changelog, expected):
         assert result.returncode != 0 and "CHANGELOG.md has no section" in result.stdout
     else:
         assert result.returncode == 0 and expected in output.read_text()
+
+
+def test_monthly_model_check_keeps_the_exit_code_of_its_tools():
+    """0.7.43: GitHub runs steps with `bash -e`, so `report=$(python3 tools/find_new_models.py)` ended the step
+    with exit 1 as soon as new models were found – instead of opening the issue, the check failed."""
+    check = yaml.safe_load((ROOT / ".github" / "workflows" / "model-check.yml").read_text(encoding="utf-8"))
+    scripts = [step["run"] for step in check["jobs"]["check"]["steps"] if "report=$(" in step.get("run", "")]
+    assert len(scripts) == 2
+    for script in scripts:
+        line = next(x for x in script.splitlines() if "report=$(" in x)
+        assert "|| status=$?" in line

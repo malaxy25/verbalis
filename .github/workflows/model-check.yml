@@ -29,8 +29,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
-          report=$(python3 tools/check_upstream_models.py)
-          status=$?
+          status=0
+          report=$(python3 tools/check_upstream_models.py) || status=$?   # the run shell uses bash -e: a bare exit 1 would end the step here
           echo "$report"
           if [ $status -eq 0 ]; then exit 0; fi
           if [ $status -ne 1 ]; then echo "Check failed"; exit $status; fi
@@ -61,8 +61,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
-          report=$(python3 tools/find_new_models.py)
-          status=$?
+          status=0
+          report=$(python3 tools/find_new_models.py) || status=$?   # the run shell uses bash -e: a bare exit 1 would end the step here
           echo "$report"
           if [ $status -eq 0 ]; then exit 0; fi
           if [ $status -ne 1 ]; then echo "Search failed"; exit $status; fi

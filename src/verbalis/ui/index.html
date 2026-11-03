@@ -75,6 +75,38 @@
     cursor: pointer; font-size: 18px; line-height: 1; color: var(--ink);
   }
   .plan-button:hover { border-color: var(--ink); }
+  .head-buttons { display: flex; gap: 6px; }
+  .search-button { display: grid; place-items: center; }
+  .search-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .search-button[aria-pressed="true"] { border-color: var(--ink); background: var(--surface-2); }
+
+  /* ---------- Search ---------- */
+  .search-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 32px;
+    border-bottom: 1px solid var(--line); font-size: 13px; }
+  .search-bar[hidden] { display: none; }
+  .search-bar input { flex: 0 1 300px; min-width: 120px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  .search-count { min-width: 6.5em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .search-bar .icon-button { width: 26px; height: 26px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+  .search-bar .icon-button:hover { border-color: var(--line); color: var(--ink); }
+  .search-bar .icon-button:disabled { opacity: 0.4; cursor: default; border-color: transparent; }
+  #search-close { margin-left: auto; }
+  .search-scope { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .search-scope button { border: 0; background: var(--surface); padding: 3px 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .search-scope button + button { border-left: 1px solid var(--line); }
+  .search-scope button[aria-checked="true"] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+  ::highlight(search) { background: var(--amber-soft); color: inherit; text-decoration: underline 2px var(--amber); }
+  ::highlight(search-current) { background: var(--amber); color: var(--surface); }
+  .paragraph.search-current, .aside.search-current { box-shadow: -3px 0 0 var(--amber); }
+  .list .search-result { padding: 8px 12px; border-radius: 8px; }
+  .list .search-result + .search-result { border-top: 1px solid var(--line); border-radius: 0; }
+  .list .search-result > button { padding: 0; background: none; }
+  .list .search-result > button:hover .date { text-decoration: underline; }
+  .list .search-result .snippet { display: block; width: 100%; padding: 4px 6px; margin-top: 4px; font-size: 13px; color: var(--ink);
+    text-align: left; border: 0; border-radius: 6px; background: var(--surface-2); cursor: pointer; }
+  .list .search-result .snippet:hover { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+  .list .search-result .snippet time { color: var(--muted); margin-right: 6px; font-variant-numeric: tabular-nums; }
+  .list .search-result mark { background: var(--amber-soft); color: inherit; box-shadow: 0 1px 0 var(--amber); }
+  .list .search-info { padding: 12px; color: var(--muted); font-size: 13px; }
   .list .group { margin-top: 6px; }
   .list .group-head {
     display: flex; gap: 4px; align-items: center; padding: 6px 12px 4px; font-size: 12px; font-weight: 600;
@@ -622,7 +654,10 @@
 <aside class="history" aria-label="Aufnahmen">
   <div class="history-head">
     <h1>Verbalis</h1>
-    <button type="button" class="plan-button" id="btn-plan" title="Aufnahme planen: Name, Projekt und Teilnehmende schon vorher erfassen" aria-label="Aufnahme planen">+</button>
+    <div class="head-buttons">
+      <button type="button" class="plan-button search-button" id="btn-search" title="Suchen (Ctrl+F) – im Transkript oder in allen Aufnahmen" aria-label="Suchen" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.8" cy="6.8" r="4.6"/><path d="M10.3 10.3 14 14"/></svg></button>
+      <button type="button" class="plan-button" id="btn-plan" title="Aufnahme planen: Name, Projekt und Teilnehmende schon vorher erfassen" aria-label="Aufnahme planen">+</button>
+    </div>
   </div>
   <ol class="list" id="list"></ol>
   <footer>
@@ -691,6 +726,17 @@
     <p class="message" id="message" role="alert" hidden><span id="message-text"></span><button type="button" id="btn-message-close" aria-label="Meldung schliessen" title="Schliessen">×</button></p>
   </section>
 
+  <div class="search-bar" id="search-bar" role="search" hidden>
+    <input type="text" id="search-input" placeholder="Im Transkript suchen" aria-label="Suchbegriff" autocomplete="off" spellcheck="false">
+    <span class="search-count" id="search-count" aria-live="polite"></span>
+    <button type="button" class="icon-button" id="search-prev" title="Vorheriger Treffer (Shift+Enter)" aria-label="Vorheriger Treffer">↑</button>
+    <button type="button" class="icon-button" id="search-next" title="Nächster Treffer (Enter)" aria-label="Nächster Treffer">↓</button>
+    <div class="search-scope" role="radiogroup" aria-label="Suchen in">
+      <button type="button" role="radio" data-scope="this" aria-checked="true">Dieses Transkript</button>
+      <button type="button" role="radio" data-scope="all" aria-checked="false">Alle Aufnahmen</button>
+    </div>
+    <button type="button" class="icon-button" id="search-close" title="Suche schliessen (Esc)" aria-label="Suche schliessen">×</button>
+  </div>
   <section class="content" id="content" aria-live="polite"></section>
 </main>
 
@@ -1111,6 +1157,7 @@ function toggleGroup(key) {
 function renderList() {
   const list = $("list");
   list.replaceChildren();
+  if (searchingAll()) { renderSearchResults(list); return; }
   if (!state.recordings.length) {
     list.append(element("li", { class: "list-empty" }, "Noch keine Aufnahmen. Mit + lässt sich eine Aufnahme planen."));
     return;
@@ -1510,7 +1557,7 @@ function renderSegments(body, id, segments, speakerMap, meName, editable, playab
     if (s.aside) {
       const host = asideHost(segments, index);
       const text = element("span", { class: "aside-text" }, s.text);
-      const item = element("div", { class: `aside ${track}` },
+      const item = element("div", { class: `aside ${track}`, "data-index": String(index) },
         element("span", { class: "aside-who", "data-speaker-id": s.speaker_id || "" }, s.speaker || ""), ": ", text,
         " ", element("time", {}, timeText(s.start)));
       if (editable) {
@@ -3085,6 +3132,249 @@ function closeWhatsNew() {
   $("dlg-news").close();   // the close event marks it as seen (also for Esc)
 }
 
+/* ---------- Search ---------- */
+/* The open transcript is searched here in the window; «Alle Aufnahmen» asks Python (`search`) and shows the
+   recordings found in the sidebar instead of the list. Same rules on both sides (verbalis/search.py):
+   case and accents ignored, «ä» = «ae», «ö» = «oe», «ü» = «ue», «ß» = «ss»; several words = all of them in
+   one paragraph. Hits are marked with the CSS Highlight API, the text itself stays unchanged. */
+
+const SEARCH_DELAY_MS = 300;
+const SEARCH_FOLD = { "ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss" };
+const search = { open: false, query: "", terms: [], scope: "this", ranges: [], current: -1,
+                 results: null, seq: 0, timer: null, jumpTo: null, frame: 0 };
+
+function foldText(text) {
+  let folded = "";
+  const pos = [];
+  for (let i = 0; i < text.length; i++) {
+    const lower = text[i].toLowerCase();
+    const rep = SEARCH_FOLD[lower] ?? lower.normalize("NFD").replace(/\p{M}/gu, "");
+    for (const ch of rep) { folded += ch; pos.push(i); }
+  }
+  return { folded, pos };
+}
+
+function searchTerms(query) {
+  return [...new Set(foldText(query || "").folded.split(/\s+/).filter(Boolean))];
+}
+
+/* [start, end] of every hit in text, sorted – empty unless every word is in it. */
+function matchSpans(text, terms) {
+  if (!terms.length) return [];
+  const { folded, pos } = foldText(text);
+  const found = [];
+  for (const term of terms) {
+    let at = folded.indexOf(term);
+    if (at < 0) return [];
+    while (at >= 0) {
+      found.push([pos[at], pos[at + term.length - 1] + 1]);
+      at = folded.indexOf(term, at + term.length);
+    }
+  }
+  return found.sort((x, y) => x[0] - y[0]);
+}
+
+function searchingAll() {
+  return search.open && search.scope === "all" && search.terms.length > 0;
+}
+
+/* A Range over characters start…end of el's text, across its text nodes. */
+function textRange(el, start, end) {
+  const range = new Range();
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let offset = 0, started = false;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const next = offset + node.data.length;
+    if (!started && start < next) { range.setStart(node, start - offset); started = true; }
+    if (started && end <= next) { range.setEnd(node, end - offset); return range; }
+    offset = next;
+  }
+  return null;
+}
+
+function searchTextElements() {
+  return [...document.querySelectorAll("#content .transcript .paragraph .text, #content .transcript .aside-text")]
+    .filter((el) => !el.isContentEditable);   // a paragraph being corrected keeps its marks off
+}
+
+/* Mark every hit in the open transcript; jump = scroll to the current hit. */
+function paintSearch(jump = false) {
+  const ranges = [];
+  if (search.open && search.terms.length) {
+    for (const el of searchTextElements()) {
+      for (const [start, end] of matchSpans(el.textContent, search.terms)) {
+        const range = textRange(el, start, end);
+        if (range) ranges.push(range);
+      }
+    }
+  }
+  search.ranges = ranges;
+  if (search.jumpTo && search.jumpTo.id === state.selected) {
+    const at = ranges.findIndex((r) => searchHolder(r)?.dataset.index === String(search.jumpTo.index));
+    if (at >= 0) { search.current = at; search.jumpTo = null; jump = true; }
+  }
+  if (search.current >= ranges.length) search.current = ranges.length - 1;
+  if (search.current < 0 && ranges.length) search.current = 0;
+  if (HAS_HIGHLIGHT) {
+    const current = ranges[search.current];
+    CSS.highlights.set("search", new Highlight(...ranges.filter((r) => r !== current)));
+    CSS.highlights.set("search-current", current ? new Highlight(current) : new Highlight());
+  }
+  for (const el of document.querySelectorAll("#content .search-current")) el.classList.remove("search-current");
+  const holder = ranges.length ? searchHolder(ranges[search.current]) : null;
+  if (holder) holder.classList.add("search-current");
+  if (jump && ranges.length) scrollToRange(ranges[search.current]);
+  updateSearchCount();
+}
+
+function searchHolder(range) {
+  const node = range.startContainer;
+  return (node.nodeType === Node.TEXT_NODE ? node.parentElement : node).closest(".aside, .paragraph");
+}
+
+function scrollToRange(range) {
+  const box = $("content");
+  const rect = range.getBoundingClientRect(), outer = box.getBoundingClientRect();
+  box.scrollTop += rect.top - outer.top - box.clientHeight / 2;
+}
+
+function updateSearchCount() {
+  const n = search.ranges.length;
+  const open = !!document.querySelector("#content .transcript");
+  $("search-count").textContent = !search.terms.length ? "" : n ? `${search.current + 1} von ${n}`
+    : open ? "Keine Treffer" : (search.scope === "all" ? "" : "Kein Transkript offen");
+  $("search-prev").disabled = $("search-next").disabled = n < 2;
+}
+
+/* Repaint after the transcript changes (another recording, an edit, the running transcription). */
+function schedulePaintSearch() {
+  if (!search.open || search.frame) return;
+  search.frame = requestAnimationFrame(() => { search.frame = 0; paintSearch(false); });
+}
+
+function stepSearch(delta) {
+  const n = search.ranges.length;
+  if (!n) return;
+  search.current = (search.current + delta + n) % n;
+  paintSearch(true);
+}
+
+function openSearch() {
+  const selected = String(window.getSelection() || "").trim();
+  search.open = true;
+  $("search-bar").hidden = false;
+  $("btn-search").setAttribute("aria-pressed", "true");
+  const input = $("search-input");
+  if (selected && selected.length <= 60 && !selected.includes("\n")) { input.value = selected; onSearchInput(); }
+  input.focus();
+  input.select();
+  paintSearch(false);
+}
+
+function closeSearch() {
+  const wasAll = searchingAll();
+  search.open = false;
+  search.jumpTo = null;
+  clearTimeout(search.timer);
+  $("search-bar").hidden = true;
+  $("btn-search").setAttribute("aria-pressed", "false");
+  if (HAS_HIGHLIGHT) { CSS.highlights.delete("search"); CSS.highlights.delete("search-current"); }
+  for (const el of document.querySelectorAll("#content .search-current")) el.classList.remove("search-current");
+  if (wasAll) renderList();
+}
+
+function onSearchInput() {
+  search.query = $("search-input").value;
+  search.terms = searchTerms(search.query);
+  search.current = 0;
+  paintSearch(true);
+  refreshSearchResults();
+}
+
+function setSearchScope(scope) {
+  search.scope = scope;
+  for (const b of document.querySelectorAll(".search-scope button")) b.setAttribute("aria-checked", String(b.dataset.scope === scope));
+  $("search-input").placeholder = scope === "all" ? "In allen Aufnahmen suchen" : "Im Transkript suchen";
+  refreshSearchResults();
+  $("search-input").focus();
+}
+
+/* «Alle Aufnahmen»: ask Python a moment after the last keystroke; an older answer arriving late is dropped. */
+function refreshSearchResults() {
+  clearTimeout(search.timer);
+  const seq = ++search.seq;
+  search.results = null;
+  renderList();
+  if (!searchingAll()) return;
+  search.timer = setTimeout(async () => {
+    let results;
+    try { results = await call("search", search.query); } catch (e) { results = []; showMessage(e.message); }
+    if (seq !== search.seq || !searchingAll()) return;
+    search.results = results;
+    renderList();
+  }, SEARCH_DELAY_MS);
+}
+
+function markedText(text) {
+  const parts = [];
+  let at = 0;
+  for (const [start, end] of matchSpans(text, search.terms)) {
+    if (start < at) continue;
+    parts.push(text.slice(at, start), element("mark", {}, text.slice(start, end)));
+    at = end;
+  }
+  parts.push(text.slice(at));
+  return parts.filter((x) => x !== "");
+}
+
+function renderSearchResults(list) {
+  const results = search.results;
+  if (!results) { list.append(element("li", { class: "search-info" }, "Suche läuft …")); return; }
+  if (!results.length) { list.append(element("li", { class: "search-info" }, "Keine Aufnahme gefunden.")); return; }
+  list.append(element("li", { class: "search-info" }, results.length === 1 ? "1 Aufnahme gefunden" : `${results.length} Aufnahmen gefunden`));
+  for (const r of results) {
+    const open = (index) => {
+      search.jumpTo = index == null ? null : { id: r.id, index };
+      if (state.selected !== r.id) { state.selected = r.id; renderList(); renderContent(); }
+      else paintSearch(true);
+    };
+    const when = [shortDate(r), r.project].filter(Boolean).join(" · ");
+    list.append(element("li", { class: "search-result" },
+      element("button", { type: "button", "aria-current": String(r.id === state.selected),
+          onclick: () => open(r.snippets.length ? r.snippets[0].index : null) },
+        element("span", { class: "date" }, ...markedText(r.title || shortDate(r))),
+        element("span", { class: "duration" }, !r.places ? "" : r.places === 1 ? "1 Stelle" : `${r.places} Stellen`),
+        element("span", { class: "when" }, ...markedText(when))),
+      ...r.snippets.map((sn) => element("button", { type: "button", class: "snippet", title: "Diese Stelle zeigen",
+          onclick: () => open(sn.index) },
+        element("time", {}, timeText(sn.start)), sn.speaker ? `${sn.speaker}: ` : "", ...markedText(sn.text))),
+      r.places > r.snippets.length
+        ? element("span", { class: "when" }, `und ${r.places - r.snippets.length} weitere – im Transkript mit ↓`) : null,
+    ));
+  }
+}
+
+function setupSearch() {
+  $("btn-search").addEventListener("click", () => (search.open ? closeSearch() : openSearch()));
+  $("search-close").addEventListener("click", closeSearch);
+  $("search-prev").addEventListener("click", () => stepSearch(-1));
+  $("search-next").addEventListener("click", () => stepSearch(1));
+  $("search-input").addEventListener("input", onSearchInput);
+  $("search-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); stepSearch(event.shiftKey ? -1 : 1); }
+    else if (event.key === "Escape") { event.preventDefault(); closeSearch(); }
+  });
+  for (const b of document.querySelectorAll(".search-scope button")) b.addEventListener("click", () => setSearchScope(b.dataset.scope));
+  document.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "f") return;
+    event.preventDefault();   // instead of the webview's own find, which differs per platform
+    if (document.querySelector("dialog[open]")) return;
+    openSearch();
+  });
+  new MutationObserver(schedulePaintSearch).observe($("content"),
+    { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["contenteditable"] });
+}
+
 /* ---------- Spelling ---------- */
 
 const spell = { el: null, status: null, misspelled: new Set(), timer: null, menu: null };
@@ -3706,6 +3996,7 @@ async function init() {
   $("btn-diag-folder").addEventListener("click", () => call("open_data_folder").catch((e) => showMessage(e.message)));
   $("btn-message-close").addEventListener("click", () => showMessage(""));
   $("btn-plan").addEventListener("click", planRecording);
+  setupSearch();
   $("btn-install-go").addEventListener("click", installToApplications);
   $("btn-install-later").addEventListener("click", () => { $("dlg-install").close(); showWhatsNew(); });
   $("btn-models-check").addEventListener("click", checkModelsNow);

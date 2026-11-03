@@ -33,6 +33,7 @@ function startDate(a) { return new Date(a.start); }
 function shortDate(a) { return a.start; }
 function timeText(s) { return String(s); }
 function renderContent() {}
+function searchingAll() { return false; }
 """
 
 SCRIPT = """

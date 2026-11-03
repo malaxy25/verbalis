@@ -4,61 +4,14 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## Current state (26 Oct 2026)
+## Current state (3 Nov 2026)
 
 - **Last session:** v0.7.39 (Windows checks HTTPS certificates itself) and v0.7.40 (speaker box grouped by track,
   also without diarization). The status paragraph below still describes 0.7.38.
-- **Next step:** build 0.7.44 – search in transcripts (section below).
+- **Next step:** to agree with Andrea – open items below, in priority order. 0.7.44 (search in transcripts)
+  is built; Andrea checks it in the app.
 - **Open questions for Andrea:** none
 - **Prerequisites / start check:** none.
-
-## 0.7.44 – planned and decided with Andrea: search in transcripts (2 Nov 2026) **[ux]**
-
-Feedback from Lara (2 Nov 2026): find a keyword to look something up again in context – «quasi einfach wie
-Ctrl+F». Plan: one search with two scopes, the open transcript and all recordings.
-
-**Entry and layout**
-- **Ctrl+F** (Cmd+F on the Mac) opens a search bar at the top of the transcript, above the speaker box; it
-  stays visible while scrolling (sticky). Esc closes it and removes the marks. A small «Suchen» button in the
-  transcript header does the same for people who don't know the shortcut.
-- In the bar: text field, hit count «3 von 12», ↑/↓ buttons, Enter / Shift+Enter jump to the next / previous
-  hit, and a switch **«Dieses Transkript» / «Alle Aufnahmen»**.
-- We build the bar ourselves instead of using the webview's find: WebView2, WKWebView and WebKitGTK behave
-  differently, pywebview does not offer it everywhere, and it would not know about «Alle Aufnahmen».
-
-**This transcript** (only in the window, no Python needed)
-- Search the paragraph texts the window already has; ignore case, treat «ä/ae», «ö/oe», «ü/ue» the same
-  (Swiss German spellings vary). Several words = all must be in the same paragraph, in any order.
-- Mark hits with the CSS Highlight API, as the spelling check does (`::highlight(search)`, current hit in a
-  stronger colour) – the text itself stays unchanged, so editing and splitting are not affected.
-- Jumping scrolls the paragraph into the middle and shows its time; the existing «Anhören» link plays the
-  passage. Marks are refreshed after every re-render (edit, split, speaker change); a paragraph being edited
-  keeps its marks off.
-- While a transcription runs: search the finished part (`partial_transcript`).
-
-**All recordings** (new `search(query)` in the service / API)
-- Python reads `transcript.json` of every recording and finds paragraphs as above; also matches title, project
-  and participants from `meta.json`. Returns per recording: id, title, date, number of hits and up to three
-  snippets (about 60 characters around the hit, paragraph index, time, speaker).
-- The results replace the recording list in the sidebar while the search is active (newest first, title +
-  date + «5 Treffer» + snippets). Clicking a snippet opens the recording, switches to «Dieses Transkript» with
-  the same words and jumps to that paragraph. Esc or an empty field brings the normal list back.
-- Run in a background thread, wait 300 ms after the last keystroke, stop an older search when a new one starts.
-  No index on disk (no extra copy of conversations); if it gets slow with many recordings, keep the texts in
-  memory and reload a file only when its modification time changes.
-- Privacy: everything stays local; no search terms in logs (only time taken and number of hits).
-
-**Tests**
-- Service: search in a few fake recordings (umlaut spellings, several words, title/participants, damaged or
-  missing `transcript.json` skipped, limits on snippets).
-- UI: `search` in `tools/ui-preview/mock.js` and a preview scenario `#search` (both scopes); check Ctrl+F does
-  not clash with the editing keys.
-
-**Decided with Andrea (2 Nov 2026)**
-1. One bar with the switch «Dieses Transkript» / «Alle Aufnahmen» (as above).
-2. «ä/ae», «ö/oe», «ü/ue» count as the same.
-3. Results across recordings: newest first.
-4. Both scopes in one version (0.7.44).
 
 ## 0.7.34 – next
 
