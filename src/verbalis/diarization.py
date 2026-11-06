@@ -381,3 +381,141 @@ def assign(segments: list[Segment], turns: list[tuple[float, float, int]], track
         name = f"{group} {number}" if several else base_name
         result.append(replace(s, speaker=name, track=track, speaker_id=f"{track}-{number}"))
     return result
+
+
+SPLIT_WINDOW_S = 3.0     # voice split by marks: one decision per this many seconds
+SPLIT_CLEAR_SHARE = 0.3  # the voice prints are refined from this share of the clearest windows
+
+
+def split_voices(spans: list[tuple[float, float]], seeds: dict[str, list[tuple[float, float]]], embed,
+                 window_s: float = SPLIT_WINDOW_S, rounds: int = 2, progress=None,
+                 embed_many=None) -> list[tuple[float, float, str]]:
+    """One speaker that holds several people, split by the speaker marks (0.7.45).
+
+    5 Nov 2026, a meeting on site with 7 people: Sascha and Paul were one speaker – their voices are closer than
+    the clustering threshold, so «Neu zuordnen» with the number of people (which only joins) could not part them.
+    Asked directly «more like Sascha's marks or more like Paul's?», short windows are clearly told apart
+    (cosine distance of the two voices 0.40, only 4 % of the windows close to the middle).
+
+    spans: the speaker's paragraphs (start, end); seeds: name → intervals where that person talks (around the
+    marks); embed(intervals) → voice print; embed_many(windows, progress) → one voice print per window (faster,
+    see embed_windows), else embed is called per window. Every window of window_s seconds goes to the nearest voice; then the
+    voice prints are made again from the clearest windows (rounds times). A single window between two of
+    another voice follows them. Returns (start, end, name) per window, in time order.
+    """
+    import numpy as np
+
+    windows = []
+    for start, end in sorted(spans):
+        t = start
+        while end - t >= 1.0:
+            windows.append((t, min(t + window_s, end)))
+            t += window_s
+    known = [n for n, intervals in seeds.items() if intervals]
+    if not windows or len(seeds) < 2 or not known:
+        return []
+
+    def unit(v):
+        v = np.asarray(v, dtype=np.float64)
+        n = np.linalg.norm(v)
+        return v / n if n else v
+
+    names = list(seeds)
+    if embed_many is not None:
+        vectors = np.array([unit(v) for v in embed_many(windows, progress)])
+    else:
+        vectors = []
+        for i, w in enumerate(windows):
+            vectors.append(unit(embed([w])))
+            if progress and i % 20 == 0:
+                progress(i / len(windows))
+        vectors = np.array(vectors)
+    given = {n: unit(embed(seeds[n])) for n in known}
+    # a person without a sample (the speaker's own name): the windows least like all the others
+    unlike = np.min(np.array([1.0 - vectors @ given[n] for n in known]), axis=0)
+    farthest = np.argsort(-unlike)[:max(5, int(len(windows) * 0.2))]
+    profiles = np.array([given[n] if n in given else unit(vectors[farthest].mean(axis=0)) for n in names])
+    for round_ in range(rounds + 1):
+        dist = 1.0 - vectors @ profiles.T                 # windows × voices
+        best = dist.argmin(axis=1)
+        if round_ == rounds:
+            break
+        ordered = np.sort(dist, axis=1)
+        margin = ordered[:, 1] - ordered[:, 0] if len(names) > 1 else ordered[:, 0]
+        for k in range(len(names)):
+            mine = np.flatnonzero(best == k)
+            if len(mine) >= 5:
+                clear = mine[np.argsort(-margin[mine])][:max(5, int(len(mine) * SPLIT_CLEAR_SHARE))]
+                profiles[k] = unit(vectors[clear].mean(axis=0))
+    labels = best.tolist()
+    for i in range(1, len(windows) - 1):
+        if (labels[i - 1] == labels[i + 1] != labels[i] and windows[i][0] - windows[i - 1][1] < 1.0
+                and windows[i + 1][0] - windows[i][1] < 1.0):
+            labels[i] = labels[i - 1]
+    if progress:
+        progress(1.0)
+    return [(s, e, names[k]) for (s, e), k in zip(windows, labels)]
+
+
+# Voice prints of many short windows (split_voices): one call takes ~50 ms, sherpa-onnx keeps Python's global lock
+# meanwhile, and a few threads on 3 seconds of audio are mostly idle. So several processes share the windows, each
+# with few threads; only the windows' audio is sent to them (int16), not the whole recording.
+EMBED_CHUNK = 64
+_EXTRACTOR = None
+
+
+def _embed_init(folder: str, threads: int) -> None:
+    import sherpa_onnx
+
+    global _EXTRACTOR
+    _EXTRACTOR = sherpa_onnx.SpeakerEmbeddingExtractor(
+        sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(Path(folder) / EMBEDDING["file"]), num_threads=threads))
+
+
+def _embed_chunk(pieces: list) -> list[list[float]]:
+    import numpy as np
+
+    result = []
+    for piece in pieces:
+        stream = _EXTRACTOR.create_stream()
+        stream.accept_waveform(sample_rate=SAMPLERATE, waveform=np.asarray(piece, dtype=np.float32) / 32768.0)
+        stream.input_finished()
+        result.append(list(_EXTRACTOR.compute(stream)))
+    return result
+
+
+def embed_windows(audio, folder: Path | None = None, processes: int | None = None):
+    """embed_many for split_voices: the voice prints of windows of `audio`, computed in several processes."""
+    import numpy as np
+
+    folder = folder or models_dir()
+    cpus = os.cpu_count() or 2
+    processes = processes or max(1, min(6, cpus // 2))
+    threads = max(1, min(2, cpus // processes))
+
+    def embed_many(windows, progress=None):
+        pieces = [(np.clip(audio[int(s * SAMPLERATE):int(e * SAMPLERATE)], -1, 1) * 32767).astype(np.int16)
+                  for s, e in windows]
+        chunks = [pieces[i:i + EMBED_CHUNK] for i in range(0, len(pieces), EMBED_CHUNK)]
+        pool = None
+        if processes == 1 or not SEPARATE_PROCESS:
+            _embed_init(str(folder), threads)
+            results = map(_embed_chunk, chunks)
+        else:
+            import multiprocessing
+
+            pool = multiprocessing.get_context("spawn").Pool(processes, _embed_init, (str(folder), threads))
+            results = pool.imap(_embed_chunk, chunks)
+        try:
+            vectors = []
+            for done, chunk in enumerate(results, 1):
+                vectors.extend(chunk)
+                if progress:
+                    progress(done / len(chunks))
+            return vectors
+        finally:
+            if pool is not None:
+                pool.terminate()
+                pool.join()
+
+    return embed_many

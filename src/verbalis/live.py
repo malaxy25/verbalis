@@ -195,6 +195,24 @@ class LiveTranscription:
         log.info("Live transcription of %s finished: %.0f s done, rest planned", self.folder.name, self.done_s)
 
 
+def text_at(track_state: dict | None, t: float, before_s: float = 2.0, after_s: float = 8.0,
+            max_chars: int = 140) -> str | None:
+    """What was said around second t of a track while recording (for the speaker marks, 0.7.45): the words from
+    a little before to some seconds after. None = not transcribed that far yet; "" = nothing said there."""
+    if not track_state or not track_state.get("cuts") or pipeline._done_until(track_state) < t:
+        return None
+    parts = []
+    for seg in track_state["segments"]:
+        if seg["end"] < t - before_s or seg["start"] > t + after_s:
+            continue
+        if seg.get("words"):
+            parts.append("".join(str(w[2]) for w in seg["words"] if w[1] >= t - before_s and w[0] <= t + after_s))
+        else:
+            parts.append(" " + seg["text"])
+    text = " ".join("".join(parts).split())
+    return text if len(text) <= max_chars else text[:max_chars].rsplit(" ", 1)[0] + " …"
+
+
 def plan_rest(folder: Path, state: dict) -> None:
     """Cut the rest of every track up to its real end, so the normal transcription continues from the last piece.
     While recording the end was unknown: the cut points were only the ends of the pieces done."""

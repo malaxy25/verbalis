@@ -136,3 +136,46 @@ def test_live_transcription_can_be_stopped_during_the_recording():
     s.stop_live()
     assert s.state()["recording"]["live"]["stopped"] is True
     s.stop_recording()
+
+
+def words(start, *texts):
+    """Whisper-style words, one second each, with their leading space."""
+    return [[start + i, start + i + 1.0, " " + t] for i, t in enumerate(texts)]
+
+
+def test_text_at_a_speaker_mark():
+    """0.7.45: the list of marks shows what was said at each one – words from a little before to some seconds after."""
+    ts = {"duration": 120.0, "cuts": [120.0], "done": 1, "segments": [
+        {"start": 10.0, "end": 14.0, "text": "Eins zwei drei vier", "words": words(10.0, "Eins", "zwei", "drei", "vier")},
+        {"start": 30.0, "end": 32.0, "text": "Ohne Wörter", "words": None},
+        {"start": 60.0, "end": 64.0, "text": "später", "words": words(60.0, "später")}]}
+    assert live.text_at(ts, 13.5) == "zwei drei vier"         # from 2 s before
+    assert live.text_at(ts, 28.0) == "Ohne Wörter"
+    assert live.text_at(ts, 45.0) == ""                       # nobody talked there
+    assert live.text_at(ts, 130.0) is None                    # not transcribed yet
+    assert live.text_at(None, 5.0) is None
+    assert live.text_at({"duration": 0.0, "cuts": [], "done": 0, "segments": []}, 0.0) is None
+    long = {**ts, "segments": [{"start": 0.0, "end": 10.0, "text": "", "words": words(0.0, *["Wort"] * 60)}]}
+    assert live.text_at(long, 0.0, max_chars=20) == "Wort Wort Wort Wort …"
+
+
+def test_service_shows_the_text_at_each_mark():
+    s = make_service(auto_transcribe="off")
+    s.save_settings({"live_transcribe": "on"})
+    rid = s.start_recording(consent=True)
+    assert wait_until(lambda: rid in s._live)
+    marks = s.mark_speaker("Basil")                         # the fake recorder is some seconds in
+    s._live[rid].state["tracks"]["others"] = {"duration": 120.0, "cuts": [120.0], "done": 1, "segments": [
+        {"start": 0.0, "end": 60.0, "text": "Grüezi mitenand", "words": words(marks[0]["t"], "Grüezi", "mitenand")}]}
+    s.mark_speaker("Sandra", "me")                          # the microphone is not transcribed that far
+    assert s.speaker_mark_texts() == {"live": True, "texts": ["Grüezi mitenand", None]}
+    s.stop_recording()
+    assert s.speaker_mark_texts() == {"live": False, "texts": []}
+
+
+def test_no_texts_at_marks_without_live_transcription():
+    s = make_service(live_transcribe="off")
+    s.start_recording(consent=True)
+    s.mark_speaker("Basil")
+    assert s.speaker_mark_texts() == {"live": False, "texts": [None]}
+    s.stop_recording()

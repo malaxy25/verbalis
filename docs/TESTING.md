@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-338 tests in 34 files.
+356 tests in 36 files.
 
 ### `test_acceleration.py` (10)
 
@@ -115,6 +115,18 @@ Compressing and retaining the audio files.
 - **Size query while compressing** – Regression: GitHub Action on Windows – FileNotFoundError for gegenueber.wav.
 - **Kept audio survives retention days and size limit** – 0.7.17 bug: a test recording was deleted by the size limit – «Audio behalten» protects it.
 - **Track without any audio does not block the transcription** – 0.7.24 on macOS: recorded with the microphone only – the silent system audio track became a 0-byte
+
+### `test_awake.py` (7)
+
+Keeping the computer awake while recording and processing (awake.py, 0.7.45).
+
+- **Only changes reach the system**
+- **A failing sleep lock never disturbs the recording** – No sleep lock possible (e.g. a locked-down PC): logged once, the recording goes on.
+- **The helper process ends with verbalis** – macOS and Linux: the helper that holds the lock watches Verbalis' process – a crash must not leave the
+- **No backend means nothing happens**
+- **Awake while recording with the screen on by default** – 5 Nov 2026: a 2:50 h meeting on site – the computer must not sleep and the screen should stay on,
+- **Awake while transcribing**
+- **Invalid screen setting falls back to on**
 
 ### `test_calls.py` (7)
 
@@ -271,7 +283,7 @@ Linux (experimental): call detection via pactl, notifications via notify-send, o
 - **Without notify send there are no notifications**
 - **Second app on linux is refused**
 
-### `test_live.py` (8)
+### `test_live.py` (11)
 
 Transcribing while recording (live.py): pieces of the growing WAV files, handed over to the normal transcription.
 
@@ -283,6 +295,9 @@ Transcribing while recording (live.py): pieces of the growing WAV files, handed 
 - **No live transcription when switched off**
 - **Live pieces of a track left out are dropped** – «0 Personen» for the system audio after it was transcribed live: the microphone pieces still count.
 - **Live transcription can be stopped during the recording**
+- **Text at a speaker mark** – 0.7.45: the list of marks shows what was said at each one – words from a little before to some seconds after.
+- **Service shows the text at each mark**
+- **No texts at marks without live transcription**
 
 ### `test_logs.py` (5)
 
@@ -483,6 +498,17 @@ Spell checking with a tiny test dictionary (no download).
 - **Missing dictionary without download**
 - **Outdated revision triggers new download**
 
+### `test_split_voices.py` (6)
+
+Splitting one speaker into the people marked on it (0.7.45: diarization.split_voices, transcript.split_by_voice).
+
+- **Two people in one speaker are told apart by their marks** – 5 Nov 2026, meeting on site with 7 people: Sascha and Paul were one speaker. «Neu zuordnen» with 7 people
+- **A paragraph is cut where the voice changes and keeps corrections**
+- **The hidden person becomes a speaker of its own**
+- **Split speaker runs in the background**
+- **A paragraph moved to a new person is a sample to split with** – 5 Nov 2026: marks could only be set while recording – after it there was no way to show Verbalis «this is
+- **The own voice without a sample is found from the rest** – Only Sascha's paragraphs were moved out of «Paul»: Paul's voice is taken from the windows least like her.
+
 ### `test_stepwise.py` (5)
 
 Step-by-step transcription: pieces cut in speech pauses, both tracks alternately, resume after a crash.
@@ -519,7 +545,7 @@ The recording list in the UI: groups open and close. Runs the list functions of 
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
 
-### `test_ui_speakers.py` (7)
+### `test_ui_speakers.py` (9)
 
 The speaker box in the UI. Runs functions of index.html in Node.js.
 
@@ -527,8 +553,10 @@ The speaker box in the UI. Runs functions of index.html in Node.js.
 - **Number of people offered without speakers** – Ubuntu, 0.7.36: the test recording of the introduction is transcribed with «1 Person» per track, so no
 - **Speaker box closed once everybody has a name** – 0.7.40: the speaker box took much room above the transcript. It is closed (one line with the names) once every
 - **Unclear speaker marks shown with the moment to listen to** – 0.7.43: «… klingen für Verbalis gleich» was a global notice without saying where – now the speaker box lists
+- **Unclear marks offer to split the voice** – 5 Nov 2026: «sascha» marked three times where Verbalis heard «Paul» – Sascha had no voice of her own and the
 - **Generated names are recognised** – A name Verbalis gave is cleared on focus so the field lists all participants; a typed name is kept.
 - **Speaker marks box offers the participants and the latest marks** – 0.7.41: «Wer spricht gerade?» while recording – a button per participant, grouped by track, the latest marks.
+- **All marks of a person are listed with what was said** – 5 Nov 2026, 2:50 h meeting on site: only the latest 6 marks were shown – were the others still saved? Now the
 - **Speaker marks box shows yourself at the microphone** – 28 Oct 2026: Andrea marked himself during a call – not needed, the microphone is named after him anyway.
 
 ### `test_ui_tour.py` (1)

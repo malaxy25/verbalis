@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.45 – 2026-11-06
+- **No sleep mode while recording or processing:** a recording that ran into sleep mode stopped. While Verbalis
+  records (also paused) or transcribes and tells speakers apart, the computer no longer goes to sleep (Windows: a
+  power request, macOS: `caffeinate`, Linux: `systemd-inhibit`; each ends with Verbalis). New setting
+  «Während der Aufnahme: Bildschirm anlassen», on by default – at a meeting on site the names are clicked on the
+  screen. A closed laptop lid still sends it to sleep.
+- **All speaker marks of a person:** only the latest six marks were shown, which made people unsure whether the
+  others were saved. Each name now shows its number of marks; a click on it lists all of them with what was said
+  there (from the transcription while recording; «Text folgt …» until that part is transcribed) and × to remove.
+- **Splitting two people heard as one voice:** in a meeting on site with 7 people, Sascha and Paul were one
+  speaker – their voices are closer than the clustering threshold, and «Neu zuordnen» with the number of people
+  only joins voices. «… heraustrennen» in the speaker box compares every 3 seconds of that voice with the places
+  where the other person was marked (or with paragraphs moved to them by hand) and gives each stretch to the
+  nearer voice; paragraphs where both speak are cut where the voice changes, corrections stay. On that recording
+  29 of 65 minutes went to Sascha. It runs in the background in several processes (about 1 minute for an hour
+  of one voice). The unclear-mark hint offers it only where the marks give a voice sample.
+- **A paragraph to a new person:** a click on the name of a paragraph now also offers the participants without a
+  voice of their own and «Neue Person …». Such a paragraph counts as a voice sample for «heraustrennen» – so
+  people can be told apart afterwards, also without marks during the recording.
+
 ## 0.7.44 – 2026-11-03
 - **Search in transcripts (Ctrl+F, or the magnifier next to «+»):** a narrow bar above the transcript with the
   hit count («2 von 5»), ↑/↓ or Enter / Shift+Enter to jump, Esc to close. Case and accents don't matter, «ä» =

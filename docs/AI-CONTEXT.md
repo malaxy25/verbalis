@@ -117,7 +117,17 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
 - **Speaker marks** (0.7.41): «Wer spricht gerade?» during a recording stores `{t, name, track}` in `meta.json`
   (`speaker_marks`, a DETAIL_FIELD). After the transcription (and after «Neu zuordnen») `transcript.apply_marks`
   names the speaker talking at each mark and joins speakers of a track that got the same name. Diarization itself
-  is not changed – it needs the whole recording, so live assignment is not possible.
+  is not changed – it needs the whole recording, so live assignment is not possible. 0.7.45: the marks list
+  shows the live text at each mark (`live.text_at`, `Service.speaker_mark_texts`).
+- **Splitting a voice** (0.7.45): «Neu zuordnen» with a number only *joins* clusters, it can never part two
+  people whose voices are closer than the threshold. `diarization.split_voices` classifies 3-s windows of one
+  speaker against voice samples (marks inside it, and paragraphs moved out of it by hand → `voice_samples` in
+  transcript.json via `_note_voice_sample`); a name without a sample takes the windows least like the others.
+  `transcript.split_by_voice` cuts paragraphs at word level (text mapped to words like `split_times`, so corrections
+  stay). Embeddings run in a spawn pool (`embed_windows`, int16 slices) – sherpa-onnx keeps the GIL.
+- **Keep awake** (0.7.45, `awake.py`): a thread in Service compares every 5 s what is going on (recording, job,
+  queue, live finishing) with the lock held; Windows PowerCreateRequest, macOS caffeinate -w pid, Linux
+  systemd-inhibit around `tail --pid`. Tests: `awake.default_backend` returns None (conftest).
 - **Transcription starts by hand** by default since 0.7.18 (`auto_transcribe` setting): the number of
   people per track is entered first and stored in `meta.json` (`people`), used as `num_speakers`.
 - **Step-by-step transcription** (0.7.18, `pipeline.transcribe`): ~2-min pieces cut in speech pauses,

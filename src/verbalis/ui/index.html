@@ -340,6 +340,22 @@
   .marks-recent { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 13px; }
   .marks-recent button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0 2px; }
   .marks-recent button:hover { color: var(--ink); }
+  /* 0.7.45: the number of marks next to a name; a click lists them all, with what was said there */
+  .mark-name { display: inline-flex; }
+  .mark-name > .action:first-child:not(:only-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .marks-row .mark-count { min-width: 2.2em; padding: 5px 8px; margin-left: -1px; border-top-left-radius: 0;
+    border-bottom-left-radius: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .marks-row .mark-count[aria-expanded="true"] { color: var(--ink); background: var(--line); }
+  .marks-list { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--surface); font-size: 13px; }
+  .marks-list header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+  .marks-list ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .marks-list li { display: grid; grid-template-columns: 4.5em 1fr auto; gap: 8px; align-items: baseline; }
+  .marks-list .when { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .marks-list .said { color: var(--ink); overflow-wrap: anywhere; }
+  .marks-list .said.waiting { color: var(--muted); font-style: italic; }
+  .marks-list button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0 4px; }
+  .marks-list button:hover { color: var(--ink); }
   .notice span { flex: 1; }
   .notice button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
   .notice button:hover { color: var(--ink); }
@@ -486,6 +502,7 @@
   .mark-doubts { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 14px; }
   .mark-doubts > div { flex: 1; }
   .mark-doubts ul { margin: 4px 0 0; padding-left: 18px; }
+  .mark-doubts .doubt-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .mark-doubts .close { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
   .mark-doubts .close:hover { color: var(--ink); }
   .speaker-track { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; }
@@ -854,6 +871,11 @@
               <label>nach <input type="text" name="max_recording_min" inputmode="numeric" autocomplete="off" aria-label="Minuten"> Minuten beenden</label>
             </div>
             <small>Falls man das Beenden vergisst. 5 Minuten vorher kommt ein Hinweis mit «+30 Min.». Leer heisst ohne Grenze.</small>
+          </div>
+          <div class="field">
+            <span>Während der Aufnahme</span>
+            <label class="consent-like"><input type="checkbox" name="keep_display_on"> Bildschirm anlassen</label>
+            <small>Der Computer geht während Aufnahme und Transkription nicht in den Ruhezustand. Mit diesem Häkchen bleibt auch der Bildschirm an – praktisch, um bei Meetings vor Ort die Namen anzuklicken. Wird der Deckel des Laptops zugeklappt, schläft er trotzdem ein.</small>
           </div>
           <div class="field">
             <span>Calls erkennen</span>
@@ -1416,6 +1438,29 @@ const MARKS_SHOWN = 6;   // the latest marks, each can be taken back
 function speakerMarks(a) {
   const box = element("section", { class: "marks", "aria-label": "Wer spricht gerade?" });
   let marks = a.speaker_marks || [];
+  let open = null;                 // {track, name}: the person whose marks are listed (click on the number)
+  let said = null, saidAt = 0;     // speaker_mark_texts(): what was said at each mark, and when it was asked
+  const sameName = (x, y) => x.toLowerCase() === y.toLowerCase();
+  const loadSaid = async () => {
+    saidAt = Date.now();
+    try { said = await call("speaker_mark_texts"); } catch { said = null; }
+    if (box.isConnected && open) draw();
+  };
+  const refreshSaid = () => {   // the transcription while recording catches up: ask again now and then
+    if (!box.isConnected || !open) return;
+    if (Date.now() - saidAt > 15000) loadSaid();
+    setTimeout(refreshSaid, 5000);
+  };
+  const toggle = (track, name) => {
+    const closing = open && open.track === track && sameName(open.name, name);
+    open = closing ? null : { track, name };
+    draw();
+    if (!closing) { loadSaid(); setTimeout(refreshSaid, 5000); }
+  };
+  const remove = async (index) => {
+    try { marks = await call("remove_speaker_mark", index); said = null; draw(); if (open) loadSaid(); }
+    catch (e) { showMessage(e.message); }
+  };
   const newTrack = a.only_microphone ? "me" : "others";
   const mark = async (name, track) => {
     try {
@@ -1432,7 +1477,7 @@ function speakerMarks(a) {
   };
   const draw = () => {
     const rows = [];
-    let open = 0;   // participants still without a mark
+    let missing = 0;   // participants still without a mark
     // you are at the microphone unless others are listed there: shown with ✓, no need to mark yourself
     const me = (state.settings || {}).name;
     const own = me && me !== "Ich" && !a.only_microphone ? [me] : [];
@@ -1443,11 +1488,18 @@ function speakerMarks(a) {
       const marked = (n) => marks.some((m) => m.track === track && m.name.toLowerCase() === n.toLowerCase());
       // a track's only participant names its speaker anyway (0.7.40): no mark needed
       const done = (n) => names.length === 1 || marked(n);
-      open += names.filter((n) => !done(n)).length;
+      missing += names.filter((n) => !done(n)).length;
+      const count = (n) => marks.filter((m) => m.track === track && sameName(m.name, n)).length;
+      const isOpen = (n) => Boolean(open && open.track === track && sameName(open.name, n));
       rows.push(element("div", { class: "marks-row" }, element("span", {}, label),
-        ...names.map((n) => element("button", { type: "button", class: done(n) ? "action marked" : "action",
-          title: marked(n) ? `Jetzt spricht ${n} (schon markiert)` : done(n) ? `${n} wird automatisch zugeordnet`
-            : `Jetzt spricht ${n}`, onclick: () => mark(n, track) }, done(n) ? `✓ ${n}` : n))));
+        ...names.map((n) => element("span", { class: "mark-name" },
+          element("button", { type: "button", class: done(n) ? "action marked" : "action",
+            title: marked(n) ? `Jetzt spricht ${n} (schon markiert)` : done(n) ? `${n} wird automatisch zugeordnet`
+              : `Jetzt spricht ${n}`, onclick: () => mark(n, track) }, done(n) ? `✓ ${n}` : n),
+          ...(count(n) ? [element("button", { type: "button", class: "action mark-count",
+            "aria-expanded": String(isOpen(n)), title: `Alle ${count(n)} Marken von ${n} anzeigen`,
+            "aria-label": `${count(n)} Marken von ${n} anzeigen`, onclick: () => toggle(track, n) },
+            String(count(n)))] : [])))));
     }
     const input = element("input", { type: "text", maxlength: "80", autocomplete: "off",
       placeholder: "Neuer Name", "aria-label": "Neuer Name – spricht jetzt" });
@@ -1458,10 +1510,26 @@ function speakerMarks(a) {
     const first = Math.max(0, marks.length - MARKS_SHOWN);
     const recent = marks.slice(first).map((m, i) => element("span", {}, `${timeText(m.t)} ${m.name}`,
       element("button", { type: "button", title: "Marke entfernen", "aria-label": `Marke ${m.name} entfernen`,
-        onclick: async () => {
-          try { marks = await call("remove_speaker_mark", first + i); draw(); } catch (e) { showMessage(e.message); }
-        } }, "×")));
-    const allDone = rows.length && !open;
+        onclick: () => remove(first + i) }, "×")));
+    const list = [];   // the marks of the person whose number was clicked
+    if (open) {
+      const own = marks.map((m, i) => [m, i]).filter(([m]) => m.track === open.track && sameName(m.name, open.name));
+      if (!own.length) open = null;
+      else list.push(element("div", { class: "marks-list", "aria-label": `Marken von ${open.name}` },
+        element("header", {}, element("span", {}, `Marken von ${open.name}`),
+          element("button", { type: "button", title: "Schliessen", "aria-label": "Liste schliessen",
+            onclick: () => { open = null; draw(); } }, "×")),
+        element("ol", {}, ...own.map(([m, i]) => {
+          const text = said && said.texts ? said.texts[i] : undefined;
+          const shown = text ? `«${text}»` : text === "" ? "(nichts gesagt)"
+            : said && !said.live ? "" : "Text folgt, sobald dieser Teil transkribiert ist …";
+          return element("li", {}, element("span", { class: "when" }, timeText(m.t)),
+            element("span", { class: text ? "said" : "said waiting" }, shown),
+            element("button", { type: "button", title: "Marke entfernen", "aria-label": `Marke ${timeText(m.t)} entfernen`,
+              onclick: () => remove(i) }, "×"));
+        }))));
+    }
+    const allDone = rows.length && !missing;
     box.classList.toggle("done", Boolean(allDone));
     box.replaceChildren(
       element("h3", {}, allDone ? "Wer spricht gerade? ✓ Alle markiert" : "Wer spricht gerade?"),
@@ -1470,6 +1538,7 @@ function speakerMarks(a) {
         : "Klick auf einen Namen, wenn die Person spricht. Nach dem Transkribieren bekommt die Stimme an dieser Stelle "
           + "den Namen – einmal pro Person genügt."),
       ...rows,
+      ...list,
       ...(recent.length ? [element("div", { class: "marks-recent" }, ...recent)] : []));
   };
   box.redraw = draw;
@@ -1541,14 +1610,14 @@ async function renderTranscript(a) {
   if (!t.segments.length) {
     body.append(element("p", { class: "empty" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
   }
-  renderSegments(body, a.id, t.segments, t.speakers, meName, true, !!a.audio);
+  renderSegments(body, a.id, t.segments, t.speakers, meName, true, !!a.audio, a.participants || {});
   $("content").replaceChildren(...[header, speakersPanel(a, t), body].filter(Boolean));
 }
 
 /* Paragraphs, with short interjections («ja», «genau») in a narrow column next to the
    paragraph they were said during. editable = false while a transcription still runs;
    playable: a ▶ per paragraph plays that passage (both tracks), as long as the audio exists. */
-function renderSegments(body, id, segments, speakerMap, meName, editable, playable = false) {
+function renderSegments(body, id, segments, speakerMap, meName, editable, playable = false, participants = {}) {
   const speakers = Object.entries(speakerMap || {});
   const trackOf = (s) => s.track || (s.speaker === meName ? "me" : "others");
   const columns = new Map();   // paragraph index → its aside column
@@ -1570,10 +1639,11 @@ function renderSegments(body, id, segments, speakerMap, meName, editable, playab
     }
     const text = element("p", { class: "text" }, s.text);
     const sameTrack = speakers.filter(([, info]) => info.track === track);
-    const who = editable && s.speaker_id && sameTrack.length > 1
+    const who = editable && s.speaker_id
       ? element("button", { type: "button", class: "who who-button", title: "Einer anderen Person zuweisen",
           "data-speaker-id": s.speaker_id,
-          onclick: (event) => chooseSpeaker(id, index, s, sameTrack, event.currentTarget) }, s.speaker || "")
+          onclick: (event) => chooseSpeaker(id, index, s, sameTrack, event.currentTarget, participants[track] || []) },
+        s.speaker || "")
       : element("div", { class: "who", "data-speaker-id": s.speaker_id || "" }, s.speaker || "");
     const asides = element("div", { class: "asides" });
     columns.set(index, asides);
@@ -1687,13 +1757,15 @@ function speakersPanel(a, t) {
       onclick: () => playSample(a.id, id, play) }, "▶");
     play.disabled = !a.audio;
     return element("div", { class: "speaker-row" }, play, input,
-      element("span", { class: "talk" }, `${timeText(talk[id])} Redezeit`, " ", saved), merge);
+      element("span", { class: "talk" }, `${timeText(talk[id])} Redezeit`, " ", saved), merge,
+      ...splitButton(a, id, (t.split_with || {})[id]));
   });
   names.textContent = shownNames();
   const hint = (a.audio ? "Mit ▶ eine Hörprobe anhören und den Namen eintragen – er wird gespeichert, sobald du das Feld verlässt. "
     : "Namen eintragen – sie werden gespeichert, sobald du das Feld verlässt. Hörproben gibt es keine mehr, das Audio wurde gelöscht. ")
     + "Wurde eine Person doppelt erkannt: «Gleiche Person wie …» wählen. Einzelne Absätze lassen sich über den Namen im Text umhängen. "
-    + "«Neu zuordnen» erkennt die Personen einer Spur neu, wenn die Anzahl nicht stimmt.";
+    + "«Neu zuordnen» erkennt die Personen einer Spur neu, wenn die Anzahl nicht stimmt. Spricht unter einem Namen "
+    + "noch jemand anderes: ein paar Absätze dieser Person über den Namen im Text umhängen, dann «heraustrennen».";
   const panel = element("details", { class: "speakers-panel", "aria-label": "Sprecher" },
     element("summary", {}, element("h3", {}, "Sprecher"), names,
       element("span", { class: "help", tabindex: "0", title: hint, "aria-label": hint }, "?")),
@@ -1709,6 +1781,31 @@ function speakersPanel(a, t) {
     : (t.mark_doubts || []).length > 0 || sorted.some(([, info]) => unnamedSpeaker(info.name, info.track, t.tracks));
   panel.addEventListener("toggle", () => { state.speakersOpen = { ...(state.speakersOpen || {}), [a.id]: panel.open }; });
   return panel;
+}
+
+/* «… heraustrennen» (0.7.45): other people marked or moved out of this voice by hand – Verbalis finds the rest of
+   them in it (Service.split_speaker). [] when there is nobody to take out. */
+function splitButton(a, sid, names) {
+  if (!names || !names.length) return [];
+  const label = `«${names.join("», «")}» heraustrennen`;
+  const button = element("button", { type: "button", class: "action split-button",
+    title: a.audio ? "Verbalis vergleicht jede Stelle dieser Stimme mit den markierten oder umgehängten Stellen."
+      : "Das Audio dieser Aufnahme wurde gelöscht – trennen ist nicht mehr möglich.",
+    onclick: async () => {
+      button.disabled = true;
+      button.textContent = "Wird getrennt …";
+      try {
+        await call("split_speaker", a.id, sid);   // runs in the background with progress
+        state.listSignature = "";
+        await loadList();
+      } catch (e) {
+        showMessage(e.message);
+        button.disabled = false;
+        button.textContent = label;
+      }
+    } }, label);
+  button.disabled = !a.audio;
+  return [button];
 }
 
 /* Speaker marks Verbalis is unsure about (transcript.apply_marks): «Lara» was marked where it hears Maurice. Each one
@@ -1727,10 +1824,20 @@ function markDoubts(a, t) {
     play.disabled = !a.audio;
     return element("li", {}, `Bei ${timeText(d.t)} war «${d.name}» markiert, Verbalis hört dort «${d.heard}».`, play);
   });
+  // 0.7.45: two people Verbalis heard as one voice are parted by their marks («Neu zuordnen» only joins voices) –
+  // only where the marks give a voice sample (a click a bit off, next to the voice, gives none: listen, then ×)
+  const splits = [...new Set(doubts.map((d) => d.heard))].flatMap((heard) => {
+    const sid = Object.keys(t.speakers || {}).find((id) => t.speakers[id].name === heard);
+    return sid ? splitButton(a, sid, (t.split_with || {})[sid]) : [];
+  });
   const box = element("div", { class: "mark-doubts", role: "note" },
     element("div", {}, element("strong", {}, "Unklar: "),
-      "Stimmt die Markierung, hat Verbalis zwei Personen als eine erkannt – dann mit der Anzahl Personen «Neu zuordnen».",
-      element("ul", {}, ...items)), close);
+      splits.length ? "Stimmt die Markierung, hat Verbalis zwei Personen als eine Stimme gehört. «Heraustrennen» gibt "
+        + "jeder Person ihre eigene Stimme – anhand der Stellen, an denen sie markiert wurde."
+        : "Anhören: Wurde nur etwas früh oder spät geklickt, passt es – dann ×. Sonst die Absätze über den Namen im "
+        + "Text der richtigen Person geben.",
+      element("ul", {}, ...items),
+      ...(splits.length ? [element("div", { class: "doubt-actions" }, ...splits)] : [])), close);
   return [box];
 }
 
@@ -1834,12 +1941,47 @@ async function playAudio(key, fetch, button) {
   }
 }
 
-function chooseSpeaker(id, index, segment, sameTrack, button) {
+/* A click on the name of a paragraph: give it to another voice of the track – or (0.7.45) to a participant
+   Verbalis heard no voice of its own for, or a new person. Such a paragraph is a voice sample: «trennen» in the
+   speaker box then finds the rest of that person in the voice it came from. */
+function chooseSpeaker(id, index, segment, sameTrack, button, participants = []) {
+  const voices = new Set(sameTrack.map(([, info]) => info.name.toLowerCase()));
+  const without = participants.filter((n) => !voices.has(n.toLowerCase()));
   const select = element("select", { class: "who-select", "aria-label": "Absatz zuweisen an" },
-    ...sameTrack.map(([sid, info]) => element("option", { value: sid }, info.name)));
+    ...sameTrack.map(([sid, info]) => element("option", { value: sid }, info.name)),
+    ...(without.length ? [element("option", { disabled: "" }, "──────────")] : []),
+    ...without.map((n) => element("option", { value: `name:${n}` }, n)),
+    element("option", { value: "new" }, "Neue Person …"));
   select.value = segment.speaker_id;
+  let finished = false;
+  const assign = async (name) => {
+    try { await call("assign_paragraph", id, index, name); } catch (e) { showMessage(e.message); }
+  };
   const done = async () => {
-    if (select.value !== segment.speaker_id) {
+    if (finished) return;
+    if (select.value === "new") {   // type the name instead
+      finished = true;
+      const input = element("input", { type: "text", class: "who-select", maxlength: "80", autocomplete: "off",
+        placeholder: "Name", "aria-label": "Name der Person" });
+      let saved = false;
+      const save = async () => {
+        if (saved) return;
+        saved = true;
+        if (input.value.trim()) await assign(input.value.trim());
+        await renderContent(true);
+      };
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") { event.preventDefault(); save(); }
+        if (event.key === "Escape") { saved = true; renderContent(true); }
+      });
+      input.addEventListener("blur", save);
+      select.replaceWith(input);
+      input.focus();
+      return;
+    }
+    finished = true;
+    if (select.value.startsWith("name:")) await assign(select.value.slice(5));
+    else if (select.value !== segment.speaker_id) {
       try { await call("set_paragraph_speaker", id, index, select.value); } catch (e) { showMessage(e.message); }
     }
     await renderContent(true);
@@ -2927,6 +3069,7 @@ async function openSettings(tab) {
   form.elements.asides.checked = e.asides !== "off";
   form.elements.auto_transcribe.checked = e.auto_transcribe === "on";
   form.elements.live_transcribe.checked = e.live_transcribe === "on";
+  form.elements.keep_display_on.checked = e.keep_display_on !== "off";
   form.elements.call_detection.checked = e.call_detection !== "off";
   $("audio-hint").textContent = AUDIO_HINT;
   call("audio_usage").then((sp) => {
@@ -3539,6 +3682,7 @@ function collectSettings() {
   data.asides = form.elements.asides.checked ? "on" : "off";
   data.auto_transcribe = form.elements.auto_transcribe.checked ? "on" : "off";
   data.live_transcribe = form.elements.live_transcribe.checked ? "on" : "off";
+  data.keep_display_on = form.elements.keep_display_on.checked ? "on" : "off";
   data.call_detection = form.elements.call_detection.checked ? "on" : "off";
   const choice = chosenModel();
   data.model = choice === CUSTOM ? (form.elements.model_custom ? form.elements.model_custom.value.trim() : "") : choice;

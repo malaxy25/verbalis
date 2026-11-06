@@ -4,14 +4,18 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## Current state (3 Nov 2026)
+## Current state (5 Nov 2026)
 
-- **Last session:** v0.7.39 (Windows checks HTTPS certificates itself) and v0.7.40 (speaker box grouped by track,
-  also without diarization). The status paragraph below still describes 0.7.38.
-- **Next step:** to agree with Andrea – open items below, in priority order. 0.7.44 (search in transcripts)
-  is built; Andrea checks it in the app.
+- **Last session:** v0.7.45 – no sleep mode while recording/processing (screen on by default), number and list
+  of speaker marks with the live text, «… heraustrennen» (split one voice into the people marked or moved out of
+  it), paragraph to a new person. Triggered by a 2:50 h meeting on site with 7 people (Sascha was inside «Paul»;
+  that recording was split by script, backups `transcript.before-split.json` / `transcript_original.json`).
+- **Next step:** Andrea checks 0.7.45 in the app; Mac: does `caffeinate` keep the screen on, does
+  «heraustrennen» (spawn pool) work in the packaged app? Then the items below.
 - **Open questions for Andrea:** none
 - **Prerequisites / start check:** none.
+- **Idea, not decided:** diarization already during a recording (e.g. up to a break) – parked: clustering needs
+  the whole recording; since 0.7.43 it takes ~5 % of the recording time anyway.
 
 ## 0.7.34 – next
 
@@ -44,8 +48,6 @@ tried and dropped (not better). Idea for later: «klingt ähnlich wie …» hint
    measure; the recording 2026-10-14_110111 (a quiet second speaker) may be used for it. **[quality]**
 2. **Split automatically at a speaker change** – diarization sees a change within a sentence; the words are
    there now. Measure first how often it happens, so short overlaps don't chop paragraphs. **[quality]**
-3. **New user-defined speaker after splitting** – today the second part can only go to a person already
-   found on that track. **[ux]**
 
 **Speaker measurements 19 Oct 2026** (speakers after refining · right without merging by hand · pure = right
    after naming · right with the known number):

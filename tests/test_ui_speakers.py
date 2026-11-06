@@ -39,7 +39,7 @@ console.log(JSON.stringify(row.children[0].children[1].attrs["aria-label"]));
 def test_number_of_people_offered_without_speakers():
     """Ubuntu, 0.7.36: the test recording of the introduction is transcribed with «1 Person» per track, so no
     speakers were told apart – and without speakers the box with «Anzahl Personen» didn't appear at all."""
-    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "speakerTracks", "trackGroup") + """
+    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "splitButton", "speakerTracks", "trackGroup") + """
 const t = { speakers: {}, segments: [{ track: "others", start: 0, end: 3 }, { track: "me", start: 4, end: 6 }] };
 const panel = speakersPanel({ id: "x", audio: true }, t);
 const groups = panel.children.slice(2);
@@ -54,7 +54,7 @@ def test_speaker_box_closed_once_everybody_has_a_name():
     """0.7.40: the speaker box took much room above the transcript. It is closed (one line with the names) once every
     speaker has a name, open while one is still «Gegenüber 2» or «Person 1»; the number of people is next to the
     speakers of its track."""
-    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "speakerTracks", "trackGroup", "unnamedSpeaker",
+    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "splitButton", "speakerTracks", "trackGroup", "unnamedSpeaker",
                                "generatedName") + """
 const state = {};
 function timeText(s) { return String(s); }
@@ -80,7 +80,7 @@ console.log(JSON.stringify([named.tag, named.open, text(named.children[0].childr
 def test_unclear_speaker_marks_shown_with_the_moment_to_listen_to():
     """0.7.43: «… klingen für Verbalis gleich» was a global notice without saying where – now the speaker box lists
     each unclear mark with ▶ for that moment (from 5 s before) and opens itself."""
-    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "speakerTracks", "trackGroup",
+    script = STUBS + functions("speakerCountRow", "speakersPanel", "markDoubts", "splitButton", "speakerTracks", "trackGroup",
                                "unnamedSpeaker", "generatedName") + """
 const state = {};
 function timeText(s) { return `t${Math.floor(s)}`; }
@@ -100,6 +100,33 @@ console.log(JSON.stringify([panel.open, box.attrs.class, text(item), played]));
     assert opened is True and cls == "mark-doubts"
     assert item.startswith("Bei t4563 war «lara» markiert, Verbalis hört dort «maurice».")
     assert played == [["audio_clip", "x", 4558.1, 4573.1]]
+
+
+
+def test_unclear_marks_offer_to_split_the_voice():
+    """5 Nov 2026: «sascha» marked three times where Verbalis heard «Paul» – Sascha had no voice of her own and the
+    hint said «Neu zuordnen», which only joins voices. Now a button splits that voice by the marks.
+    5 Nov 2026, later: the button also showed for a mark only next to the voice (8:53) – no sample there, so
+    «trennen» failed with «keine Marken». It shows only where the backend found samples (split_with)."""
+    script = STUBS + functions("markDoubts", "splitButton") + """
+const state = {};
+function timeText(s) { return String(s); }
+const asked = [];
+function call(name, ...args) { asked.push([name, ...args]); return Promise.resolve(null); }
+async function loadList() {}
+function showMessage(m) { console.error(m); }
+const doubts = [{ t: 270.1, name: "sascha", heard: "Paul" }, { t: 533.9, name: "sascha", heard: "Paul" }];
+const box = markDoubts({ id: "x", audio: true }, { speakers: { "me-1": { name: "Paul", track: "me" } }, mark_doubts: doubts,
+  split_with: { "me-1": ["sascha"] } })[0];
+const near = markDoubts({ id: "x", audio: true }, { speakers: { "me-1": { name: "Paul", track: "me" } }, mark_doubts: doubts })[0];
+const nearActions = near.children[0].children.filter((c) => c && c.attrs && c.attrs.class === "doubt-actions").length;
+const buttons = box.children[0].children.find((c) => c && c.attrs && c.attrs.class === "doubt-actions").children;
+buttons[0].attrs.onclick();
+setTimeout(() => console.log(JSON.stringify([buttons.map((b) => b.textContent), asked, nearActions])), 10);
+"""
+    labels, asked, near_actions = run(script)
+    assert labels == ["Wird getrennt …"] and asked == [["split_speaker", "x", "me-1"]]
+    assert near_actions == 0
 
 
 def test_generated_names_are_recognised():
@@ -130,10 +157,53 @@ console.log(JSON.stringify([show(speakerMarks({ participants, speaker_marks: mar
 """
     some, every = run(script)
     # marked people and a track's only participant (named automatically) get ✓
-    assert some["rows"][:2] == [["Im Call", "✓ Basil", "✓ Sandra", "Peter"], ["Am Mikrofon", "✓ Andrea"]]
+    # marked people get the number of their marks next to the name (0.7.45)
+    assert some["rows"][:2] == [["Im Call", "✓ Basil4", "✓ Sandra4", "Peter"], ["Am Mikrofon", "✓ Andrea"]]
     assert some["rows"][2][-1] == "spricht jetzt" and some["title"] == "Wer spricht gerade?"
     assert some["recent"] == ["120 Sandra×", "180 Basil×", "240 Sandra×", "300 Basil×", "360 Sandra×", "420 Basil×"]
     assert every["title"] == "Wer spricht gerade? ✓ Alle markiert"
+
+
+
+def test_all_marks_of_a_person_are_listed_with_what_was_said():
+    """5 Nov 2026, 2:50 h meeting on site: only the latest 6 marks were shown – were the others still saved? Now the
+    number of marks stands next to each name; a click on it lists all of them with the words said there and ×."""
+    script = STUBS + functions("speakerMarks") + """
+const MARKS_SHOWN = 6;
+const state = {};
+function timeText(s) { return String(s); }
+function showMessage(m) { console.error(m); }
+const original = element;
+element = (...args) => Object.assign(original(...args), { classList: { toggle() {} }, isConnected: true });
+const marks = Array.from({ length: 8 }, (_, i) => ({ t: i * 60, name: i % 2 ? "Basil" : "Sandra", track: "others" }));
+const asked = [];
+async function call(name, ...args) {
+  asked.push([name, ...args]);
+  if (name === "speaker_mark_texts") return { live: true, texts: marks.map((m, i) => i < 3 ? `Satz ${i}` : i === 3 ? "" : null) };
+  if (name === "remove_speaker_mark") { marks.splice(args[0], 1); return [...marks]; }
+}
+const box = speakerMarks({ participants: { others: ["Basil", "Sandra"] }, speaker_marks: [...marks] });
+const list = () => box.children.find((c) => c && c.attrs.class === "marks-list");
+const basil = box.children.find((c) => c && c.attrs.class === "marks-row").children[1];
+(async () => {
+  basil.children[1].attrs.onclick();                      // the number next to «Basil»
+  await new Promise((r) => setTimeout(r, 10));
+  const items = list().children[1].children;
+  const before = items.map(text);
+  items[0].children[2].attrs.onclick();                   // × at the first mark of Basil
+  await new Promise((r) => setTimeout(r, 10));
+  const after = list().children[1].children.map(text);
+  list().children[0].children[1].attrs.onclick();          // close
+  console.log(JSON.stringify({ before, after, asked, closed: !list() }));
+  process.exit(0);
+})();
+"""
+    result = run(script)
+    assert result["before"] == ["60«Satz 1»×", "180(nichts gesagt)×",
+                                "300Text folgt, sobald dieser Teil transkribiert ist …×",
+                                "420Text folgt, sobald dieser Teil transkribiert ist …×"]
+    assert ["remove_speaker_mark", 1] in result["asked"]   # the index in all marks, not in Basil's list
+    assert result["after"][0].startswith("180") and len(result["after"]) == 3 and result["closed"]
 
 
 def test_speaker_marks_box_shows_yourself_at_the_microphone():

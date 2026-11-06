@@ -29,12 +29,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import __version__, feedback, hardware, pipeline, search, updates
+from . import __version__, awake, feedback, hardware, pipeline, search, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
-from .transcript import (apply_marks, clean_text, complete_speakers, is_default_name, joined_words,
-                         segment_from_dict, split_times, to_markdown)
+from .transcript import (apply_marks, apply_voice_split, clean_text, complete_speakers, is_default_name,
+                         joined_words, segment_from_dict, split_candidates, split_times, to_markdown,
+                         voice_split_plan)
 from .transcription.models import verbalis_home
 
 VALID_ID = re.compile(r"^[\w\-]+$")
@@ -110,6 +111,7 @@ class Service:
         check_updates_on_start: bool = False,
         monitor_factory: Callable | None = None,
         detect_calls: Callable | None = None,
+        keep_awake: "awake.KeepAwake | None" = None,
     ):
         self._lock = threading.RLock()
         self._s = settings or Settings.load()
@@ -163,6 +165,8 @@ class Service:
 
         self._worker = threading.Thread(target=self._work, name="transcription", daemon=True)
         self._worker.start()
+        self._awake = keep_awake or awake.KeepAwake()
+        threading.Thread(target=self._keep_awake, name="keep-awake", daemon=True).start()
         try:
             self._recover_interrupted()   # before anything else touches the recordings
         except OSError:
@@ -1364,9 +1368,12 @@ class Service:
             if recording_id == CLEANUP:
                 self._cleanup_safely()
                 continue
-            if isinstance(recording_id, tuple):   # ("speakers", id, track, count)
+            if isinstance(recording_id, tuple):   # ("speakers", id, track, count) or ("split", id, speaker id)
                 try:
-                    self._run_reassign(*recording_id[1:])
+                    if recording_id[0] == "split":
+                        self._run_split(*recording_id[1:])
+                    else:
+                        self._run_reassign(*recording_id[1:])
                 except ShuttingDown:
                     return
                 continue
@@ -1774,6 +1781,83 @@ class Service:
         log.info("Speakers of %s/%s re-assigned to %d people", recording_id, track, count)
         self._apply_marks(recording_id)
 
+    def split_speaker(self, recording_id: str, speaker_id: str) -> None:
+        """«Stimmen trennen» (0.7.45): one speaker holds several people marked during the recording – part it by
+        the voices at the marks (diarization.split_voices). Runs in the background like «Neu zuordnen»."""
+        folder, data = self._transcript_data(recording_id)
+        info = (data.get("speakers") or {}).get(speaker_id)
+        if info is None:
+            raise ValueError("Diesen Sprecher gibt es nicht (mehr).")
+        if pipeline.audio_file(folder, info.get("track", "")) is None:
+            raise RuntimeError("Das Audio dieser Aufnahme wurde gelöscht – trennen ist nicht mehr möglich.")
+        if speaker_id not in split_candidates(data, pipeline.read_meta(folder).get("speaker_marks") or []):
+            raise ValueError("Zum Trennen zuerst ein paar Absätze der anderen Person über den Namen im Text "
+                             "umhängen – oder sie während der Aufnahme markieren.")
+        with self._lock:
+            if recording_id in self._queued or (self._job and self._job["id"] == recording_id):
+                raise RuntimeError("Diese Aufnahme wird gerade bearbeitet – bitte warten, bis das fertig ist.")
+            self._queued.append(recording_id)
+        self._queue.put(("split", recording_id, speaker_id))
+
+    def _run_split(self, recording_id: str, speaker_id: str) -> None:
+        """Worker thread: the background part of split_speaker."""
+        self._wait_while_paused()
+        with self._lock:
+            if recording_id in self._queued:
+                self._queued.remove(recording_id)
+            self._job = {"id": recording_id, "kind": "speakers", "phase": "Stimmen werden getrennt",
+                         "progress": 0.0, "start": time.monotonic(), "paused_s": 0.0, "paused_since": None,
+                         "duration_s": None, "factor": None}
+
+        def progress(fraction: float) -> None:
+            with self._lock:
+                if self._job:
+                    self._job["progress"] = min(fraction, 0.99)
+                    self._job["phase"] = f"Stimmen werden getrennt: {fraction:.0%}"
+            self._wait_while_paused()
+
+        try:
+            self._split(recording_id, speaker_id, progress)
+        except ShuttingDown:
+            raise
+        except Exception as e:
+            log.exception("Splitting speaker %s of %s failed", speaker_id, recording_id)
+            self._notice = f"Stimmen trennen hat nicht geklappt; die bisherige Zuordnung bleibt. ({e})"
+        finally:
+            with self._lock:
+                self._job = None
+
+    def _split(self, recording_id: str, speaker_id: str, progress=None) -> None:
+        from . import diarization
+        from .transcription.faster import load_audio
+
+        folder, data = self._transcript_data(recording_id)
+        track = data["speakers"][speaker_id]["track"]
+        marks = pipeline.read_meta(folder).get("speaker_marks") or []
+        spans, seeds = voice_split_plan(data, marks, speaker_id)
+        diarization.ensure_models()
+        audio = load_audio(pipeline.audio_file(folder, track))
+        embed, embed_many = self._voice_embedder(audio)
+        labeled = diarization.split_voices(spans, seeds, embed, progress=progress, embed_many=embed_many)
+        folder, data = self._transcript_data(recording_id)   # read now: the newest state of the transcript
+        ids = apply_voice_split(data, speaker_id, labeled)
+        if len(ids) < 2:
+            raise RuntimeError("Verbalis hört auf dieser Stimme nur eine Person.")
+        # the samples taken out of this voice are used: no more «trennen» for them
+        data["voice_samples"] = [s for s in data.get("voice_samples") or [] if s.get("from") != speaker_id]
+        self._keep_original(folder)
+        data["segments"] = _join_neighbours(data["segments"])
+        self._write_transcript(folder, data)
+        log.info("Speaker %s of %s split into %d voices", speaker_id, recording_id, len(ids))
+        self._apply_marks(recording_id)
+
+    @staticmethod
+    def _voice_embedder(audio):
+        """(embed, embed_many) for diarization.split_voices."""
+        from . import diarization
+
+        return diarization.embedder(audio), diarization.embed_windows(audio)
+
     def mark_speaker(self, name: str, track: str = "others") -> list[dict]:
         """«Jetzt spricht …» while recording: who talks at this moment. After the transcription the speaker found
         there gets the name (transcript.apply_marks). A new name joins the participants of the track."""
@@ -1809,6 +1893,24 @@ class Service:
                 pipeline.update_meta(folder, speaker_marks=marks)
         return marks
 
+    def speaker_mark_texts(self) -> dict:
+        """What was said at each mark of the running recording, from the transcription while recording (live.py),
+        to check that the right person was clicked (0.7.45). texts[i] belongs to mark i: the words around it,
+        "" = nothing said there, None = not transcribed yet. live: whether more texts will come."""
+        from .live import text_at
+
+        with self._lock:
+            if self._rec is None:
+                return {"live": False, "texts": []}
+            folder = self._rec_info["folder"]
+            live = self._live.get(folder.name)
+            marks = pipeline.read_meta(folder).get("speaker_marks") or []
+        if live is None:
+            return {"live": False, "texts": [None] * len(marks)}
+        tracks = dict(live.state["tracks"])
+        return {"live": not live.stopped and not live.problem,
+                "texts": [text_at(tracks.get(m.get("track")), float(m.get("t") or 0)) for m in marks]}
+
     def _apply_marks(self, recording_id: str) -> None:
         """Name the speakers from the marks set during the recording; never fails the transcription."""
         try:
@@ -1839,8 +1941,39 @@ class Service:
             raise ValueError("Diesen Absatz gibt es nicht (mehr).")
         if speaker_id not in speakers or speakers[speaker_id].get("track") != segments[index].get("track"):
             raise ValueError("Dieser Sprecher gehört nicht zu dieser Spur.")
+        _note_voice_sample(data, segments[index], speaker_id)
         segments[index]["speaker_id"], segments[index]["speaker"] = speaker_id, speakers[speaker_id]["name"]
         self._write_transcript(folder, data)
+
+    def assign_paragraph(self, recording_id: str, index: int, name: str) -> dict:
+        """A paragraph belongs to a person by name (0.7.45): a voice of this track with that name, or a new one -
+        e.g. a participant Verbalis did not hear as a voice of its own. The paragraph is kept as a voice sample,
+        so «trennen» can find the rest of that person in the voice it came from. Returns the speaker id."""
+        name = _clean_text(name, 80)
+        if not name:
+            raise ValueError("Bitte einen Namen angeben.")
+        folder, data = self._transcript_data(recording_id)
+        segments, speakers = data["segments"], data.setdefault("speakers", {})
+        if not 0 <= index < len(segments):
+            raise ValueError("Diesen Absatz gibt es nicht (mehr).")
+        seg = segments[index]
+        track = seg.get("track") or "others"
+        target = next((sid for sid, info in speakers.items()
+                       if info.get("track") == track and info["name"].lower() == name.lower()), None)
+        if target is None:
+            numbers = [int(sid.rsplit("-", 1)[1]) for sid in speakers
+                       if sid.startswith(f"{track}-") and sid.rsplit("-", 1)[1].isdigit()]
+            target = f"{track}-{max(numbers, default=0) + 1}"
+            speakers[target] = {"name": name, "track": track}
+            meta = pipeline.read_meta(folder)
+            participants = dict(meta.get("participants") or {})
+            if name.lower() not in (n.lower() for n in participants.get(track, [])):
+                participants[track] = [*participants.get(track, []), name]
+                pipeline.update_meta(folder, participants=participants)
+        _note_voice_sample(data, seg, target)
+        seg["speaker_id"], seg["speaker"] = target, speakers[target]["name"]
+        self._write_transcript(folder, data)
+        return {"speaker_id": target}
 
     def speaker_sample(self, recording_id: str, speaker_id: str, seconds: float = 8.0) -> dict:
         """A few seconds of this speaker as a WAV data URL, to hear who it is."""
@@ -2219,6 +2352,8 @@ class Service:
         data["markdown"] = md.read_text(encoding="utf-8") if md.exists() else ""
         for seg in data["segments"]:
             seg.pop("words", None)   # only needed here in Python (splitting), not in the window
+        # «trennen» in the speaker box: voices with other people marked or moved out of them (0.7.45)
+        data["split_with"] = split_candidates(data, pipeline.read_meta(folder).get("speaker_marks") or [])
         return data
 
     def search(self, query: str) -> list[dict]:
@@ -2345,6 +2480,29 @@ class Service:
                 "call": call,
                 "update_progress": self._update_progress}
 
+    # ------------------------------------------------------------ keep awake
+
+    AWAKE_CHECK_S = 5.0
+
+    def _awake_wish(self) -> tuple[bool, bool]:
+        """(system, screen): no sleep while recording (also paused) or processing; the screen stays on while
+        recording if the setting says so."""
+        with self._lock:
+            recording = self._rec is not None
+            working = self._job is not None or bool(self._queued) or any(
+                t.is_alive() for t in self._live_done.values())
+        return recording or working, recording and self._s.keep_display_on == "on"
+
+    def _keep_awake(self) -> None:
+        """Thread: brings the system's sleep lock in line with what Verbalis does (awake.py)."""
+        while not self._stopping.is_set():
+            try:
+                self._awake.set(*self._awake_wish())
+            except Exception:
+                log.exception("Keep awake check failed")
+            self._stopping.wait(self.AWAKE_CHECK_S)
+        self._awake.set(False, False)
+
     def shutdown(self, wait_s: float = 0.0) -> None:
         """When the window closes: save a running recording properly.
 
@@ -2387,6 +2545,17 @@ def speaker_plan(s: Settings, meta: dict) -> tuple[dict[str, bool], dict[str, in
         if number > 1:
             people[track] = number
     return diarize, people, left_out
+
+
+def _note_voice_sample(data: dict, seg: dict, target: str) -> None:
+    """A paragraph moved by hand to another person is a sample of that person's voice in the voice it came from
+    (transcript.voice_split_plan). Interjections are too short to count."""
+    source = seg.get("speaker_id")
+    if not source or source == target or seg.get("aside") or seg["end"] - seg["start"] < 1.0:
+        return
+    name = (data.get("speakers") or {}).get(target, {}).get("name")
+    data.setdefault("voice_samples", []).append(
+        {"start": seg["start"], "end": seg["end"], "name": name, "track": seg.get("track"), "from": source})
 
 
 def _join_neighbours(segments: list[dict], max_pause: float = 2.0) -> list[dict]:

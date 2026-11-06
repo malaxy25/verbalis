@@ -103,6 +103,15 @@ class Api:
     def remove_speaker_mark(self, index):
         return self._call(self._s.remove_speaker_mark, index)
 
+    def assign_paragraph(self, recording_id, index, name):
+        return self._call(self._s.assign_paragraph, recording_id, index, name)
+
+    def split_speaker(self, recording_id, speaker_id):
+        return self._call(self._s.split_speaker, recording_id, speaker_id)
+
+    def speaker_mark_texts(self):
+        return self._call(self._s.speaker_mark_texts)
+
     def recordings(self):
         return self._call(self._s.recordings)
 

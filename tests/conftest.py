@@ -18,7 +18,7 @@ def home(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def shutdown_services(monkeypatch):
+def shutdown_services(monkeypatch, no_real_keep_awake):   # services end before the real sleep lock is back
     created = []
     original = service.Service.__init__
 
@@ -62,3 +62,10 @@ def no_real_hardware_query(monkeypatch):
     from verbalis import hardware
     monkeypatch.setattr(hardware, "describe", lambda *a, **k: {"Prozessor": "Test-CPU", "Arbeitsspeicher": "16 GB",
                                                                 "Grafikkarte": "Test-GPU"})
+
+
+@pytest.fixture(autouse=True)
+def no_real_keep_awake(monkeypatch):
+    """Tests never hold a sleep lock (power request, caffeinate, systemd-inhibit) on the machine running them."""
+    from verbalis import awake
+    monkeypatch.setattr(awake, "default_backend", lambda: None)

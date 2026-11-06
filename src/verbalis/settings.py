@@ -35,6 +35,7 @@ class Settings:
     auto_transcribe: str = "off"      # "on" = transcribe right after recording; "off" = start it by hand
                                       # (after entering the number of people)
     live_transcribe: str = "on"       # "on" = transcribe already while recording (live.py; on since 0.7.42)
+    keep_display_on: str = "on"       # "on" = the screen stays on while recording (awake.py; since 0.7.45)
     last_seen_version: str = ""       # version whose «what's new» was shown last
     tour: str = ""                    # "done" once the introduction was finished or closed
 
@@ -96,6 +97,8 @@ class Settings:
             s.auto_transcribe = "off"
         if s.live_transcribe not in ("on", "off"):
             s.live_transcribe = "off"
+        if s.keep_display_on not in ("on", "off"):
+            s.keep_display_on = "on"
         if s.call_detection not in ("on", "off"):
             s.call_detection = "on"
         for name, default in (("audio_days", "3"), ("audio_max_mb", ""), ("max_recording_min", "120")):

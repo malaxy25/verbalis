@@ -29,7 +29,7 @@ const ok = (d) => Promise.resolve({ ok: true, data: d });
 let t0 = 754;
 window.pywebview = { api: {
   version: () => ok("0.7.0"),
-  settings: () => ok({ diarize_others: "on", diarize_me: "off", speaker_split: "normal", asides: "on", auto_transcribe: "off", live_transcribe: "on", call_detection: "on", max_recording_min: "120", model_auto_update: "off", storage_warning: window.__scenario === "dev" ? "Der Aufnahmeordner liegt in einem synchronisierten Ordner (Verbalis in «onedrive - tocco ag»). Aufnahmen würden so in die Cloud kopiert – für vertrauliche Gespräche einen lokalen Ordner wählen." : null, update_check: "on", name: "Andrea", others: "Gegenüber", model: "gcoli/whisper-large-v3-turbo-swiss-german-mit", quality: "accurate", keywords: "tocco, Höngg", recordings_dir: "", microphone: "", speakers: "", audio_days: "3", audio_max_mb: "", recordings_path: "C:\\Users\\AndreaFrehner\\.verbalis\\recordings" }),
+  settings: () => ok({ diarize_others: "on", diarize_me: "off", speaker_split: "normal", asides: "on", auto_transcribe: "off", live_transcribe: "on", keep_display_on: "on", call_detection: "on", max_recording_min: "120", model_auto_update: "off", storage_warning: window.__scenario === "dev" ? "Der Aufnahmeordner liegt in einem synchronisierten Ordner (Verbalis in «onedrive - tocco ag»). Aufnahmen würden so in die Cloud kopiert – für vertrauliche Gespräche einen lokalen Ordner wählen." : null, update_check: "on", name: "Andrea", others: "Gegenüber", model: "gcoli/whisper-large-v3-turbo-swiss-german-mit", quality: "accurate", keywords: "tocco, Höngg", recordings_dir: "", microphone: "", speakers: "", audio_days: "3", audio_max_mb: "", recordings_path: "C:\\Users\\AndreaFrehner\\.verbalis\\recordings" }),
   acceleration_info: () => ok(window.__scenario === "linux"
     ? { kind: "nvidia", ready: false, problem: "Keine Nvidia-Grafikkarte gefunden (oder kein aktueller Nvidia-Treiber).", can_install: false, size: "1.3 GB", task: null, phase: "", progress: null, error: null, speed: null, notification: { ok: true, clicked: true, detail: "Meldung gezeigt und angeklickt – Verbalis kam nach vorne." }, calls: { ok: true, detail: "Call erkannt: Teams – am Mikrofon: teams-for-linux" } }
     : { kind: "nvidia", ready: false, problem: "Die Nvidia-Bibliotheken (cuBLAS, cuDNN) fehlen noch – einmalig laden: Einstellungen → Diagnose → «Nvidia-Bibliotheken laden» oder verbalis gpu --install", can_install: true, size: "1.3 GB", task: null, phase: "", progress: null, error: null,
@@ -109,6 +109,10 @@ window.pywebview = { api: {
   stop_live: () => { window.__liveStopped = true; return ok(null); },
   mark_speaker: (name, track) => { (window.__marks = window.__marks || []).push({ t: Math.round(t0 * 10) / 10, name, track }); const p = window.__participants = window.__participants || { me: ["Andrea"], others: ["Basil", "Sandra"] }; if (!(p[track] || []).includes(name)) p[track] = [...(p[track] || []), name]; return ok([...window.__marks]); },
   remove_speaker_mark: (i) => { (window.__marks = window.__marks || []).splice(i, 1); return ok([...window.__marks]); },
+  // the transcription while recording is 10 minutes in (state.live.done_s): later marks have no text yet
+  split_speaker: () => ok(null),
+  assign_paragraph: (id, index, name) => ok({ speaker_id: "x" }),
+  speaker_mark_texts: () => ok({ live: true, texts: (window.__marks || []).map((m) => m.t > 600 ? null : m.t % 7 < 1 ? "" : "und dänn händ mir gseit, mir mached das bis Ende Monet fertig, oder?") }),
   pause_recording: () => { window.__recPaused = true; return ok(null); },
   resume_recording: () => { window.__recPaused = false; return ok(null); },
   spelling_check: (words) => ok({ status: "ready", error: null, misspelled: words.filter((w) => ["Toko", "Hund", "Budjet"].includes(w) && !(window.__known || []).includes(w)) }),

@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, replace
+from bisect import bisect_right
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -333,3 +334,182 @@ def speakers_of(paragraphs: list[Segment]) -> dict[str, dict]:
         if p.speaker_id and p.speaker_id not in found:
             found[p.speaker_id] = {"name": p.speaker, "track": p.track}
     return found
+
+
+# Splitting one speaker into the people marked on it (0.7.45, diarization.split_voices)
+SPLIT_SEED_BEFORE_S = 1.0   # a mark's voice sample: from a little before the click …
+SPLIT_SEED_AFTER_S = 6.0    # … to some seconds after it
+SPLIT_MIN_PART_S = 2.0      # a shorter stretch of another voice inside a paragraph doesn't split it
+
+
+def voice_split_plan(data: dict, marks: list[dict], speaker_id: str) -> tuple[list, dict[str, list | None]]:
+    """What splitting a speaker needs: its paragraphs (start, end) and, per person, voice samples - the moments
+    around marks inside it, and paragraphs moved out of it to another person by hand (data["voice_samples"],
+    0.7.45). The speaker's own name without a sample gets None (diarization.split_voices then takes the windows
+    least like the others). Names that differ only in case are one."""
+    segments = data.get("segments") or []
+    spans = [(s["start"], s["end"]) for s in segments if s.get("speaker_id") == speaker_id and not s.get("aside")]
+    seeds: dict[str, list] = {}
+    spelling: dict[str, str] = {}
+    for mark in marks or []:
+        name = " ".join(str(mark.get("name") or "").split())
+        if not name or _marked_speaker(segments, mark) != speaker_id:
+            continue
+        t = float(mark.get("t") or 0.0)
+        a, b = t - SPLIT_SEED_BEFORE_S, t + SPLIT_SEED_AFTER_S
+        parts = [(max(s, a), min(e, b)) for s, e in spans if min(e, b) - max(s, a) > 0.3]
+        if parts:
+            key = spelling.setdefault(name.lower(), name)
+            seeds.setdefault(key, []).extend(parts)
+    for sample in data.get("voice_samples") or []:
+        name = " ".join(str(sample.get("name") or "").split())
+        if name and sample.get("from") == speaker_id:
+            key = spelling.setdefault(name.lower(), name)
+            seeds.setdefault(key, []).append((float(sample["start"]), float(sample["end"])))
+    own = ((data.get("speakers") or {}).get(speaker_id) or {}).get("name")
+    if own and seeds and own.lower() not in spelling:
+        seeds[own] = None
+    return spans, seeds
+
+
+def split_candidates(data: dict, marks: list[dict]) -> dict[str, list[str]]:
+    """speaker id -> the other people found in its voice (marks, paragraphs moved out): «trennen» is offered."""
+    result = {}
+    for sid, info in (data.get("speakers") or {}).items():
+        _, seeds = voice_split_plan(data, marks, sid)
+        others = [n for n, v in seeds.items() if v and n.lower() != str(info.get("name", "")).lower()]
+        if others:
+            result[sid] = others
+    return result
+
+
+def _word_tokens(words: list, tokens: list[str]) -> dict[int, int]:
+    """Word index → index of the matching token of the (maybe corrected) text."""
+    matcher = SequenceMatcher(None, [_token(str(w[2])) for w in words], [_token(t) for t in tokens], autojunk=False)
+    return {a + i: b + i for a, b, size in matcher.get_matching_blocks() for i in range(size)}
+
+
+def _token_cut(to_token: dict[int, int], word: int, words: int, tokens: int) -> int:
+    later = [i for i in to_token if i >= word]
+    if later:
+        i = min(later)
+        return to_token[i] - (i - word)
+    earlier = [i for i in to_token if i < word]
+    if earlier:
+        i = max(earlier)
+        return to_token[i] + (word - i)
+    return round(word * tokens / max(words, 1))
+
+
+def split_by_voice(seg: dict, labeled: list[tuple[float, float, str]],
+                   min_part_s: float = SPLIT_MIN_PART_S) -> list[tuple[dict, str]]:
+    """A paragraph cut where the voice changes (labeled: (start, end, name) windows). Returns (part, name);
+    the text keeps corrections, each part keeps its words. Without words (or with line breaks typed by hand)
+    the paragraph stays whole and goes to the voice heard longest in it."""
+    starts = [w[0] for w in labeled]   # labeled is in time order
+
+    def label_at(t: float) -> str | None:
+        if not labeled:
+            return None
+        i = bisect_right(starts, t)
+        near = [labeled[j] for j in (i - 1, i) if 0 <= j < len(labeled)]
+        return min(near, key=lambda w: max(w[0] - t, t - w[1], 0.0))[2]
+
+    def longest(start: float, end: float) -> str | None:
+        talk: dict[str, float] = {}
+        for s, e, name in labeled:
+            if (shared := min(e, end) - max(s, start)) > 0:
+                talk[name] = talk.get(name, 0.0) + shared
+        return max(talk, key=talk.get) if talk else label_at((start + end) / 2)
+
+    words = seg.get("words")
+    if seg.get("aside") or not words or "\n" in seg["text"]:
+        return [(seg, longest(seg["start"], seg["end"]))]
+    runs: list[list] = []   # [first word, after last word, name]
+    for i, w in enumerate(words):
+        name = label_at((float(w[0]) + float(w[1])) / 2)
+        if runs and runs[-1][2] == name:
+            runs[-1][1] = i + 1
+        else:
+            runs.append([i, i + 1, name])
+
+    def length(run) -> float:
+        return float(words[run[1] - 1][1]) - float(words[run[0]][0])
+
+    def join(k: int) -> None:   # run k goes into its neighbour (the previous one if there is one)
+        other = k - 1 if k > 0 else k + 1
+        keep = runs[other] if length(runs[other]) >= length(runs[k]) else runs[k]
+        first, last = min(k, other), max(k, other)
+        runs[first:last + 1] = [[runs[first][0], runs[last][1], keep[2]]]
+
+    def tidy() -> None:
+        k = 1
+        while k < len(runs):
+            if runs[k][2] == runs[k - 1][2]:
+                runs[k - 1:k + 1] = [[runs[k - 1][0], runs[k][1], runs[k][2]]]
+            else:
+                k += 1
+
+    while len(runs) > 1 and (short := [k for k, r in enumerate(runs) if length(r) < min_part_s]):
+        join(min(short, key=lambda k: length(runs[k])))
+        tidy()
+    tokens = seg["text"].split()
+    to_token = _word_tokens(words, tokens)
+    cuts = [0]
+    k = 1
+    while k < len(runs):
+        cut = _token_cut(to_token, runs[k][0], len(words), len(tokens))
+        if cuts[-1] < cut < len(tokens):
+            cuts.append(cut)
+            k += 1
+        else:   # no clean place in the text: the two stay together
+            join(k)
+            tidy()
+            cuts = [0]
+            k = 1
+    cuts.append(len(tokens))
+    if len(runs) == 1:
+        return [(seg, runs[0][2])]
+    parts = []
+    for k, run in enumerate(runs):
+        part = {**seg, "text": " ".join(tokens[cuts[k]:cuts[k + 1]]), "words": words[run[0]:run[1]]}
+        if k:
+            part["start"] = float(words[run[0]][0])
+        if k < len(runs) - 1:
+            part["end"] = float(words[run[1] - 1][1])
+        parts.append((part, run[2]))
+    return parts
+
+
+def apply_voice_split(data: dict, speaker_id: str, labeled: list[tuple[float, float, str]]) -> dict[str, str]:
+    """Give the paragraphs of one speaker to the voices found in it (split_by_voice). The voice with the
+    speaker's name – or else the one heard most – keeps the speaker; every other one becomes a new speaker of
+    the track, named after its marks. Returns name → speaker id."""
+    speakers = data.setdefault("speakers", {})
+    info = speakers[speaker_id]
+    track = info.get("track")
+    talk: dict[str, float] = {}
+    for s, e, name in labeled:
+        talk[name] = talk.get(name, 0.0) + e - s
+    if len(talk) < 2:
+        return {}
+    keep = info["name"] if info["name"] in talk else max(talk, key=talk.get)
+    ids = {keep: speaker_id}
+    taken = [int(sid.rsplit("-", 1)[1]) for sid in speakers if sid.rsplit("-", 1)[-1].isdigit()
+             and sid.startswith(f"{track}-")]
+    number = max(taken, default=0)
+    for name in dict.fromkeys(n for *_, n in labeled):
+        if name not in ids:
+            number += 1
+            ids[name] = f"{track}-{number}"
+            speakers[ids[name]] = {"name": name, "track": track}
+    info["name"] = keep
+    result = []
+    for seg in data.get("segments") or []:
+        if seg.get("speaker_id") != speaker_id:
+            result.append(seg)
+            continue
+        for part, name in split_by_voice(seg, labeled):
+            result.append({**part, "speaker_id": ids[name or keep], "speaker": name or keep})
+    data["segments"] = result
+    return ids
