@@ -6,33 +6,33 @@ altgraph==0.17.5          # via macholib, pyinstaller
 anyio==4.15.1             # via httpx
 av==19.0.1                # via faster-whisper
 bottle==0.13.4            # via pywebview
-certifi==2026.7.22        # via httpcore, httpx, verbalis (pyproject.toml)
+certifi==2026.10.23        # via httpcore, httpx, verbalis (pyproject.toml)
 cffi==2.1.1               # via clr-loader, soundcard, soundfile
 click==8.5.0              # via huggingface-hub
 clr-loader==0.3.1 ; sys_platform == 'win32'  # via pythonnet
 colorama==0.4.6 ; sys_platform == 'win32'  # via tqdm
-ctranslate2==4.8.2        # via faster-whisper
+ctranslate2==4.8.4        # via faster-whisper
 faster-whisper==1.2.1     # via verbalis (pyproject.toml)
-filelock==4.0.12          # via huggingface-hub
+filelock==4.2.4          # via huggingface-hub
 flatbuffers==25.12.19     # via onnxruntime
 fsspec==2026.9.0          # via huggingface-hub
 h11==0.16.0               # via httpcore
-hf-xet==1.7.0 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'  # via huggingface-hub
+hf-xet==1.7.1 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'  # via huggingface-hub
 httpcore==1.0.9           # via httpx
 httpx==0.28.1             # via huggingface-hub
 huggingface-hub==1.33.0   # via faster-whisper, tokenizers
 idna==3.20                # via anyio, httpx
 macholib==1.16.4 ; sys_platform == 'darwin'  # via pyinstaller
 numpy==2.5.3              # via ctranslate2, onnxruntime, scipy, soundcard, soundfile, soxr, verbalis (pyproject.toml)
-onnxruntime==1.30.0       # via faster-whisper
+onnxruntime==1.31.1       # via faster-whisper
 packaging==26.3           # via huggingface-hub, onnxruntime, pyinstaller, pyinstaller-hooks-contrib, qtpy
 pefile==2024.8.26 ; sys_platform == 'win32'  # via pyinstaller
-pillow==12.3.0 ; sys_platform == 'darwin'  # via verbalis (pyproject.toml)
+pillow==13.0.0 ; sys_platform == 'darwin'  # via verbalis (pyproject.toml)
 protobuf==7.36.2          # via onnxruntime
 proxy-tools==0.1.0        # via pywebview
-pycparser==3.1 ; implementation_name != 'PyPy'  # via cffi
+pycparser==3.12 ; implementation_name != 'PyPy'  # via cffi
 pyinstaller==6.22.3       # via verbalis (pyproject.toml)
-pyinstaller-hooks-contrib==2026.8  # via pyinstaller
+pyinstaller-hooks-contrib==2026.9  # via pyinstaller
 pyobjc-core==12.2.2 ; sys_platform == 'darwin'  # via pyobjc-framework-cocoa, pyobjc-framework-quartz, pyobjc-framework-security, pyobjc-framework-uniformtypeidentifiers, pyobjc-framework-webkit, pywebview
 pyobjc-framework-cocoa==12.2.2 ; sys_platform == 'darwin'  # via pyobjc-framework-quartz, pyobjc-framework-security, pyobjc-framework-uniformtypeidentifiers, pyobjc-framework-webkit, pywebview
 pyobjc-framework-quartz==12.2.2 ; sys_platform == 'darwin'  # via pywebview
@@ -45,13 +45,13 @@ pywin32-ctypes==0.2.3 ; sys_platform == 'win32'  # via pyinstaller
 pyyaml==6.0.3             # via ctranslate2, huggingface-hub
 qtpy==2.4.3 ; sys_platform == 'openbsd6'  # via pywebview
 scipy==1.18.1             # via verbalis (pyproject.toml)
-setuptools==84.0.0        # via pyinstaller
-sherpa-onnx==1.13.8       # via verbalis (pyproject.toml)
+setuptools==84.2.1        # via pyinstaller
+sherpa-onnx==2.0.1       # via verbalis (pyproject.toml)
 soundcard==0.4.6          # via verbalis (pyproject.toml)
 soundfile==0.14.0         # via verbalis (pyproject.toml)
 soxr==1.1.0               # via verbalis (pyproject.toml)
 spylls==0.1.7             # via verbalis (pyproject.toml)
-tokenizers==0.23.2        # via faster-whisper
+tokenizers==0.23.3        # via faster-whisper
 tqdm==4.70.1              # via faster-whisper, huggingface-hub
 truststore==0.10.5 ; sys_platform == 'win32'  # via verbalis (pyproject.toml)
 typing-extensions==4.16.0  # via anyio, huggingface-hub, pywebview, soundfile
