@@ -67,7 +67,7 @@ console.log(JSON.stringify({ steps, monday: (today.getDay() + 6) % 7 === 0 }));
 def test_list_groups_open_and_close_again():
     """0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
     and «Heute» could not be closed while its recording was selected."""
-    code = STUBS + functions("groupOf", "collapsedGroups", "toggleGroup", "renderList") + SCRIPT
+    code = STUBS + functions("groupOf", "collapsedGroups", "toggleGroup", "listOrder", "renderList") + SCRIPT
     out = subprocess.run([NODE, "-e", code], capture_output=True, text=True, encoding="utf-8", check=True).stdout
     result = json.loads(out)
     if result["monday"]:

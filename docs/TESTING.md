@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-382 tests in 39 files.
+384 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -579,11 +579,13 @@ The recording list in the UI: groups open and close. Runs the list functions of 
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
 
-### `test_ui_sidebar.py` (2)
+### `test_ui_sidebar.py` (4)
 
 Folding the recording list to a narrow rail (Ctrl/Cmd+B). Runs setSidebar of index.html in Node.js.
 
 - **List folds and remembers only on purpose**
+- **Ctrl arrows go to the next recording in list order** – Not the order Python sends: a planned recording is on top of the list, so Ctrl+↑ from the newest goes there.
+- **Rail list button shows recording red before transcribing blue**
 - **Sidebar setting is open or closed**
 
 ### `test_ui_speakers.py` (9)

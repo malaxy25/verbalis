@@ -89,6 +89,17 @@
   body.sidebar-collapsed .rail-foot { display: flex; flex-direction: column; align-items: center; gap: 8px;
     margin-top: auto; padding: 12px 0 16px; }
   .rail-version { padding: 2px 0 0; font-size: 11px; justify-self: auto; }
+  /* ☰ in the rail: the list floats over the content until a recording is chosen (Esc / click beside closes) */
+  .rail-list { display: none; }
+  body.sidebar-collapsed .rail-list { display: grid; }
+  .rail-list.is-recording::after, .rail-list.is-working::after { content: ""; position: absolute; top: 3px; right: 3px;
+    width: 8px; height: 8px; border-radius: 50%; }
+  .rail-list.is-recording::after { background: var(--red); }
+  .rail-list.is-working::after { background: var(--limmat); }
+  body.sidebar-collapsed.list-flyout .history .list {
+    display: block; position: fixed; left: 52px; top: 0; bottom: 0; width: 300px; z-index: 50; overflow-y: auto;
+    background: var(--bg); border-right: 1px solid var(--line); box-shadow: 6px 0 24px rgb(21 27 34 / 0.18);
+  }
   body.sidebar-collapsed { grid-template-columns: 52px 1fr; }
   body.sidebar-collapsed .history h1, body.sidebar-collapsed .history .list,
   body.sidebar-collapsed .history footer { display: none; }
@@ -710,6 +721,7 @@
       <button type="button" class="plan-button search-button" id="btn-search" title="Suchen (Ctrl+F) – im Transkript oder in allen Aufnahmen" aria-label="Suchen" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.8" cy="6.8" r="4.6"/><path d="M10.3 10.3 14 14"/></svg></button>
       <button type="button" class="plan-button" id="btn-plan" title="Aufnahme planen: Name, Projekt und Teilnehmende schon vorher erfassen" aria-label="Aufnahme planen">+</button>
       <button type="button" class="plan-button sidebar-toggle" id="btn-sidebar" aria-expanded="true" aria-controls="list"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8 10 12.5"/></svg></button>
+      <button type="button" class="plan-button rail-icon rail-list" id="btn-list-rail" title="Aufnahmen zeigen" aria-label="Aufnahmen zeigen" aria-expanded="false" aria-controls="list"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg></button>
     </div>
   </div>
   <ol class="list" id="list"></ol>
@@ -1237,6 +1249,13 @@ function toggleGroup(key) {
   renderList();
 }
 
+/* The recordings as the list shows them: planned first (soonest at the top), then the others, newest first. */
+function listOrder() {
+  const planned = state.recordings.filter((a) => a.status === "planned")
+    .sort((x, y) => (startDate(x) || 0) - (startDate(y) || 0));
+  return [...planned, ...state.recordings.filter((a) => a.status !== "planned")];
+}
+
 function renderList() {
   const list = $("list");
   list.replaceChildren();
@@ -1251,9 +1270,7 @@ function renderList() {
     state.revealed = selected.id;                     // afterwards its group can be closed like any other
     collapsed.delete(groupOf(selected).key);
   }
-  const planned = state.recordings.filter((a) => a.status === "planned")
-    .sort((x, y) => (startDate(x) || 0) - (startDate(y) || 0));
-  const ordered = [...planned, ...state.recordings.filter((a) => a.status !== "planned")];
+  const ordered = listOrder();
   let current = null, items = null;
   for (const a of ordered) {
     const group = groupOf(a);
@@ -1272,7 +1289,7 @@ function renderList() {
     const button = element("button", {
         type: "button",
         "aria-current": String(a.id === state.selected),
-        onclick: () => { state.selected = a.id; renderList(); renderContent(); },
+        onclick: () => { state.selected = a.id; renderList(); renderContent(); closeListFlyout(); },
       },
       element("span", { class: "date" }, a.title || shortDate(a)),
       element("span", { class: "duration" }, a.duration_s != null ? timeText(a.duration_s) : ""),
@@ -2634,6 +2651,7 @@ async function poll() {
     state.lastState = z;
     showUpdateBanner(z);
     showModelBanner(z);
+    markRailStatus(z);
     $("notice").hidden = !z.notice;
     if (z.notice) $("notice-text").textContent = z.notice;
     showProgress(z);
@@ -3603,6 +3621,7 @@ const SHORTCUT = /Mac/.test(navigator.platform || navigator.userAgent) ? "⌘B" 
 /* collapsed: only the narrow rail. remember: keep it for the next start (Settings «sidebar»). */
 function setSidebar(collapsed, remember = true) {
   document.body.classList.toggle("sidebar-collapsed", collapsed);
+  if (!collapsed) closeListFlyout();
   const toggle = $("btn-sidebar");
   toggle.setAttribute("aria-expanded", String(!collapsed));
   const label = collapsed ? `Liste aufklappen (${SHORTCUT})` : `Liste zuklappen (${SHORTCUT})`;
@@ -3613,6 +3632,42 @@ function setSidebar(collapsed, remember = true) {
     state.settings.sidebar = wanted;
     call("save_settings", { sidebar: wanted }).then((s) => { state.settings = s; }).catch(() => {});
   }
+}
+
+/* ☰ in the folded list: the list floats over the content; choosing a recording, Esc or a click beside closes it. */
+function openListFlyout() {
+  document.body.classList.add("list-flyout");
+  $("btn-list-rail").setAttribute("aria-expanded", "true");
+  const current = document.querySelector('#list button[aria-current="true"]') || document.querySelector("#list button");
+  if (current) { current.scrollIntoView({ block: "nearest" }); current.focus(); }
+}
+
+function closeListFlyout() {
+  if (!document.body.classList.contains("list-flyout")) return;
+  document.body.classList.remove("list-flyout");
+  $("btn-list-rail").setAttribute("aria-expanded", "false");
+}
+
+/* Ctrl+↑ / Ctrl+↓ (Mac: Cmd): the newer / older recording, in the order of the list – also with the list folded. */
+function selectNeighbour(step) {
+  const list = listOrder();
+  const i = list.findIndex((a) => a.id === state.selected);
+  const next = list[i < 0 ? 0 : i + step];
+  if (!next) return;
+  state.selected = next.id;
+  renderList();
+  renderContent();
+  const button = document.querySelector('#list button[aria-current="true"]');
+  if (button) button.scrollIntoView({ block: "nearest" });
+}
+
+/* The ☰ shows what runs: a red dot while recording, a blue one while transcribing. */
+function markRailStatus(z) {
+  const button = $("btn-list-rail");
+  button.classList.toggle("is-recording", !!z.recording);
+  button.classList.toggle("is-working", !z.recording && !!z.job);
+  button.title = z.recording ? "Aufnahmen zeigen – eine Aufnahme läuft"
+    : z.job ? "Aufnahmen zeigen – es wird transkribiert" : "Aufnahmen zeigen";
 }
 
 /* A dot on the rail's settings button while an update is announced (the banners are hidden with the list). */
@@ -3708,6 +3763,28 @@ function setupSearch() {
     setSidebar(!document.body.classList.contains("sidebar-collapsed"));
   });
   $("btn-sidebar").addEventListener("click", () => setSidebar(!document.body.classList.contains("sidebar-collapsed")));
+  $("btn-list-rail").addEventListener("click", () => {
+    if (document.body.classList.contains("list-flyout")) closeListFlyout(); else openListFlyout();
+  });
+  document.addEventListener("mousedown", (event) => {   // a click beside the floating list closes it
+    if (document.body.classList.contains("list-flyout") && !event.target.closest("#list, #btn-list-rail")) closeListFlyout();
+  }, true);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.body.classList.contains("list-flyout")) {
+      event.preventDefault();
+      closeListFlyout();
+      $("btn-list-rail").focus();
+      return;
+    }
+    // Ctrl+↑/↓ (Mac: Cmd): newer / older recording – not while typing (there it moves the cursor) or in a dialog
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    const t = event.target;
+    if (t.closest && t.closest("input, textarea, select, [contenteditable=true], [contenteditable='']")) return;
+    if (document.querySelector("dialog[open]")) return;
+    event.preventDefault();
+    selectNeighbour(event.key === "ArrowUp" ? -1 : 1);
+  });
   $("btn-settings-rail").addEventListener("click", () => {
     // an announced update: the banner is in the folded list – unfold it, there it can be clicked
     if ($("btn-settings-rail").classList.contains("has-news")) setSidebar(false);

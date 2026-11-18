@@ -30,6 +30,7 @@ const SHORTCUT = "Ctrl+B";
 const saved = [];
 function call(name, data) { saved.push(data); return Promise.resolve({ ...state.settings, ...data }); }
 const state = { settings: { sidebar: "open" } };
+function closeListFlyout() {}
 """
 
 SCRIPT = """
@@ -50,6 +51,46 @@ def test_list_folds_and_remembers_only_on_purpose():
     assert steps[0] == [True, "false", "Liste aufklappen (Ctrl+B)", 1]
     assert steps[1][3] == 1
     assert steps[2] == [False, "true", "Liste zuklappen (Ctrl+B)", 1]
+
+
+NEIGHBOUR = """
+// as Python sends them: newest first, the planned one somewhere in between – the list shows it on top
+const state = { recordings: [{ id: "new" }, { id: "plan", status: "planned" }, { id: "old" }], selected: "new" };
+function startDate() { return null; }
+const shown = [];
+function renderList() {}
+function renderContent() { shown.push(state.selected); }
+const document = { querySelector() { return null; } };
+selectNeighbour(1); selectNeighbour(1); selectNeighbour(1);   // stops at the oldest
+selectNeighbour(-1); selectNeighbour(-1); selectNeighbour(-1);  // and at the top
+console.log(JSON.stringify(shown));
+"""
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js not installed")
+def test_ctrl_arrows_go_to_the_next_recording_in_list_order():
+    """Not the order Python sends: a planned recording is on top of the list, so Ctrl+↑ from the newest goes there."""
+    out = subprocess.run([NODE, "-e", function("listOrder") + function("selectNeighbour") + NEIGHBOUR],
+                         capture_output=True, text=True, encoding="utf-8", check=True).stdout
+    assert json.loads(out) == ["old", "new", "plan"]
+
+
+STATUS = """
+const button = { title: "", classes: new Set(), classList: { toggle(c, on) { on ? button.classes.add(c) : button.classes.delete(c); } } };
+const $ = () => button;
+const seen = [];
+for (const z of [{ recording: { id: "x" }, job: { id: "y" } }, { recording: null, job: { id: "y" } }, { recording: null, job: null }]) {
+  markRailStatus(z); seen.push([...button.classes].sort().join(","));
+}
+console.log(JSON.stringify(seen));
+"""
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js not installed")
+def test_rail_list_button_shows_recording_red_before_transcribing_blue():
+    out = subprocess.run([NODE, "-e", function("markRailStatus") + STATUS], capture_output=True, text=True,
+                         encoding="utf-8", check=True).stdout
+    assert json.loads(out) == ["is-recording", "is-working", ""]
 
 
 def test_sidebar_setting_is_open_or_closed():
