@@ -6,14 +6,16 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## Current state (18 Nov 2026)
 
-- **Last session:** three features for 0.7.46, committed locally (c591233 … HEAD, 11 commits), **not pushed**,
+- **Last session:** three features for 0.7.46, committed locally (c591233 … HEAD, 15 commits), **not pushed**,
   no version raised. (1) Screen snapshots while recording (`screens.py`): none / monitor / one window (Windows);
   kept on a clear change once the screen is still; moving areas (Teams video tiles) are learned and ignored;
   `screens/HH-MM-SS.png`, linked in `transcript.md`. (2) «Für KI kopieren: <Anweisung>» in the transcript menu
   «⋯»: the whole text with German placeholders ({transkript} {bilder} {titel} {datum} {dauer} {projekt}
   {teilnehmende} {notizen}) visible in Settings → KI; «Standard» per delivered entry; lines with only empty
   placeholders drop out; old saved entries get the placeholders. Named «KI», not Claude. (3) Recording list
-  folds to a narrow rail (button «‹», Ctrl/Cmd+B), remembered in setting `sidebar`.
+  folds to a narrow rail (button «‹», Ctrl/Cmd+B), remembered in setting `sidebar`. Rail: ›, search, +, ☰ (list
+  floats over the content until a recording is chosen; red dot recording, blue transcribing), folder, gear,
+  version. Ctrl/Cmd+↑/↓ = newer/older recording in list order (`listOrder()`), not while typing.
 - **Next step:** Andrea tests all three in the app, the snapshots in a real Teams call (window «Meeting |
   Microsoft Teams»): missing pictures for small changes? near-duplicates? window black/cut off? Then tune, write
   CHANGELOG, raise to 0.7.46 – push only when Andrea says so. Mac: test the rail/Cmd+B and snapshots there;
