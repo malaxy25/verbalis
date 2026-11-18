@@ -1607,7 +1607,7 @@ class Service:
         try:
             if end_s is None:
                 end_s = pipeline.read_meta(folder).get("duration_s")
-            if screens.prepare(folder, end_s) and (folder / "transcript.json").exists():
+            if screens.prepare(folder, end_s, self._s.min_shown_s) and (folder / "transcript.json").exists():
                 self._write_markdown(folder, json.loads((folder / "transcript.json").read_text(encoding="utf-8")))
         except Exception:   # the originals are still linked: worse for the AI, but nothing is lost
             log.exception("Preparing the snapshots of %s failed", folder.name)

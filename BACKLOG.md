@@ -21,10 +21,10 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
   automatically (not after «Keine» by hand). Devices and windows reload when Verbalis gets the focus back; reloading
   keeps the choice on screen (before, «Geräte neu laden» reset an unsaved microphone choice to the saved one).
   (5) Pictures prepared for the AI (`screens.prepare`, after the recording and at «Für KI kopieren»): cut to where
-  the pictures differ (no OCR: bar, tiles, taskbar barely change), chosen = shown >= 3 s (Andrea: live demos; 10 s gave 65, 3 s 100 of 123) and not a repeat (pixel
+  the pictures differ (no OCR: bar, tiles, taskbar barely change), chosen = shown >= N s (setting `screen_min_s`, Settings → KI, default 5; on the 18 Nov recording 10 s → 65, 5 s → 90, 3 s → 100 of 123) and not a repeat (pixel
   compare), into `screens_crop/` + `index.json`; transcript.md links those, names the others as text. No picture
   limit (Andrea), no downscaling (Claude scales > 1568 px itself, small UI text stays legible). Tested on the
-  Teams recording of 18 Nov: 123 → 100 pictures, 4 s. Andrea's own script (Tocco-Brain `screens_prep.py`, Windows
+  Teams recording of 18 Nov: 4 s for 123 pictures. Andrea's own script (Tocco-Brain `screens_prep.py`, Windows
   OCR + fixed percentages) replaced by this. Fixed: a picture taken before the recorder ran got the PC uptime as
   time («124-26-38.png»). Defaults got the Swiss German / decisions / names lines; vault paths stay in Andrea's
   own settings.

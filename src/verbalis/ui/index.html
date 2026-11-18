@@ -1010,6 +1010,15 @@
       </section>
       <section class="tab-panel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden>
         <div class="field">
+          <span>Bilder für die KI</span>
+          <div class="field-row">
+            <label>Bilder, die mindestens <input type="text" name="screen_min_s" inputmode="numeric" autocomplete="off" aria-label="Sekunden"> Sekunden zu sehen waren</label>
+          </div>
+          <small>Die Bildschirm-Schnappschüsse werden für die KI auf den gezeigten Inhalt zugeschnitten. Kürzer gezeigte
+            (Zwischenstände beim Klicken und Scrollen) und wiederholte Bilder stehen nur als Verweis im Transkript.
+            Weniger Sekunden = mehr Bilder und mehr Tokens (ein Bild rund 1'600). 0 = alle ausser Wiederholungen.</small>
+        </div>
+        <div class="field">
           <span>Anweisungen für «Für KI kopieren»</span>
           <small>Im Menü «⋯» eines Transkripts gibt es pro Anweisung einen Eintrag. Kopiert wird genau dieser Text, die
             Platzhalter in {geschweiften Klammern} durch die Angaben der Aufnahme ersetzt. Den Text in Claude Code oder eine
@@ -3227,7 +3236,7 @@ async function openSettings(tab) {
   showTab(typeof tab === "string" ? tab : "general");   // called as click handler too (then tab is the event)
   const form = $("form-settings");
   const e = state.settings;
-  for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb", "max_recording_min"]) form.elements[field].value = e[field] || "";
+  for (const field of ["name", "others", "keywords", "recordings_dir", "audio_days", "audio_max_mb", "max_recording_min", "screen_min_s"]) form.elements[field].value = e[field] || "";
   form.elements.update_check.checked = e.update_check !== "off";
   form.elements.model_auto_update.checked = e.model_auto_update === "on";
   form.elements.diarize_others.checked = e.diarize_others !== "off";
@@ -3969,7 +3978,7 @@ function replaceWord(range, replacement) {
 function collectSettings() {
   const form = $("form-settings");
   const data = {};
-  for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "speaker_split", "audio_days", "audio_max_mb", "max_recording_min"]) data[field] = form.elements[field].value;
+  for (const field of ["name", "others", "keywords", "recordings_dir", "quality", "speaker_split", "audio_days", "audio_max_mb", "max_recording_min", "screen_min_s"]) data[field] = form.elements[field].value;
   data.update_check = form.elements.update_check.checked ? "on" : "off";
   data.model_auto_update = form.elements.model_auto_update.checked ? "on" : "off";
   data.diarize_others = form.elements.diarize_others.checked ? "on" : "off";
@@ -3992,6 +4001,11 @@ async function saveSettings(event) {
   if (data.max_recording_min.trim() && !/^\d+$/.test(data.max_recording_min.trim())) {
     showTab("general");
     showMessage("Bitte bei der Höchstdauer nur ganze Minuten eingeben oder das Feld leer lassen.");
+    return false;
+  }
+  if (!/^\d+$/.test(data.screen_min_s.trim())) {
+    showTab("ai");
+    showMessage("Bitte bei «Bilder für die KI» ganze Sekunden eingeben, z.B. 5.");
     return false;
   }
   for (const field of ["audio_days", "audio_max_mb"]) {

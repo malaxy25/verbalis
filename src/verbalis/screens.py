@@ -311,7 +311,8 @@ def read_png(path: Path) -> np.ndarray:
 
 CROP_FOLDER = "screens_crop"
 INDEX = "index.json"
-MIN_SHOWN_S = 3          # shown for less = an in-between state while clicking or scrolling: not chosen
+MIN_SHOWN_S = 5          # shown for less = an in-between state while clicking or scrolling: not chosen
+                         # (the default of the setting screen_min_s)
 PROFILE_SHARE = 0.2      # a row/column belongs to the content if it changes at least this share of the busiest one
 GAP_SHARE = 0.05         # gaps up to this share of the picture inside the content are bridged (a white slide area)
 PAD_SHARE = 0.01
@@ -367,8 +368,9 @@ def _cut(picture: np.ndarray, box) -> np.ndarray:
     return picture[int(box[0] * h):int(np.ceil(box[1] * h)), int(box[2] * w):int(np.ceil(box[3] * w))]
 
 
-def choose(times: list[float], greys: list[np.ndarray], end_s: float | None) -> list[str]:
-    """For each picture (its cut, coarse grey version): "" chosen, "short" (shown less than MIN_SHOWN_S) or the
+def choose(times: list[float], greys: list[np.ndarray], end_s: float | None,
+           min_shown_s: float = MIN_SHOWN_S) -> list[str]:
+    """For each picture (its cut, coarse grey version): "" chosen, "short" (shown less than min_shown_s) or the
     index of the earlier chosen picture it repeats (differs in less than CHANGED_SHARE), as text. If none would be
     chosen (a very short recording), the one shown longest is."""
     result, chosen = [], []
@@ -377,7 +379,7 @@ def choose(times: list[float], greys: list[np.ndarray], end_s: float | None) -> 
         same = next((j for j in chosen if changed_share(greys[j], grey) < CHANGED_SHARE), None)
         if same is not None:
             result.append(str(same))
-        elif until is not None and until - t < MIN_SHOWN_S:
+        elif until is not None and until - t < min_shown_s:
             result.append("short")
         else:
             result.append("")
@@ -388,9 +390,9 @@ def choose(times: list[float], greys: list[np.ndarray], end_s: float | None) -> 
     return result
 
 
-def prepare(folder: Path, end_s: float | None = None) -> bool:
+def prepare(folder: Path, end_s: float | None = None, min_shown_s: float = MIN_SHOWN_S) -> bool:
     """Cut and choose the snapshots for an AI (screens_crop/ and its index.json). Does nothing if that is up to
-    date with screens/; True if it was (re)done."""
+    date with screens/ and min_shown_s; True if it was (re)done."""
     import json
 
     import mss.tools
@@ -401,7 +403,8 @@ def prepare(folder: Path, end_s: float | None = None) -> bool:
         return False
     try:
         old = json.loads((target / INDEX).read_text(encoding="utf-8"))
-        if [p for _, p in pictures] == [e["source"] for e in old["pictures"]]:
+        same_pictures = [p for _, p in pictures] == [e["source"] for e in old["pictures"]]
+        if same_pictures and old.get("min_shown_s") == min_shown_s:
             return False
     except (OSError, ValueError, KeyError, TypeError):
         pass
@@ -410,7 +413,7 @@ def prepare(folder: Path, end_s: float | None = None) -> bool:
     for shape in {p.shape for p in loaded}:
         boxes[shape] = content_box([_grey(p) for p in loaded if p.shape == shape])
     cut = [_cut(p, boxes[p.shape]) for p in loaded]
-    verdicts = choose([t for t, _ in pictures], [_grey(c) for c in cut], end_s)
+    verdicts = choose([t for t, _ in pictures], [_grey(c) for c in cut], end_s, min_shown_s)
     target.mkdir(exist_ok=True)
     for stale in target.glob("*.png"):
         stale.unlink()
@@ -427,7 +430,7 @@ def prepare(folder: Path, end_s: float | None = None) -> bool:
         else:
             entry["same_as"] = pictures[int(verdict)][0]
         entries.append(entry)
-    (target / INDEX).write_text(json.dumps({"pictures": entries}, indent=1), encoding="utf-8")
+    (target / INDEX).write_text(json.dumps({"min_shown_s": min_shown_s, "pictures": entries}, indent=1), encoding="utf-8")
     log.info("Snapshots of %s prepared: %d of %d chosen", folder.name, sum("file" in e for e in entries), len(entries))
     return True
 

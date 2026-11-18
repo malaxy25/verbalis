@@ -313,3 +313,19 @@ def test_prepare_cuts_chooses_and_the_transcript_links_the_chosen(tmp_path):
     screens.save(tmp_path, 120, call_screen(6, 120))
     assert all(p.startswith("screens/") and not note for _, p, note in screens.for_transcript(tmp_path))
     assert screens.prepare(tmp_path, end_s=150) is True
+
+
+def test_minimum_shown_time_is_a_setting_and_a_change_prepares_anew(tmp_path):
+    from verbalis.settings import Settings
+
+    assert Settings().min_shown_s == 5
+    assert Settings.from_dict({"screen_min_s": "03"}).screen_min_s == "3"
+    for bad in ("", "abc", "-1", "9999"):
+        assert Settings.from_dict({"screen_min_s": bad}).screen_min_s == "5"
+    for t, slide in [(0, 1), (30, 2), (34, 3), (60, 4)]:   # slide 2 shown 4 s
+        screens.save(tmp_path, t, call_screen(slide, t))
+    screens.prepare(tmp_path, 90, min_shown_s=5)
+    assert [note for _, _, note in screens.for_transcript(tmp_path)][1] == "nur kurz gezeigt"
+    assert screens.prepare(tmp_path, 90, min_shown_s=5) is False
+    assert screens.prepare(tmp_path, 90, min_shown_s=3) is True
+    assert [note for _, _, note in screens.for_transcript(tmp_path)][1] == ""

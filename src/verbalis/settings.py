@@ -45,7 +45,8 @@ class Settings:
     microphone: str = ""              # empty = system default
     speakers: str = ""                # output device whose loopback is recorded
     screen: str = ""                  # screen snapshots while recording: "" off, "monitor:N", "window:<title>"
-    sidebar: str = "open"             # the recording list: "open" or "closed" (a narrow rail; Ctrl/Cmd+B)
+    screen_min_s: str = "5"           # pictures for the AI: only those shown at least N seconds (0 = all but repeats)
+    sidebar: str = "open"            # the recording list: "open" or "closed" (a narrow rail; Ctrl/Cmd+B)
     window_size: str = ""             # last window size, e.g. "1180x700"
     audio_days: str = "3"             # delete audio after N days; empty = never, 0 = right after transcription
     audio_max_mb: str = ""            # all audio at most N MB; empty = unlimited
@@ -80,6 +81,10 @@ class Settings:
     @property
     def max_recording_s(self) -> float | None:
         return int(self.max_recording_min) * 60 if self.max_recording_min and int(self.max_recording_min) else None
+
+    @property
+    def min_shown_s(self) -> int:
+        return int(self.screen_min_s)
 
     @property
     def prompts(self) -> list[dict]:
@@ -136,6 +141,9 @@ class Settings:
             s.sidebar = "open"
         if s.screen and not s.screen.startswith(("monitor:", "window:")):
             s.screen = ""
+        if not (s.screen_min_s.isdigit() and int(s.screen_min_s) <= 600):
+            s.screen_min_s = "5"
+        s.screen_min_s = str(int(s.screen_min_s))   # «05» → «5»
         if s.call_detection not in ("on", "off"):
             s.call_detection = "on"
         for name, default in (("audio_days", "3"), ("audio_max_mb", ""), ("max_recording_min", "120")):

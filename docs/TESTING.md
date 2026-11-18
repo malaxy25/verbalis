@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-392 tests in 39 files.
+393 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -443,7 +443,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_screens.py` (23)
+### `test_screens.py` (24)
 
 Screen snapshots during a recording (screens.py): which pictures are kept, their files, the Markdown links
 
@@ -470,6 +470,7 @@ Screen snapshots during a recording (screens.py): which pictures are kept, their
 - **A very short recording keeps its longest shown picture**
 - **Png written by save is read back**
 - **Prepare cuts chooses and the transcript links the chosen**
+- **Minimum shown time is a setting and a change prepares anew**
 
 ### `test_search.py` (7)
 

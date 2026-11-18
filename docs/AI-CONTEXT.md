@@ -40,7 +40,7 @@ src/verbalis/
   settings.py      ~/.verbalis/settings.json
   screens.py       screen snapshots while recording (monitor or Windows window, kept on change;
                    screens/HH-MM-SS.png; after the recording cut to the shared content and chosen
-                   (shown >= 3 s, no repeats) into screens_crop/, which transcript.md links for the AI)
+                   (shown >= screen_min_s, no repeats) into screens_crop/, which transcript.md links for the AI)
 packaging/         PyInstaller recipe, Inno Setup script, pinned build versions
 tools/             shortcut script, upstream model check, test catalogue, UI preview
 ```
