@@ -272,8 +272,8 @@ def test_content_box_is_where_the_pictures_differ():
 
 def test_short_and_repeated_pictures_are_not_chosen():
     a, b, c = (screens._grey(call_screen(n, n)) for n in range(3))
-    #              0 a     20 b (4 s)  24 c    40 a again  60 b (3 s until the end)
-    verdicts = screens.choose([0, 20, 24, 40, 60], [a, b, c, a.copy(), b], end_s=63)
+    #              0 a     20 b (2 s)  22 c    40 a again  60 b (2 s until the end)
+    verdicts = screens.choose([0, 20, 22, 40, 60], [a, b, c, a.copy(), b], end_s=62)
     assert verdicts == ["", "short", "", "0", "short"]
     assert screens.choose([0], [a], end_s=None) == [""]   # end unknown: kept
 
@@ -285,7 +285,7 @@ def test_two_white_slides_with_different_text_are_not_the_same():
 
 def test_a_very_short_recording_keeps_its_longest_shown_picture():
     a, b = screens._grey(call_screen(1, 0)), screens._grey(call_screen(2, 0))
-    assert screens.choose([0, 2], [a, b], end_s=8) == ["short", ""]
+    assert screens.choose([0, 1], [a, b], end_s=3) == ["short", ""]   # 1 s and 2 s: the 2 s one
 
 
 def test_png_written_by_save_is_read_back(tmp_path):

@@ -311,7 +311,7 @@ def read_png(path: Path) -> np.ndarray:
 
 CROP_FOLDER = "screens_crop"
 INDEX = "index.json"
-MIN_SHOWN_S = 10         # shown for less = an in-between state while clicking or scrolling: not chosen
+MIN_SHOWN_S = 3          # shown for less = an in-between state while clicking or scrolling: not chosen
 PROFILE_SHARE = 0.2      # a row/column belongs to the content if it changes at least this share of the busiest one
 GAP_SHARE = 0.05         # gaps up to this share of the picture inside the content are bridged (a white slide area)
 PAD_SHARE = 0.01
