@@ -22,13 +22,15 @@ def test_default_instructions_until_own_ones_are_saved():
 def test_copied_text_has_path_details_and_instruction(home):
     s = make_service()
     rid = finished_recording(s)
-    s.update_details(rid, {"title": "Konzept SLRG", "project": "SLRG", "participants": {"others": ["Mike"]}})
+    s.update_details(rid, {"title": "Konzept SLRG", "project": "SLRG", "participants": {"others": ["Mike"]},
+                           "notes": "Mike schickt die Folien nach."})
     s.save_settings({"ai_prompts": json.dumps([{"name": "Meeting", "text": "Lege es unter {projekt} ab."}])})
     text = s.ai_prompt(rid, 0)
     folder = home / "recordings" / rid
     assert text.startswith(f"Lies das Transkript {folder / 'transcript.md'}.\n")
     assert "Schnappschüsse" not in text   # no pictures in this recording
     assert "Aufnahme: Konzept SLRG (" in text and "Projekt: SLRG" in text and "Teilnehmende: Mike" in text
+    assert "Dauer: " in text and "Notizen dazu:\nMike schickt die Folien nach.\n" in text   # notes not lost
     assert text.endswith("Lege es unter SLRG ab.\n")
 
 
