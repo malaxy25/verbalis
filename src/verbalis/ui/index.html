@@ -79,12 +79,16 @@
   .search-button { display: grid; place-items: center; }
   .search-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
   /* The list can be folded to a narrow rail (Ctrl/Cmd+B): toggle, search, plan and settings stay reachable */
-  .sidebar-toggle, .rail-only { display: grid; place-items: center; position: relative; }
-  .sidebar-toggle svg, .rail-only svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2;
+  .sidebar-toggle, .rail-icon { display: grid; place-items: center; position: relative; }
+  .sidebar-toggle svg, .rail-icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2;
     stroke-linecap: round; stroke-linejoin: round; }
-  .rail-only { display: none; }
-  .rail-only.has-news::after { content: ""; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px;
+  .rail-icon svg { width: 16px; height: 16px; }
+  .rail-foot { display: none; }
+  .rail-icon.has-news::after { content: ""; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px;
     border-radius: 50%; background: var(--limmat); }
+  body.sidebar-collapsed .rail-foot { display: flex; flex-direction: column; align-items: center; gap: 8px;
+    margin-top: auto; padding: 12px 0 16px; }
+  .rail-version { padding: 2px 0 0; font-size: 11px; justify-self: auto; }
   body.sidebar-collapsed { grid-template-columns: 52px 1fr; }
   body.sidebar-collapsed .history h1, body.sidebar-collapsed .history .list,
   body.sidebar-collapsed .history footer { display: none; }
@@ -92,7 +96,6 @@
   body.sidebar-collapsed .head-buttons { flex-direction: column; gap: 8px; }
   body.sidebar-collapsed .sidebar-toggle { order: -1; }
   body.sidebar-collapsed .sidebar-toggle svg { transform: scaleX(-1); }
-  body.sidebar-collapsed .rail-only { display: grid; }
   .search-button[aria-pressed="true"] { border-color: var(--ink); background: var(--surface-2); }
 
   /* ---------- Search ---------- */
@@ -666,6 +669,7 @@
     body.sidebar-collapsed { grid-template-columns: 1fr; }
     body.sidebar-collapsed .history-head { justify-content: flex-end; padding: 8px 14px; }
     body.sidebar-collapsed .head-buttons { flex-direction: row; }
+    body.sidebar-collapsed .rail-foot { flex-direction: row; margin: 0; padding: 0 14px 8px; justify-content: flex-end; }
     .paragraph { grid-template-columns: 1fr; }
     .asides { grid-column: 1; }
   }
@@ -706,7 +710,6 @@
       <button type="button" class="plan-button search-button" id="btn-search" title="Suchen (Ctrl+F) – im Transkript oder in allen Aufnahmen" aria-label="Suchen" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.8" cy="6.8" r="4.6"/><path d="M10.3 10.3 14 14"/></svg></button>
       <button type="button" class="plan-button" id="btn-plan" title="Aufnahme planen: Name, Projekt und Teilnehmende schon vorher erfassen" aria-label="Aufnahme planen">+</button>
       <button type="button" class="plan-button sidebar-toggle" id="btn-sidebar" aria-expanded="true" aria-controls="list"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8 10 12.5"/></svg></button>
-      <button type="button" class="plan-button rail-only" id="btn-settings-rail" title="Einstellungen" aria-label="Einstellungen"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3"/><path d="M8 1.6v2M8 12.4v2M1.6 8h2M12.4 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4"/></svg></button>
     </div>
   </div>
   <ol class="list" id="list"></ol>
@@ -717,6 +720,11 @@
     <button type="button" id="btn-folder">Aufnahmeordner öffnen</button>
     <a href="#" class="version" id="version" title="Was ist neu? Versionshinweise auf GitHub öffnen"></a>
   </footer>
+  <div class="rail-foot">   <!-- only with the list folded: the footer as icons -->
+    <button type="button" class="plan-button rail-icon" id="btn-folder-rail" title="Aufnahmeordner öffnen" aria-label="Aufnahmeordner öffnen"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 4h4.4l1.5 1.7h6.5v7H1.8z"/></svg></button>
+    <button type="button" class="plan-button rail-icon" id="btn-settings-rail" title="Einstellungen" aria-label="Einstellungen"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" stroke-width="2.6" stroke-dasharray="2.2 2.2" stroke-linecap="butt"/><circle cx="8" cy="8" r="4.1" stroke-width="1.6"/><circle cx="8" cy="8" r="1.5" stroke-width="1.4"/></svg></button>
+    <a href="#" class="version rail-version" id="version-rail" title="Was ist neu? Versionshinweise auf GitHub öffnen"></a>
+  </div>
 </aside>
 
 <main>
@@ -4299,6 +4307,8 @@ async function init() {
   $("chk-consent").addEventListener("change", updateRecordButton);
   $("btn-settings").addEventListener("click", openSettings);
   $("btn-folder").addEventListener("click", () => call("open_folder", "").catch((e) => showMessage(e.message)));
+  $("btn-folder-rail").addEventListener("click", () => $("btn-folder").click());
+  $("version-rail").addEventListener("click", (event) => { event.preventDefault(); $("version").click(); });
   for (const tab of TABS) $(`tab-${tab}`).addEventListener("click", () => showTab(tab));
   $("dlg-settings").addEventListener("keydown", (event) => {
     if (event.key === "Escape") {   // Escape asks first if something changed (instead of closing right away)
@@ -4387,7 +4397,9 @@ async function init() {
 
   try {
     state.settings = await call("settings");
-    $("version").textContent = "Version " + (await call("version"));
+    const version = await call("version");
+    $("version").textContent = "Version " + version;
+    $("version-rail").textContent = version;
   } catch (e) { showMessage(e.message); }
   setSidebar((state.settings || {}).sidebar === "closed", false);
   await loadDevices();
