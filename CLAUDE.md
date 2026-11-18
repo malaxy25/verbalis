@@ -23,7 +23,8 @@ holds the agreed plan for the next version, if there is one).
   For a browser check with the Chrome tools serve it (`python -m http.server 8765`) – `file://` is refused.
   Keep `tools/ui-preview/mock.js` in step when the Python API changes.
 - The Bash tool's heredocs swallow backslashes (`\n` becomes a line break, `C:\x` breaks): put strings with
-  backslashes into files with the Edit/Write tool, not via `python - <<'EOF'` or `sed`.
+  backslashes into files with the Edit/Write tool, not via `python - <<'EOF'` or `sed` – this includes
+  Python line continuations (`\` at line end) and regexes (`\d`) inside replacement strings.
 
 ## Rules
 

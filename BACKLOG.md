@@ -6,7 +6,7 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## Current state (18 Nov 2026)
 
-- **Last session:** three features for 0.7.46, committed locally (c591233 … HEAD, 15 commits), **not pushed**,
+- **Last session:** features for 0.7.46, committed locally (c591233 … HEAD, 19 commits), **not pushed**,
   no version raised. (1) Screen snapshots while recording (`screens.py`): none / monitor / one window (Windows);
   kept on a clear change once the screen is still; moving areas (Teams video tiles) are learned and ignored;
   `screens/HH-MM-SS.png`, linked in `transcript.md`. (2) «Für KI kopieren: <Anweisung>» in the transcript menu
@@ -21,15 +21,17 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
   automatically (not after «Keine» by hand). Devices and windows reload when Verbalis gets the focus back; reloading
   keeps the choice on screen (before, «Geräte neu laden» reset an unsaved microphone choice to the saved one).
   (5) Pictures prepared for the AI (`screens.prepare`, after the recording and at «Für KI kopieren»): cut to where
-  the pictures differ (no OCR: bar, tiles, taskbar barely change), chosen = shown >= N s (setting `screen_min_s`, Settings → KI, default 5; on the 18 Nov recording 10 s → 65, 5 s → 90, 3 s → 100 of 123) and not a repeat (pixel
-  compare), into `screens_crop/` + `index.json`; transcript.md links those, names the others as text. No picture
+  the pictures differ (no OCR: bar, tiles, taskbar barely change), chosen = shown >= N s (setting
+  `screen_min_s`, Settings → KI, default 5; on the 18 Nov recording 10 s → 65, 5 s → 90, 3 s → 100 of 123) and
+  not a repeat (pixel compare; a coarse hash took different white slides for one), into `screens_crop/` + `index.json`; transcript.md links those, names the others as text. No picture
   limit (Andrea), no downscaling (Claude scales > 1568 px itself, small UI text stays legible). Tested on the
   Teams recording of 18 Nov: 4 s for 123 pictures. Andrea's own script (Tocco-Brain `screens_prep.py`, Windows
   OCR + fixed percentages) replaced by this. Fixed: a picture taken before the recorder ran got the PC uptime as
   time («124-26-38.png»). Defaults got the Swiss German / decisions / names lines; vault paths stay in Andrea's
   own settings.
-- **Next step:** Andrea tests all three in the app, the snapshots in a real Teams call (window «Meeting |
-  Microsoft Teams»): missing pictures for small changes? near-duplicates? window black/cut off? Then tune, write
+- **Next step:** Andrea tests in the app: snapshots in a real Teams call (window «Meeting | Microsoft Teams»),
+  «Für KI kopieren» on the 18 Nov recording (first copy prepares ~4 s; Andrea deletes the stray
+  `124-26-38.png` there himself), the new field in Settings → KI (not looked at in a browser yet). Then tune, write
   CHANGELOG, raise to 0.7.46 – push only when Andrea says so. Mac: test the rail/Cmd+B and snapshots there;
   still open from 0.7.45: `caffeinate`, «heraustrennen».
 - **Open questions for Andrea:** none
