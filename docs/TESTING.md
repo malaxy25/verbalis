@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-384 tests in 39 files.
+385 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -443,7 +443,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_screens.py` (15)
+### `test_screens.py` (16)
 
 Screen snapshots during a recording (screens.py): which pictures are kept, their files, the Markdown links
 
@@ -462,6 +462,7 @@ Screen snapshots during a recording (screens.py): which pictures are kept, their
 - **Recording with snapshots links them in the transcript**
 - **Wrong screen choice starts no recording**
 - **Unknown screen setting falls back to none**
+- **Meeting windows are listed apart with calls first** – Bug 18 Nov 2026: the Teams call window was hard to find among all windows (and Teams' main window looks
 
 ### `test_search.py` (7)
 

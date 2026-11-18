@@ -49,9 +49,52 @@ _NAME = re.compile(r"^(\d+)-(\d\d)-(\d\d)(?:_\d+)?\.png$")
 
 # ------------------------------------------------------------------ what can be captured
 
+# Meeting windows, recognised by their title. The new Teams names every window «… | Microsoft Teams»; its main
+# window starts with the section shown (Chat, Calendar …), a call window with the meeting's name or «Meeting».
+TEAMS = "microsoft teams"
+TEAMS_SECTIONS = {"activity", "aktivität", "chat", "teams", "calendar", "kalender", "calls", "anrufe", "apps",
+                  "onedrive", "files", "dateien", "community", "communities", "copilot", "people", "personen",
+                  "assignments", "aufgaben", "planner", "approvals", "genehmigungen", "settings", "einstellungen",
+                  "notifications", "benachrichtigungen", "home", "start"}
+_MEET = re.compile(r"^Meet\s+[-–]\s")   # Google Meet in a browser: «Meet – abc-defg-hij - Google Chrome»
+_APPS = ("zoom", "webex", "3cx", "skype", "jitsi", "whereby", "gotomeeting", "goto meeting")
+
+
+def meeting_kind(title: str) -> str | None:
+    """«call» for a window that shows a running call, «app» for another window of a meeting program, else None."""
+    low = title.lower()
+    if low.endswith(TEAMS):
+        first = low.split("|")[0].strip()
+        return "app" if first in TEAMS_SECTIONS or first == TEAMS else "call"
+    if _MEET.match(title):
+        return "call"
+    if low.startswith(("zoom meeting", "zoom webinar")) or "jitsi meet" in low:
+        return "call"
+    if any(app in low for app in _APPS):
+        return "app"
+    return None
+
+
+def group_windows(titles: list[str]) -> dict:
+    """Window titles as choices: meeting windows (calls first, otherwise in the given order) and the others."""
+    meetings, windows = [], []
+    for title in titles:
+        kind = meeting_kind(title)
+        entry = {"value": WINDOW + title, "label": title}
+        if kind:
+            meetings.append({**entry, "call": kind == "call"})
+        else:
+            windows.append(entry)
+    meetings.sort(key=lambda m: not m["call"])   # stable: keeps the front-most-first order within each kind
+    return {"meetings": meetings, "windows": windows}
+
+
 def sources() -> dict:
-    """The monitors and (Windows) the open windows, for the choice in the recording view."""
-    result = {"monitors": [], "windows": [], "windows_supported": sys.platform == "win32"}
+    """The monitors and (Windows) the open windows, for the choice in the recording view.
+
+    Meeting windows are listed apart (`meetings`, running calls first, each with `call`), the rest in `windows`.
+    """
+    result = {"monitors": [], "meetings": [], "windows": [], "windows_supported": sys.platform == "win32"}
     try:
         import mss
 
@@ -65,7 +108,7 @@ def sources() -> dict:
         log.warning("Monitors could not be listed: %s", e)
     if sys.platform == "win32":
         try:
-            result["windows"] = [{"value": WINDOW + title, "label": title} for _, title in _win_windows()]
+            result.update(group_windows([title for _, title in _win_windows()]))
         except Exception as e:
             log.warning("Windows could not be listed: %s", e)
     return result

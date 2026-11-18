@@ -2978,8 +2978,10 @@ function deleteRecordingButton(id, label = "Aufnahme löschen") {
 async function loadDevices() {
   try {
     const g = await call("devices");
-    fillOptions($("sel-microphone"), g.microphones, g.default_microphone, state.settings.microphone);
-    fillOptions($("sel-speakers"), g.speakers, g.default_speakers, state.settings.speakers, true);
+    // once filled, keep what is chosen on screen (saved only when a recording starts)
+    const current = (id, saved) => ($(id).options.length ? $(id).value : saved);
+    fillOptions($("sel-microphone"), g.microphones, g.default_microphone, current("sel-microphone", state.settings.microphone));
+    fillOptions($("sel-speakers"), g.speakers, g.default_speakers, current("sel-speakers", state.settings.speakers), true);
     await loadScreenSources();
     const hint = $("device-hint");
     const notes = [...(g.problems || [])];
@@ -2997,21 +2999,36 @@ async function loadDevices() {
   }
 }
 
-/* Choice for the screen snapshots: none, a monitor or (Windows) an open window. */
+/* Choice for the screen snapshots: none, a monitor or (Windows) an open window – meeting windows (running calls
+   first) apart from the others. If the choice so far is gone or «Keine» and exactly one call is open, that call
+   is chosen – unless «Keine» was picked by hand since the app started. */
 async function loadScreenSources() {
   const select = $("sel-screen");
-  let g = { monitors: [], windows: [] };
+  let g = { monitors: [], meetings: [], windows: [] };
   try { g = await call("screen_sources"); } catch (_) { /* no display: only «Keine» */ }
-  const chosen = select.value || state.settings.screen || "";
+  const chosen = select.options.length ? select.value : state.settings.screen || "";
+  const short = (label) => label.length > 60 ? label.slice(0, 57) + " …" : label;
   select.replaceChildren(element("option", { value: "" }, "Keine"));
-  for (const m of g.monitors) select.append(element("option", { value: m.value }, m.label));
-  if (g.windows.length) {
-    const group = element("optgroup", { label: "Nur ein Fenster" });
-    for (const w of g.windows) group.append(element("option", { value: w.value }, w.label.length > 60 ? w.label.slice(0, 57) + " …" : w.label));
+  const groups = [["Ganzer Bildschirm", g.monitors], ["Meetings", g.meetings || []], ["Weitere Fenster", g.windows]];
+  for (const [label, entries] of groups) {
+    if (!entries.length) continue;
+    const group = element("optgroup", { label });
+    for (const e of entries) group.append(element("option", { value: e.value, title: e.label }, short(e.label)));
     select.append(group);
   }
   const values = [...select.options].map((o) => o.value);
-  select.value = values.includes(chosen) ? chosen : "";
+  const calls = (g.meetings || []).filter((m) => m.call);
+  let value = values.includes(chosen) ? chosen : "";
+  if (!value && !state.screenNoneByHand && calls.length === 1) value = calls[0].value;
+  select.value = value;
+}
+
+/* Lists are read anew when Verbalis gets the focus back (a call or headset started meanwhile), at most every 2 s. */
+let devicesLoadedAt = 0;
+async function refreshDevicesOnFocus() {
+  if (state.running || Date.now() - devicesLoadedAt < 2000) return;
+  devicesLoadedAt = Date.now();
+  await loadDevices();
 }
 
 const CUSTOM = "__custom__";
@@ -4435,6 +4452,8 @@ async function init() {
     window.addEventListener(type, () => { lastActivity = Date.now(); }, { passive: true });
   }
   $("btn-reload-devices").addEventListener("click", reloadDevices);
+  window.addEventListener("focus", refreshDevicesOnFocus);
+  $("sel-screen").addEventListener("change", () => { state.screenNoneByHand = $("sel-screen").value === ""; });
   // No browser context menu; while correcting, the app shows its own spelling menu
   document.addEventListener("contextmenu", (event) => {
     if (!event.target.closest("input[type=text], textarea")) event.preventDefault();
@@ -4479,6 +4498,7 @@ async function init() {
     $("version-rail").textContent = version;
   } catch (e) { showMessage(e.message); }
   setSidebar((state.settings || {}).sidebar === "closed", false);
+  devicesLoadedAt = Date.now();
   await loadDevices();
   await loadList();
   await renderContent(true);

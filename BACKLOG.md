@@ -16,6 +16,10 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
   folds to a narrow rail (button «‹», Ctrl/Cmd+B), remembered in setting `sidebar`. Rail: ›, search, +, ☰ (list
   floats over the content until a recording is chosen; red dot recording, blue transcribing), folder, gear,
   version. Ctrl/Cmd+↑/↓ = newer/older recording in list order (`listOrder()`), not while typing.
+  (4) Snapshot choice grouped: «Ganzer Bildschirm» / «Meetings» (Teams/Zoom/Webex/Meet/3CX by title, running calls
+  first; `screens.meeting_kind`) / «Weitere Fenster»; exactly one call open and choice gone or «Keine» → chosen
+  automatically (not after «Keine» by hand). Devices and windows reload when Verbalis gets the focus back; reloading
+  keeps the choice on screen (before, «Geräte neu laden» reset an unsaved microphone choice to the saved one).
 - **Next step:** Andrea tests all three in the app, the snapshots in a real Teams call (window «Meeting |
   Microsoft Teams»): missing pictures for small changes? near-duplicates? window black/cut off? Then tune, write
   CHANGELOG, raise to 0.7.46 – push only when Andrea says so. Mac: test the rail/Cmd+B and snapshots there;

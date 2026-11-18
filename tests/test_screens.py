@@ -196,3 +196,23 @@ def test_unknown_screen_setting_falls_back_to_none():
 
     assert Settings.from_dict({"screen": "irgendwas"}).screen == ""
     assert Settings.from_dict({"screen": "window:Teams"}).screen == "window:Teams"
+
+
+def test_meeting_windows_are_listed_apart_with_calls_first():
+    """Bug 18 Nov 2026: the Teams call window was hard to find among all windows (and Teams' main window looks
+    alike) – meeting windows form their own group, running calls first."""
+    from verbalis.screens import group_windows, meeting_kind
+
+    titles = ["Verbalis", "Calendar | Tocco AG | a@b.ch | Microsoft Teams", "3CX (PWA)",
+              "Interne Vorstellung: Release 3.16 | Tocco AG | a@b.ch | Microsoft Teams", "Posteingang – Outlook",
+              "Meet – abc-defg-hij - Google Chrome", "Zoom Meeting", "Zoom Workplace"]
+    g = group_windows(titles)
+    assert [m["label"] for m in g["meetings"]] == [
+        "Interne Vorstellung: Release 3.16 | Tocco AG | a@b.ch | Microsoft Teams",
+        "Meet – abc-defg-hij - Google Chrome", "Zoom Meeting",
+        "Calendar | Tocco AG | a@b.ch | Microsoft Teams", "3CX (PWA)", "Zoom Workplace"]
+    assert [m["call"] for m in g["meetings"]] == [True, True, True, False, False, False]
+    assert [w["label"] for w in g["windows"]] == ["Verbalis", "Posteingang – Outlook"]
+    assert meeting_kind("Chat | Anna | Microsoft Teams") == "app"
+    assert meeting_kind("Meeting | Microsoft Teams") == "call"
+    assert meeting_kind("Meeting-Notizen.docx - Word") is None
