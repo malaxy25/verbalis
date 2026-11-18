@@ -6,23 +6,23 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 
 ## Current state (18 Nov 2026)
 
-- **Last session:** screen snapshots while recording (`screens.py`, committed locally as c591233, **not pushed**,
-  no version raised). Choice next to the audio devices: none / whole monitor / one window (Windows, PrintWindow).
-  Kept when the screen changed (≥ 3 % of the steady pixels) and is still for 2 s; areas that keep moving (Teams
-  video tiles) are learned and ignored. `screens/HH-MM-SS.png`, linked in `transcript.md` for Claude Code.
-  Purpose: Claude relates comments to the shown slide/section (concept reviews, trainings).
-  Also «Für KI kopieren: <Anweisung>» in the transcript menu «⋯» (path + details + instruction; instructions in
-  Settings → KI, defaults Meeting/Schulung; named «KI», not Claude, on purpose). Commit 24e97cf, not pushed.
-- **Next step:** Andrea tests it in a real Teams call (window «Meeting | Microsoft Teams»): missing pictures for
-  small changes? too many near-duplicates? Teams window black/cut off? Then tune and release as 0.7.46 (version,
-  CHANGELOG, push only when Andrea says so). Still to check: 0.7.45 on the Mac (`caffeinate`, «heraustrennen»).
+- **Last session:** two features for 0.7.46, committed locally (c591233 … 0b37d12), **not pushed**, no version
+  raised. (1) Screen snapshots while recording (`screens.py`): none / monitor / one window (Windows); kept on a
+  clear change once the screen is still; moving areas (Teams video tiles) are learned and ignored;
+  `screens/HH-MM-SS.png`, linked in `transcript.md`. (2) «Für KI kopieren: <Anweisung>» in the transcript menu
+  «⋯»: path, snapshots note, title, date, duration, project, participants, notes + instruction. Instructions in
+  Settings → KI (defaults Meeting/Schulung, «Standard wiederherstellen» only there). Named «KI», not Claude.
+- **Next step:** Andrea tests both in a real Teams call (window «Meeting | Microsoft Teams»): missing pictures for
+  small changes? near-duplicates? Teams window black/cut off? Then tune, write CHANGELOG, raise to 0.7.46 –
+  push only when Andrea says so. Still to check: 0.7.45 on the Mac (`caffeinate`, «heraustrennen»).
 - **Open questions for Andrea:** none
 - **Prerequisites / start check:** restart Verbalis (start menu runs the repo `.venv`; `mss` is installed there).
-- **Decided:** no video recording (Claude reads no video, big files, CPU load during calls); Markdown + picture
-  folder instead of PDF. Text recognition (OCR) on the pictures later, only for searching – see below.
+- **Decided:** no video recording (AI reads no video, big files, CPU load); Markdown + picture folder, not PDF;
+  reset button only for the KI instructions (Andrea: not needed elsewhere).
+- **Later:** OCR on the snapshots so Ctrl+F finds slide text (medium effort); snapshots on the Mac
+  (ScreenCaptureKit permission) untested, windows only on Windows. Test helper `finished_recording` (5 s wait)
+  sometimes times out on the first cold run after a code change – raise the timeout if it shows up in CI.
 - **Idea, not decided:** diarization already during a recording – parked: clustering needs the whole recording.
-- **Later:** OCR on the snapshots so Ctrl+F finds slide text (Windows/Mac have built-in OCR, Linux not; medium
-  effort). Screen snapshots on the Mac (ScreenCaptureKit permission) and windows on Mac/Linux untested/missing.
 
 ## 0.7.34 – next
 

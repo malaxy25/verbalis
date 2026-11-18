@@ -22,6 +22,8 @@ holds the agreed plan for the next version, if there is one).
   `tools/ui-preview/preview.html#transcript` (other scenarios listed in `docs/TESTING.md`).
   For a browser check with the Chrome tools serve it (`python -m http.server 8765`) – `file://` is refused.
   Keep `tools/ui-preview/mock.js` in step when the Python API changes.
+- The Bash tool's heredocs swallow backslashes (`\n` becomes a line break, `C:\x` breaks): put strings with
+  backslashes into files with the Edit/Write tool, not via `python - <<'EOF'` or `sed`.
 
 ## Rules
 
