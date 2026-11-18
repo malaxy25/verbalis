@@ -14,6 +14,7 @@ dependencies = [
     "pywebview>=5",
     "spylls>=0.1.7",
     "sherpa-onnx>=1.12",          # speaker diarization (Apache 2.0)
+    "mss>=9",                     # screen snapshots while recording (MIT, pure Python)
     "certifi",                    # CA certificates for HTTPS in the Mac app (its Python has none)
     "truststore; sys_platform == 'win32'",   # HTTPS checked by Windows itself (company roots, roots loaded on demand)
 ]

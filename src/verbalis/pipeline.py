@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from . import __version__
+from .screens import listing as screen_listing
 from .transcript import merge, save, segment_dict, sentences
 
 if TYPE_CHECKING:
@@ -570,7 +571,7 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
     if problems:
         h["Sprecher"] = " ".join(problems)
     path = save(folder, "transcript", paragraphs, meta.get("title") or default_title(recording_start(folder)), h,
-                tracks=names)
+                tracks=names, screens=screen_listing(folder))
     (folder / "transcript_original.json").unlink(missing_ok=True)  # older edits are obsolete
     (folder / PARTIAL).unlink(missing_ok=True)                     # done: no need to resume
     return path, compute, recording

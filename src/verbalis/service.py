@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import __version__, awake, feedback, hardware, pipeline, search, updates
+from . import __version__, awake, feedback, hardware, pipeline, screens, search, updates
 from .corrections import CorrectionList, suggestions
 from .settings import Settings
 from .spelling import Speller
@@ -112,6 +112,7 @@ class Service:
         monitor_factory: Callable | None = None,
         detect_calls: Callable | None = None,
         keep_awake: "awake.KeepAwake | None" = None,
+        screen_factory: Callable | None = None,
     ):
         self._lock = threading.RLock()
         self._s = settings or Settings.load()
@@ -120,6 +121,7 @@ class Service:
         self._select_devices = select_devices or self._default_select
         self._list_devices = list_devices or self._default_list
         self._monitor_factory = monitor_factory or self._default_monitor
+        self._screen_factory = screen_factory or screens.ScreenCapture   # (folder, target, position)
         self._monitor = None              # level meters before a recording
         self._monitor_key: tuple | None = None
         self._monitor_asked = 0.0         # when the UI last asked for levels (monotonic)
@@ -859,8 +861,9 @@ class Service:
     # ------------------------------------------------------------ recording
 
     def start_recording(self, microphone: str = "", speakers: str = "", consent: bool = False,
-                        planned_id: str = "") -> str:
-        """planned_id: record into this planned recording (its details stay)."""
+                        planned_id: str = "", screen: str = "") -> str:
+        """planned_id: record into this planned recording (its details stay).
+        screen: take screen snapshots of "monitor:N" or "window:<title>" (screens.py); "" = none."""
         with self._lock:
             if self._rec is not None:
                 raise RuntimeError("Es läuft bereits eine Aufnahme.")
@@ -893,9 +896,18 @@ class Service:
             if only_microphone:
                 known["only_microphone"] = True
             rec = self._recorder_factory(devices.microphone, devices.loopback, folder)
+            capture = None
+            if screen:   # a closed window is reported before anything is recorded
+                capture = self._screen_factory(folder, screen, lambda: None if rec.paused else rec.active_seconds())
+                capture.start()
             # consent and start are on disk before the first sample – they survive a crash
-            pipeline.start_meta(folder, start, getattr(rec, "samplerate", 48_000), consent, names, known)
-            rec.start()
+            try:
+                pipeline.start_meta(folder, start, getattr(rec, "samplerate", 48_000), consent, names, known)
+                rec.start()
+            except BaseException:
+                if capture is not None:
+                    capture.stop()
+                raise
 
             self._rec = rec
             self._recording_error = None
@@ -905,10 +917,10 @@ class Service:
                               "devices": names, "limit_s": self._s.max_recording_s,
                               # a recognised call: ask to stop the recording when it is over
                               "call_app": self._call["apps"][0] if self._call else None,
-                              "call_seen": time.monotonic()}
+                              "call_seen": time.monotonic(), "screens": capture}
             # Remember the chosen devices for next time
-            if (microphone, speakers) != (self._s.microphone, self._s.speakers):
-                self.save_settings({"microphone": microphone, "speakers": speakers})
+            if (microphone, speakers, screen) != (self._s.microphone, self._s.speakers, self._s.screen):
+                self.save_settings({"microphone": microphone, "speakers": speakers, "screen": screen})
             return folder.name
 
     # ------------------------------------------------------------ transcribing while recording (live.py)
@@ -1034,6 +1046,8 @@ class Service:
 
     def _finish(self, rec, info: dict, reason: str | None = None) -> str:
         """Stop the recorder and record honestly in meta.json how the recording ended."""
+        if info.get("screens") is not None:
+            info["screens"].stop()
         ended = rec.stop()
         errors = [str(e) or type(e).__name__ for e in rec.errors]   # readable, not repr()
         if not ended:
@@ -1582,7 +1596,8 @@ class Service:
         (folder / "transcript.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         paragraphs = [segment_from_dict(s) for s in data["segments"]]
         (folder / "transcript.md").write_text(
-            to_markdown(paragraphs, data.get("title") or f"Transkript {folder.name}", data.get("header", {})),
+            to_markdown(paragraphs, data.get("title") or f"Transkript {folder.name}", data.get("header", {}),
+                        screens.listing(folder)),
             encoding="utf-8")
 
     def edit_transcript(self, recording_id: str, index: int, text: str) -> dict:
@@ -2354,7 +2369,27 @@ class Service:
             seg.pop("words", None)   # only needed here in Python (splitting), not in the window
         # «trennen» in the speaker box: voices with other people marked or moved out of them (0.7.45)
         data["split_with"] = split_candidates(data, pipeline.read_meta(folder).get("speaker_marks") or [])
+        data["screens"] = [{"t": t, "file": path} for t, path in screens.listing(folder)]
         return data
+
+    def screen_sources(self) -> dict:
+        """Monitors and windows for the snapshot choice in the recording view."""
+        return screens.sources()
+
+    def screen_image(self, recording_id: str, file: str, thumb: bool = False) -> str:
+        """A snapshot as data URL for the transcript view (thumb: the small copy)."""
+        import base64
+
+        path = screens.image_path(self._path(recording_id), file, thumb)
+        return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+
+    def open_screen_image(self, recording_id: str, file: str) -> None:
+        """Open a snapshot in the system's image viewer (zoom, full size)."""
+        path = screens.image_path(self._path(recording_id), file)
+        if sys.platform == "win32":
+            os.startfile(path)   # noqa: S606 – a file of this recording
+        else:
+            subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(path)])
 
     def search(self, query: str) -> list[dict]:
         """All recordings with a paragraph containing every word of `query` (or with them in the title, project
@@ -2447,6 +2482,8 @@ class Service:
                     "others_device": info["devices"]["others"],
                     "only_microphone": others is None,
                     "live": self._live_status(info["id"]),
+                    "screens": {"count": info["screens"].count, "problem": info["screens"].problem}
+                    if info.get("screens") is not None else None,
                     "call_over": info.get("call_app") if info.get("call_over")
                     and not info.get("call_over_dismissed") else None,
                 }

@@ -21,6 +21,7 @@ class Settings:
     recordings_dir: str = ""          # empty = ~/.verbalis/recordings
     microphone: str = ""              # empty = system default
     speakers: str = ""                # output device whose loopback is recorded
+    screen: str = ""                  # screen snapshots while recording: "" off, "monitor:N", "window:<title>"
     window_size: str = ""             # last window size, e.g. "1180x700"
     audio_days: str = "3"             # delete audio after N days; empty = never, 0 = right after transcription
     audio_max_mb: str = ""            # all audio at most N MB; empty = unlimited
@@ -99,6 +100,8 @@ class Settings:
             s.live_transcribe = "off"
         if s.keep_display_on not in ("on", "off"):
             s.keep_display_on = "on"
+        if s.screen and not s.screen.startswith(("monitor:", "window:")):
+            s.screen = ""
         if s.call_detection not in ("on", "off"):
             s.call_detection = "on"
         for name, default in (("audio_days", "3"), ("audio_max_mb", ""), ("max_recording_min", "120")):

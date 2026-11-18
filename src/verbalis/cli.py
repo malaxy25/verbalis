@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import __version__
+from .screens import listing as screen_listing
 
 
 def _level_bar(rms: float, width: int = 20) -> str:
@@ -255,7 +256,8 @@ def cmd_transcribe(args) -> int:
     h = header(folder, args.model, compute, duration)
     if n := apply_corrections(paragraphs, CorrectionList.load()):
         h["Korrekturen"] = f"{n} automatisch ersetzt"
-    md = save(folder, "transcript", paragraphs, f"Transkript {folder.name}", h, tracks=names)
+    md = save(folder, "transcript", paragraphs, f"Transkript {folder.name}", h, tracks=names,
+              screens=screen_listing(folder))
     print(f"\nGespeichert: {md}  ({compute / max(duration, 1e-9):.2f}× Echtzeit)")
     return 0
 

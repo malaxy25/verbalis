@@ -61,8 +61,18 @@ class Api:
     def models(self):
         return self._call(self._s.models)
 
-    def start_recording(self, microphone, speakers, consent, planned_id=""):
-        return self._call(self._s.start_recording, microphone, speakers, bool(consent), planned_id or "")
+    def start_recording(self, microphone, speakers, consent, planned_id="", screen=""):
+        return self._call(self._s.start_recording, microphone, speakers, bool(consent), planned_id or "",
+                          screen or "")
+
+    def screen_sources(self):
+        return self._call(self._s.screen_sources)
+
+    def screen_image(self, recording_id, file, thumb=False):
+        return self._call(self._s.screen_image, recording_id, file, bool(thumb))
+
+    def open_screen_image(self, recording_id, file):
+        return self._call(self._s.open_screen_image, recording_id, file)
 
     def plan_recording(self, data=None):
         return self._call(self._s.plan_recording, data)

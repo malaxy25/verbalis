@@ -389,6 +389,13 @@
   .link-button:disabled { opacity: .5; cursor: default; }
   .device-hint { flex-basis: 100%; color: var(--amber); font-size: 13px; }
   .device-hint[hidden] { display: none; }
+  .screen-status { flex-basis: 100%; color: var(--muted); font-size: 13px; }
+  .screen-status.problem { color: var(--amber); }
+  .screen-status[hidden] { display: none; }
+  .paragraph.screen-shot .who { color: var(--muted); font-weight: 600; }
+  .screen-shot button.shot { padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2);
+    cursor: zoom-in; display: block; max-width: 100%; }
+  .screen-shot img { display: block; max-width: min(100%, 480px); min-height: 60px; border-radius: 6px; }
 
   /* Log */
   .log-body { display: grid; gap: 12px; align-content: start; }
@@ -715,8 +722,12 @@
       <label>Systemton kommt über
         <select id="sel-speakers"></select>
       </label>
+      <label title="Schnappschüsse, wenn sich das Bild ändert (neue Folie, anderer Abschnitt) – im Transkript an der richtigen Stelle">Bildschirm-Schnappschüsse
+        <select id="sel-screen"></select>
+      </label>
       <button type="button" class="link-button" id="btn-reload-devices">Geräte neu laden</button>
       <small class="device-hint" id="device-hint" hidden></small>
+      <small class="screen-status" id="screen-status" role="status" hidden></small>
     </div>
 
     <label class="consent">
@@ -1611,6 +1622,7 @@ async function renderTranscript(a) {
     body.append(element("p", { class: "empty" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
   }
   renderSegments(body, a.id, t.segments, t.speakers, meName, true, !!a.audio, a.participants || {});
+  placeScreens(body, a.id, t.segments, t.screens || []);
   $("content").replaceChildren(...[header, speakersPanel(a, t), body].filter(Boolean));
 }
 
@@ -1664,6 +1676,31 @@ function renderSegments(body, id, segments, speakerMap, meName, editable, playab
     }
     body.append(paragraph);
   });
+}
+
+/* Screen snapshots (screens.py) between the paragraphs: each before the first paragraph starting at or after it.
+   The small pictures load when they scroll into view; a click opens the full picture in the image viewer. */
+function placeScreens(body, id, segments, screens) {
+  if (!screens.length) return;
+  const observer = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      observer.unobserve(e.target);
+      call("screen_image", id, e.target.dataset.file, true).then((url) => { e.target.src = url; }).catch(() => {});
+    }
+  }, { rootMargin: "400px" });
+  const rows = [...body.querySelectorAll(":scope > .paragraph[data-index]")];
+  for (const shot of screens) {
+    const img = element("img", { alt: `Bildschirm ${timeText(shot.t)}`, "data-file": shot.file });
+    const row = element("div", { class: "paragraph screen-shot" },
+      element("div", {}, element("div", { class: "who" }, "Bildschirm"), element("time", {}, timeText(shot.t))),
+      element("div", {}, element("button", { type: "button", class: "shot", title: "Gross anzeigen",
+        onclick: () => call("open_screen_image", id, shot.file).catch((e) => showMessage(e.message)) }, img)),
+      element("div"));
+    const next = rows.find((r) => segments[Number(r.dataset.index)].start >= shot.t);
+    if (next) body.insertBefore(row, next); else body.append(row);
+    observer.observe(img);
+  }
 }
 
 /* The paragraph of another person that was going on when the interjection was said. */
@@ -2285,7 +2322,18 @@ function liveText(live) {
     + (behind > 300 ? ` – ${Math.round(behind / 60)} Min. im Rückstand, der Rest folgt nach dem Ende.` : "");
 }
 
+/* Screen snapshots of the running recording (Service.state → recording.screens). */
+function showScreenStatus(recording) {
+  const box = $("screen-status");
+  const s = recording && recording.screens;
+  box.hidden = !s;
+  if (!s) return;
+  box.classList.toggle("problem", !!s.problem);
+  box.textContent = s.problem || (s.count === 1 ? "1 Bildschirm-Schnappschuss" : `${s.count} Bildschirm-Schnappschüsse`);
+}
+
 function showRecording(recording) {
+  showScreenStatus(recording);
   const status = document.getElementById("live-status");
   if (status) {
     const live = recording && recording.live;
@@ -2305,6 +2353,7 @@ function showRecording(recording) {
     $("recorder").classList.toggle("running", running);
     $("sel-microphone").disabled = running;
     $("sel-speakers").disabled = running;
+    $("sel-screen").disabled = running;
     $("chk-consent").disabled = running;
     $("btn-reload-devices").disabled = running;
     if (!running) {
@@ -2380,7 +2429,8 @@ async function toggleRecording() {
     } else {
       const target = chosen();   // a selected planned recording is recorded into
       const planned = target && target.status === "planned" ? target.id : "";
-      const id = await call("start_recording", $("sel-microphone").value, $("sel-speakers").value, $("chk-consent").checked, planned);
+      const id = await call("start_recording", $("sel-microphone").value, $("sel-speakers").value, $("chk-consent").checked, planned,
+        $("sel-screen").value);
       state.selected = id;
       $("time").textContent = "00:00";
     }
@@ -2849,6 +2899,7 @@ async function loadDevices() {
     const g = await call("devices");
     fillOptions($("sel-microphone"), g.microphones, g.default_microphone, state.settings.microphone);
     fillOptions($("sel-speakers"), g.speakers, g.default_speakers, state.settings.speakers, true);
+    await loadScreenSources();
     const hint = $("device-hint");
     const notes = [...(g.problems || [])];
     if (g.platform === "darwin" && !g.virtual_device) {
@@ -2863,6 +2914,23 @@ async function loadDevices() {
   } catch (e) {
     showMessage("Audiogeräte konnten nicht gelesen werden: " + e.message);
   }
+}
+
+/* Choice for the screen snapshots: none, a monitor or (Windows) an open window. */
+async function loadScreenSources() {
+  const select = $("sel-screen");
+  let g = { monitors: [], windows: [] };
+  try { g = await call("screen_sources"); } catch (_) { /* no display: only «Keine» */ }
+  const chosen = select.value || state.settings.screen || "";
+  select.replaceChildren(element("option", { value: "" }, "Keine"));
+  for (const m of g.monitors) select.append(element("option", { value: m.value }, m.label));
+  if (g.windows.length) {
+    const group = element("optgroup", { label: "Nur ein Fenster" });
+    for (const w of g.windows) group.append(element("option", { value: w.value }, w.label.length > 60 ? w.label.slice(0, 57) + " …" : w.label));
+    select.append(group);
+  }
+  const values = [...select.options].map((o) => o.value);
+  select.value = values.includes(chosen) ? chosen : "";
 }
 
 const CUSTOM = "__custom__";

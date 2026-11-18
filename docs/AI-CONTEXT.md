@@ -38,6 +38,8 @@ src/verbalis/
   evaluation.py    WER for `compare`          updates.py   GitHub releases, what's new
   logs.py          log view/export            migration.py from «Mitschrift» ≤ 0.6
   settings.py      ~/.verbalis/settings.json
+  screens.py       screen snapshots while recording (monitor or Windows window, kept on change;
+                   screens/HH-MM-SS.png, linked in transcript.md for Claude)
 packaging/         PyInstaller recipe, Inno Setup script, pinned build versions
 tools/             shortcut script, upstream model check, test catalogue, UI preview
 ```

@@ -148,16 +148,28 @@ def _time(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
-def to_markdown(paragraphs: list[Segment], title: str, header: dict[str, str]) -> str:
+def to_markdown(paragraphs: list[Segment], title: str, header: dict[str, str],
+                screens: list[tuple[float, str]] | None = None) -> str:
+    """screens: (recording second, relative path) of the screen snapshots – each is linked before the first
+    paragraph that starts at or after it, so a reader (or Claude) sees what was on the screen."""
     lines = [f"# {title}", ""]
     lines += [f"- **{k}:** {v}" for k, v in header.items()]
     lines.append("")
+    pending = list(screens or [])
+
+    def pictures(until: float | None) -> None:
+        while pending and (until is None or pending[0][0] <= until):
+            t, path = pending.pop(0)
+            lines.extend([f"**[{_time(t)}] Bildschirm:** ![Bildschirm {_time(t)}]({path})", ""])
+
     for p in paragraphs:
-        if p.aside:   # interjection: small, doesn't interrupt the conversation
+        if p.aside:   # interjection: small, doesn't interrupt the conversation (and stays with its paragraph)
             lines.append(f"*[{_time(p.start)}] {p.speaker}: {p.text}*")
         else:
+            pictures(p.start)
             lines.append(f"**[{_time(p.start)}] {p.speaker}:** " + p.text.replace("\n", "  \n"))   # line break
         lines.append("")
+    pictures(None)
     return "\n".join(lines)
 
 
@@ -177,14 +189,14 @@ def segment_from_dict(data: dict) -> Segment:
 
 
 def save(folder: Path, filename: str, paragraphs: list[Segment], title: str, header: dict[str, str],
-         tracks: dict[str, str] | None = None) -> Path:
+         tracks: dict[str, str] | None = None, screens: list[tuple[float, str]] | None = None) -> Path:
     """tracks: track → display name, e.g. {"me": "Andrea", "others": "Gegenüber"}.
 
     `header` holds user-facing labels and values (German), shown in the
     Markdown file and in the app.
     """
     md = folder / f"{filename}.md"
-    md.write_text(to_markdown(paragraphs, title, header), encoding="utf-8")
+    md.write_text(to_markdown(paragraphs, title, header, screens), encoding="utf-8")
     data = {"title": title, "header": header, "tracks": tracks or {}, "speakers": speakers_of(paragraphs),
             "segments": [segment_dict(p) for p in paragraphs]}
     (folder / f"{filename}.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-356 tests in 36 files.
+371 tests in 37 files.
 
 ### `test_acceleration.py` (10)
 
@@ -428,6 +428,26 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Low disk space warns and finally stops the recording**
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
+
+### `test_screens.py` (15)
+
+Screen snapshots during a recording (screens.py): which pictures are kept, their files, the Markdown links
+
+- **First picture is kept once the screen is still**
+- **New slide is kept with the time the change began**
+- **Scrolling keeps only where it stops**
+- **Small video tile does not make new pictures** – Bug guard: moving video tiles in a Teams window must not fill the folder with nearly equal pictures.
+- **New slide next to a video tile is kept right away**
+- **Teams video tiles next to a shared screen are ignored** – The video of the people in a Teams call must not make pictures; each new slide makes exactly one, soon.
+- **Screen that never rests is kept at most every max wait**
+- **Files are named after the recording time and listed in order**
+- **Image path only for snapshots of the recording**
+- **Markdown links each picture before the paragraph it belongs to**
+- **Capture skips pauses and uses recording time**
+- **Capture of a missing window fails before the recording**
+- **Recording with snapshots links them in the transcript**
+- **Wrong screen choice starts no recording**
+- **Unknown screen setting falls back to none**
 
 ### `test_search.py` (7)
 

@@ -1,0 +1,406 @@
+"""Screen snapshots during a recording (0.7.46).
+
+While recording, the chosen monitor or window is looked at once per second. A picture is kept when the screen
+differs clearly from the last kept one and has been still for a moment (a new slide, another section of a
+document) – or, if it never comes to rest (video tiles), at most every MAX_WAIT_S. The pictures land in
+`<recording>/screens/` named after their recording time (`00-07-45.png`), which is the time used in the
+transcript; transcript.md links them at the right place, so Claude (Code) can relate comments to what was shown.
+
+Small copies for the app's transcript view are in `screens/.thumbs/`.
+
+Window capture works on Windows only (PrintWindow: also when the window is covered by others); other systems
+offer the monitors. The pictures never leave the computer.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import sys
+import threading
+import time
+from pathlib import Path
+from typing import Callable
+
+import numpy as np
+
+log = logging.getLogger(__name__)
+
+FOLDER = "screens"
+THUMBS = ".thumbs"
+THUMB_WIDTH = 480
+INTERVAL_S = 1.0
+STILL_SAMPLES = 2        # unchanged for this many samples in a row = the screen came to rest
+MAX_WAIT_S = 30.0        # a screen that never rests (video) is still kept, but at most this often
+PIXEL_STEP = 24          # grey-level difference that counts as a changed pixel
+CHANGED_SHARE = 0.03     # share of changed pixels for «a different picture»
+STILL_SHARE = 0.01       # less change than this between two samples = still
+# Areas that keep moving (the video tiles of the people in a Teams call next to the shared screen) are left out of
+# both comparisons: per pixel, how often it changed recently (moving average); above BUSY it is ignored. A pixel that
+# changes every second is ignored after 2 seconds; a slide change (once) never reaches it.
+ACTIVITY_WEIGHT = 0.2
+BUSY = 0.3
+MIN_STEADY = 0.05        # if almost everything moves (a full-screen video), compare everything again
+
+MONITOR = "monitor:"
+WINDOW = "window:"
+_NAME = re.compile(r"^(\d+)-(\d\d)-(\d\d)(?:_\d+)?\.png$")
+
+
+# ------------------------------------------------------------------ what can be captured
+
+def sources() -> dict:
+    """The monitors and (Windows) the open windows, for the choice in the recording view."""
+    result = {"monitors": [], "windows": [], "windows_supported": sys.platform == "win32"}
+    try:
+        import mss
+
+        with mss.mss() as sct:
+            screens = sct.monitors[1:]
+        for n, m in enumerate(screens, start=1):
+            label = f"Ganzer Bildschirm {n} ({m['width']}×{m['height']})" if len(screens) > 1 \
+                else f"Ganzer Bildschirm ({m['width']}×{m['height']})"
+            result["monitors"].append({"value": f"{MONITOR}{n}", "label": label})
+    except Exception as e:   # no display (CI, Linux without X/Wayland access)
+        log.warning("Monitors could not be listed: %s", e)
+    if sys.platform == "win32":
+        try:
+            result["windows"] = [{"value": WINDOW + title, "label": title} for _, title in _win_windows()]
+        except Exception as e:
+            log.warning("Windows could not be listed: %s", e)
+    return result
+
+
+def describe(target: str) -> str:
+    """User-facing name of a choice, e.g. for messages."""
+    if target.startswith(MONITOR):
+        return f"Bildschirm {target[len(MONITOR):]}"
+    if target.startswith(WINDOW):
+        return f"Fenster «{target[len(WINDOW):]}»"
+    return target
+
+
+def open_grabber(target: str) -> Callable[[], np.ndarray | None]:
+    """A function returning the current picture (height × width × 3, RGB) or None (window minimised).
+
+    Raises RuntimeError (German) if the target does not exist. Must be called in the thread that grabs:
+    mss keeps per-thread handles on Windows.
+    """
+    if target.startswith(MONITOR):
+        import mss
+
+        n = int(target[len(MONITOR):] or 1)
+        sct = mss.mss()
+        if not 1 <= n < len(sct.monitors):
+            sct.close()
+            raise RuntimeError(f"Bildschirm {n} gibt es nicht (mehr). Bitte «Geräte neu laden» und neu wählen.")
+        monitor = sct.monitors[n]
+
+        def grab() -> np.ndarray:
+            shot = sct.grab(monitor)
+            return np.frombuffer(shot.bgra, np.uint8).reshape(shot.height, shot.width, 4)[:, :, 2::-1]
+        grab.close = sct.close   # type: ignore[attr-defined]
+        return grab
+    if target.startswith(WINDOW):
+        if sys.platform != "win32":
+            raise RuntimeError("Einzelne Fenster aufnehmen geht nur unter Windows – bitte einen Bildschirm wählen.")
+        title = target[len(WINDOW):]
+        hwnd = find_window(title)
+        if hwnd is None:
+            raise RuntimeError(f"Das Fenster «{title}» gibt es nicht mehr. Bitte «Geräte neu laden» und neu wählen.")
+        return lambda: _win_capture(hwnd)
+    raise RuntimeError(f"Unbekannte Bildschirm-Auswahl: {target}")
+
+
+def find_window(title: str) -> int | None:
+    """The window with exactly this title, otherwise the first one whose title contains it."""
+    windows = _win_windows()
+    for hwnd, t in windows:
+        if t == title:
+            return hwnd
+    for hwnd, t in windows:
+        if title.lower() in t.lower():
+            return hwnd
+    return None
+
+
+# ------------------------------------------------------------------ deciding which pictures to keep
+
+def small(picture: np.ndarray) -> np.ndarray:
+    """A coarse grey version for comparing (every 8th pixel)."""
+    p = picture[::8, ::8].astype(np.int16)
+    return (p[:, :, 0] * 3 + p[:, :, 1] * 6 + p[:, :, 2]) // 10
+
+
+def changed_share(a: np.ndarray | None, b: np.ndarray | None, steady: np.ndarray | None = None) -> float:
+    """Share of changed pixels; steady: only these pixels count (the ones that don't keep moving)."""
+    if a is None or b is None or a.shape != b.shape:
+        return 1.0
+    changed = np.abs(a - b) > PIXEL_STEP
+    if steady is not None and steady.shape == changed.shape and steady.mean() >= MIN_STEADY:
+        return float(changed[steady].mean())
+    return float(changed.mean())
+
+
+class ChangeDetector:
+    """Feed one coarse picture per sample; says when to keep the current picture and from which time.
+
+    A picture is kept when it differs from the last kept one and the screen has been still for
+    STILL_SAMPLES – or after MAX_WAIT_S of a screen that keeps changing. The time is the moment the
+    change began, so the picture sits in the transcript before the talk about it. Areas that keep moving
+    (video tiles) don't count for either (see BUSY).
+    """
+
+    def __init__(self) -> None:
+        self.kept: np.ndarray | None = None
+        self.previous: np.ndarray | None = None
+        self.still = 0
+        self.change_since: float | None = None
+        self.kept_at: float | None = None
+        self.activity: np.ndarray | None = None   # per pixel: how often it changed recently (0–1)
+
+    def steady(self) -> np.ndarray | None:
+        """The pixels that don't keep moving."""
+        return None if self.activity is None else self.activity < BUSY
+
+    def feed(self, picture: np.ndarray, t: float) -> float | None:
+        """Returns the time to keep the picture under, or None."""
+        steady = self.steady()
+        different = changed_share(picture, self.kept, steady)
+        # still: hardly any change since the last sample – compared with how much changed since the last kept
+        # picture, so what is left of a video tile next to a new slide doesn't count as movement
+        still = changed_share(picture, self.previous, steady) < max(STILL_SHARE, different / 4)
+        if self.previous is not None and self.previous.shape == picture.shape:
+            moved = (np.abs(picture - self.previous) > PIXEL_STEP).astype(np.float32)
+            if self.activity is None:
+                self.activity = np.zeros(picture.shape, np.float32)
+            self.activity = self.activity * (1 - ACTIVITY_WEIGHT) + moved * ACTIVITY_WEIGHT
+        else:
+            self.activity = None   # first picture or the window changed size: learn anew
+        self.previous = picture
+        self.still = self.still + 1 if still else 0
+        if different < CHANGED_SHARE:
+            self.change_since = None
+            return None
+        if self.change_since is None:
+            self.change_since = t
+        waited = t - (self.kept_at if self.kept_at is not None else self.change_since)
+        if self.still >= STILL_SAMPLES or waited >= MAX_WAIT_S:
+            at = self.change_since
+            self.kept, self.kept_at, self.change_since = picture, t, None
+            return at
+        return None
+
+
+# ------------------------------------------------------------------ files
+
+def file_name(seconds: float) -> str:
+    h, rest = divmod(int(seconds), 3600)
+    m, s = divmod(rest, 60)
+    return f"{h:02d}-{m:02d}-{s:02d}.png"
+
+
+def listing(folder: Path) -> list[tuple[float, str]]:
+    """(recording second, path relative to the recording folder) of all snapshots, in time order."""
+    found = []
+    for path in (folder / FOLDER).glob("*.png"):
+        if m := _NAME.match(path.name):
+            found.append((int(m[1]) * 3600 + int(m[2]) * 60 + int(m[3]), f"{FOLDER}/{path.name}"))
+    return sorted(found)
+
+
+def save(folder: Path, seconds: float, picture: np.ndarray) -> Path:
+    """Write the picture (and its small copy for the app). Never overwrites an earlier one."""
+    import mss.tools
+
+    target = folder / FOLDER
+    (target / THUMBS).mkdir(parents=True, exist_ok=True)
+    path = target / file_name(seconds)
+    n = 1
+    while path.exists():
+        path = target / f"{file_name(seconds)[:-4]}_{n}.png"
+        n += 1
+    h, w = picture.shape[:2]
+    mss.tools.to_png(np.ascontiguousarray(picture).tobytes(), (w, h), level=6, output=str(path))
+    step = max(1, -(-w // THUMB_WIDTH))
+    thumb = np.ascontiguousarray(picture[::step, ::step])
+    mss.tools.to_png(thumb.tobytes(), (thumb.shape[1], thumb.shape[0]), level=6, output=str(target / THUMBS / path.name))
+    return path
+
+
+def image_path(folder: Path, relative: str, thumb: bool = False) -> Path:
+    """A snapshot file of this recording – only names from `listing`, no paths elsewhere."""
+    name = Path(relative).name
+    if not _NAME.match(name) or relative != f"{FOLDER}/{name}":
+        raise RuntimeError("Unbekanntes Bild.")
+    path = folder / FOLDER / THUMBS / name if thumb else folder / FOLDER / name
+    if thumb and not path.exists():
+        path = folder / FOLDER / name
+    return path
+
+
+# ------------------------------------------------------------------ the capture thread
+
+class ScreenCapture:
+    """Grabs the target once per INTERVAL_S while recording. position() is the recording time without pauses,
+    or None while paused (nothing is kept then)."""
+
+    def __init__(self, folder: Path, target: str, position: Callable[[], float | None],
+                 opener: Callable[[str], Callable] = open_grabber, interval_s: float = INTERVAL_S):
+        self.folder = folder
+        self.target = target
+        self.position = position
+        self.opener = opener
+        self.interval_s = interval_s
+        self.count = 0
+        self.problem: str | None = None
+        self._stop = threading.Event()
+        self._ready = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="screens")
+
+    def start(self, wait_s: float = 5.0) -> None:
+        """Start and wait until the target is open – a wrong choice raises here, before the recording runs."""
+        self._thread.start()
+        self._ready.wait(wait_s)
+        if self.problem and not self._thread.is_alive():
+            raise RuntimeError(self.problem)
+
+    def stop(self, wait_s: float = 5.0) -> None:
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(wait_s)
+
+    def _run(self) -> None:
+        try:
+            grab = self.opener(self.target)
+        except Exception as e:
+            self.problem = str(e) or type(e).__name__
+            self._ready.set()
+            return
+        self._ready.set()
+        detector = ChangeDetector()
+        failures = 0
+        try:
+            while not self._stop.is_set():
+                started = time.monotonic()
+                t = self.position()
+                if t is not None:
+                    try:
+                        picture = grab()
+                        failures = 0
+                    except _WindowGone:
+                        self.problem = f"{describe(self.target)} wurde geschlossen – keine weiteren Schnappschüsse."
+                        log.info("Screen capture %s: window gone", self.folder.name)
+                        return
+                    except Exception:
+                        failures += 1
+                        if failures in (1, 30):
+                            log.exception("Screen capture of %s failed", self.folder.name)
+                        picture = None
+                    if picture is not None:
+                        at = detector.feed(small(picture), t)
+                        if at is not None:
+                            try:
+                                save(self.folder, at, picture)
+                                self.count += 1
+                            except OSError as e:
+                                self.problem = f"Schnappschuss konnte nicht gespeichert werden ({e})."
+                                log.exception("Saving a snapshot of %s failed", self.folder.name)
+                self._stop.wait(max(0.05, self.interval_s - (time.monotonic() - started)))
+        finally:
+            close = getattr(grab, "close", None)
+            if close:
+                close()
+            log.info("Screen capture of %s ended: %d snapshots", self.folder.name, self.count)
+
+
+# ------------------------------------------------------------------ Windows: windows and PrintWindow
+
+class _WindowGone(Exception):
+    pass
+
+
+def _win_windows() -> list[tuple[int, str]]:
+    """Visible top-level windows with a title (not cloaked, not tool windows), front-most first."""
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    dwmapi = ctypes.windll.dwmapi
+    found: list[tuple[int, str]] = []
+    GWL_EXSTYLE, WS_EX_TOOLWINDOW, DWMWA_CLOAKED = -20, 0x80, 14
+    user32.GetWindowLongW.restype = ctypes.c_long
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, _):
+        if not user32.IsWindowVisible(hwnd) or user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW:
+            return True
+        cloaked = wintypes.DWORD()
+        dwmapi.DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+        if cloaked.value:
+            return True
+        n = user32.GetWindowTextLengthW(hwnd)
+        if n:
+            buf = ctypes.create_unicode_buffer(n + 1)
+            user32.GetWindowTextW(hwnd, buf, n + 1)
+            if buf.value.strip() and buf.value not in ("Program Manager",):
+                found.append((int(hwnd or 0), buf.value))
+        return True
+
+    user32.EnumWindows(visit, 0)
+    return found
+
+
+def _win_capture(hwnd: int) -> np.ndarray | None:
+    """The window's picture via PrintWindow (PW_RENDERFULLCONTENT: also browsers/Teams, also when covered).
+    None while minimised; _WindowGone once it is closed."""
+    import ctypes
+    from ctypes import wintypes
+
+    user32, gdi32 = ctypes.windll.user32, ctypes.windll.gdi32
+    for f in (user32.GetWindowDC, gdi32.CreateCompatibleDC, gdi32.CreateCompatibleBitmap, gdi32.SelectObject):
+        f.restype = ctypes.c_void_p
+    user32.GetWindowDC.argtypes = [ctypes.c_void_p]
+    user32.ReleaseDC.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    user32.PrintWindow.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint]
+    gdi32.CreateCompatibleDC.argtypes = [ctypes.c_void_p]
+    gdi32.CreateCompatibleBitmap.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+    gdi32.SelectObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    gdi32.DeleteObject.argtypes = [ctypes.c_void_p]
+    gdi32.DeleteDC.argtypes = [ctypes.c_void_p]
+    gdi32.GetDIBits.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p,
+                                ctypes.c_void_p, ctypes.c_uint]
+    if not user32.IsWindow(ctypes.c_void_p(hwnd)):
+        raise _WindowGone()
+    if user32.IsIconic(ctypes.c_void_p(hwnd)):
+        return None
+    rect = wintypes.RECT()
+    user32.GetWindowRect(ctypes.c_void_p(hwnd), ctypes.byref(rect))
+    w, h = rect.right - rect.left, rect.bottom - rect.top
+    if w <= 0 or h <= 0:
+        return None
+
+    class BITMAPINFOHEADER(ctypes.Structure):
+        _fields_ = [("biSize", wintypes.DWORD), ("biWidth", ctypes.c_long), ("biHeight", ctypes.c_long),
+                    ("biPlanes", wintypes.WORD), ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                    ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", ctypes.c_long),
+                    ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", wintypes.DWORD),
+                    ("biClrImportant", wintypes.DWORD)]
+
+    window_dc = user32.GetWindowDC(hwnd)
+    memory_dc = gdi32.CreateCompatibleDC(window_dc)
+    bitmap = gdi32.CreateCompatibleBitmap(window_dc, w, h)
+    old = gdi32.SelectObject(memory_dc, bitmap)
+    try:
+        if not user32.PrintWindow(hwnd, memory_dc, 2):   # 2 = PW_RENDERFULLCONTENT
+            return None
+        info = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+        buf = ctypes.create_string_buffer(w * h * 4)
+        if not gdi32.GetDIBits(memory_dc, bitmap, 0, h, buf, ctypes.byref(info), 0):
+            return None
+        return np.frombuffer(buf.raw, np.uint8).reshape(h, w, 4)[:, :, 2::-1]
+    finally:
+        gdi32.SelectObject(memory_dc, old)
+        gdi32.DeleteObject(bitmap)
+        gdi32.DeleteDC(memory_dc)
+        user32.ReleaseDC(hwnd, window_dc)
