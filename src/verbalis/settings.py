@@ -14,7 +14,7 @@ QUALITY_BEAM = {"accurate": 5, "fast": 1}
 # (name, text). The whole text is visible in the settings; Service.ai_prompt fills the placeholders and drops a line
 # whose placeholders are all empty. The defaults carry an id, so each one can be put back on its own.
 PROMPT_INTRO = """Lies das Transkript {transkript}.
-{schnappschuesse}
+{bilder}
 
 Aufnahme: {titel} ({datum}, {dauer})
 Projekt: {projekt}
@@ -161,6 +161,13 @@ def _clean_prompts(value: str) -> str:
         if not isinstance(p, dict):
             continue
         entry = {"name": str(p.get("name") or "").strip()[:60], "text": str(p.get("text") or "").strip()[:5000]}
+        if "id" not in p and entry["text"] and "{" not in entry["text"]:
+            # saved before the placeholders were visible (only the instruction; the details were added unseen):
+            # show the details as placeholders, and a delivered entry gets its id («Standard») back
+            entry["text"] = PROMPT_INTRO + "\n" + entry["text"]
+            default = next((d for d in DEFAULT_PROMPTS if d["name"] == entry["name"]), None)
+            if default:
+                entry = {"id": default["id"], **entry}
         if p.get("id") in DEFAULT_IDS:   # a default entry, perhaps changed: «Standard» can put it back
             entry = {"id": p["id"], **entry}
         if entry["name"] or entry["text"]:

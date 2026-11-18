@@ -1,7 +1,7 @@
 // Fake backend for tools/ui_preview.py: answers the pywebview API with sample data.
 window.__scenario = window.__scenario || "transcript";
 // as in settings.py (PROMPT_INTRO, DEFAULT_PROMPTS); the preview's «Meeting» is changed, so «Standard» shows a difference
-const PROMPT_INTRO = "Lies das Transkript {transkript}.\n{schnappschuesse}\n\nAufnahme: {titel} ({datum}, {dauer})\nProjekt: {projekt}\nTeilnehmende: {teilnehmende}\nNotizen: {notizen}\n";
+const PROMPT_INTRO = "Lies das Transkript {transkript}.\n{bilder}\n\nAufnahme: {titel} ({datum}, {dauer})\nProjekt: {projekt}\nTeilnehmende: {teilnehmende}\nNotizen: {notizen}\n";
 const DEFAULT_PROMPTS = [
   { id: "meeting", name: "Meeting", text: PROMPT_INTRO + "\nFasse die Besprechung als Meeting zusammen und lege es unter dem Projekt im Vault ab." },
   { id: "training", name: "Schulung", text: PROMPT_INTRO + "\nFasse die Besprechung nach Themen zusammen." },

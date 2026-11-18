@@ -11,14 +11,15 @@ from verbalis.settings import DEFAULT_PROMPTS, Settings
 
 from test_service import finished_recording, make_service
 
-VALUES = {"transkript": "C:/r/transcript.md", "schnappschuesse": "", "titel": "Konzept", "datum": "18.11.2026, 14:00",
+VALUES = {"transkript": "C:/r/transcript.md", "bilder": "", "titel": "Konzept", "datum": "18.11.2026, 14:00",
           "dauer": "", "projekt": "", "teilnehmende": "Mike", "notizen": ""}
 
 
 def test_default_texts_until_own_ones_are_saved():
     assert Settings().prompts == DEFAULT_PROMPTS
-    own = json.dumps([{"name": "Pendenzen", "text": "Liste alle Aufgaben."}, {"name": " ", "text": ""}])
-    assert Settings.from_dict({"ai_prompts": own}).prompts == [{"name": "Pendenzen", "text": "Liste alle Aufgaben."}]
+    own = json.dumps([{"name": "Pendenzen", "text": "{transkript}: Liste alle Aufgaben."}, {"name": " ", "text": ""}])
+    assert Settings.from_dict({"ai_prompts": own}).prompts == [{"name": "Pendenzen",
+                                                                "text": "{transkript}: Liste alle Aufgaben."}]
     assert Settings.from_dict({"ai_prompts": "kein json"}).prompts == DEFAULT_PROMPTS
     assert Settings.from_dict({"ai_prompts": json.dumps(DEFAULT_PROMPTS)}).ai_prompts == ""   # stays «default»
 
@@ -35,6 +36,14 @@ def test_a_changed_default_keeps_its_id_so_it_can_be_put_back_alone():
     prompts = Settings.from_dict({"ai_prompts": json.dumps(changed)}).prompts
     assert [p.get("id") for p in prompts] == ["meeting", "training", None]   # unknown ids are dropped
     assert Settings.from_dict({"ai_prompts": json.dumps(changed)}).as_dict()["default_prompts"] == DEFAULT_PROMPTS
+
+
+def test_texts_saved_before_the_visible_placeholders_get_them():
+    """Entries saved with only the instruction (the details were added unseen) would lose title, project, notes."""
+    old = json.dumps([{"name": "Meeting", "text": "Fasse zusammen. test"}, {"name": "Eigen", "text": "Liste Aufgaben."}])
+    prompts = Settings.from_dict({"ai_prompts": old}).prompts
+    assert prompts[0]["id"] == "meeting" and prompts[0]["text"].endswith("{notizen}\n\nFasse zusammen. test")
+    assert "id" not in prompts[1] and prompts[1]["text"].startswith("Lies das Transkript {transkript}.")
 
 
 def test_lines_with_only_empty_placeholders_are_left_out():

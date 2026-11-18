@@ -2399,7 +2399,7 @@ class Service:
                   "datum": f"{start:%d.%m.%Y, %H:%M}" if start else "", "projekt": meta.get("project") or "",
                   "teilnehmende": ", ".join(names), "notizen": str(meta.get("notes") or "").strip(),
                   "dauer": f"{max(1, round(meta['duration_s'] / 60))} Min." if meta.get("duration_s") else "",
-                  "schnappschuesse": f"Die Bildschirm-Schnappschüsse liegen im Ordner {screens.FOLDER}/ daneben und "
+                  "bilder": f"Die Bildschirm-Schnappschüsse liegen im Ordner {screens.FOLDER}/ daneben und "
                                      "sind im Transkript verlinkt." if screens.listing(folder) else ""}
         return fill_prompt(prompts[index]["text"], values)
 
