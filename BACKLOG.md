@@ -10,15 +10,17 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
   raised. (1) Screen snapshots while recording (`screens.py`): none / monitor / one window (Windows); kept on a
   clear change once the screen is still; moving areas (Teams video tiles) are learned and ignored;
   `screens/HH-MM-SS.png`, linked in `transcript.md`. (2) «Für KI kopieren: <Anweisung>» in the transcript menu
-  «⋯»: path, snapshots note, title, date, duration, project, participants, notes + instruction. Instructions in
-  Settings → KI (defaults Meeting/Schulung, «Standard wiederherstellen» only there). Named «KI», not Claude.
+  «⋯»: the whole text with placeholders is visible and editable in Settings → KI (defaults Meeting/Schulung with
+  id; «Standard» next to «Entfernen» puts back one entry). Lines whose placeholders are all empty drop out.
+  Named «KI», not Claude.
 - **Next step:** Andrea tests both in a real Teams call (window «Meeting | Microsoft Teams»): missing pictures for
   small changes? near-duplicates? Teams window black/cut off? Then tune, write CHANGELOG, raise to 0.7.46 –
   push only when Andrea says so. Still to check: 0.7.45 on the Mac (`caffeinate`, «heraustrennen»).
 - **Open questions for Andrea:** none
 - **Prerequisites / start check:** restart Verbalis (start menu runs the repo `.venv`; `mss` is installed there).
 - **Decided:** no video recording (AI reads no video, big files, CPU load); Markdown + picture folder, not PDF;
-  reset button only for the KI instructions (Andrea: not needed elsewhere).
+  reset only per KI entry (Andrea: not needed for other settings); placeholders visible in the defaults, no
+  hidden intro.
 - **Later:** OCR on the snapshots so Ctrl+F finds slide text (medium effort); snapshots on the Mac
   (ScreenCaptureKit permission) untested, windows only on Windows. Test helper `finished_recording` (5 s wait)
   sometimes times out on the first cold run after a code change – raise the timeout if it shows up in CI.
