@@ -20,6 +20,7 @@ holds the agreed plan for the next version, if there is one).
   (updates the test catalogue in `docs/TESTING.md`; CI fails if it is out of date).
 - UI in a normal browser with fake data: `python tools/ui_preview.py`, then open
   `tools/ui-preview/preview.html#transcript` (other scenarios listed in `docs/TESTING.md`).
+  For a browser check with the Chrome tools serve it (`python -m http.server 8765`) – `file://` is refused.
   Keep `tools/ui-preview/mock.js` in step when the Python API changes.
 
 ## Rules

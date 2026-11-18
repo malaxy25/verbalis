@@ -4,18 +4,23 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## Current state (5 Nov 2026)
+## Current state (18 Nov 2026)
 
-- **Last session:** v0.7.45 – no sleep mode while recording/processing (screen on by default), number and list
-  of speaker marks with the live text, «… heraustrennen» (split one voice into the people marked or moved out of
-  it), paragraph to a new person. Triggered by a 2:50 h meeting on site with 7 people (Sascha was inside «Paul»;
-  that recording was split by script, backups `transcript.before-split.json` / `transcript_original.json`).
-- **Next step:** Andrea checks 0.7.45 in the app; Mac: does `caffeinate` keep the screen on, does
-  «heraustrennen» (spawn pool) work in the packaged app? Then the items below.
+- **Last session:** screen snapshots while recording (`screens.py`, committed locally as c591233, **not pushed**,
+  no version raised). Choice next to the audio devices: none / whole monitor / one window (Windows, PrintWindow).
+  Kept when the screen changed (≥ 3 % of the steady pixels) and is still for 2 s; areas that keep moving (Teams
+  video tiles) are learned and ignored. `screens/HH-MM-SS.png`, linked in `transcript.md` for Claude Code.
+  Purpose: Claude relates comments to the shown slide/section (concept reviews, trainings).
+- **Next step:** Andrea tests it in a real Teams call (window «Meeting | Microsoft Teams»): missing pictures for
+  small changes? too many near-duplicates? Teams window black/cut off? Then tune and release as 0.7.46 (version,
+  CHANGELOG, push only when Andrea says so). Still to check: 0.7.45 on the Mac (`caffeinate`, «heraustrennen»).
 - **Open questions for Andrea:** none
-- **Prerequisites / start check:** none.
-- **Idea, not decided:** diarization already during a recording (e.g. up to a break) – parked: clustering needs
-  the whole recording; since 0.7.43 it takes ~5 % of the recording time anyway.
+- **Prerequisites / start check:** restart Verbalis (start menu runs the repo `.venv`; `mss` is installed there).
+- **Decided:** no video recording (Claude reads no video, big files, CPU load during calls); Markdown + picture
+  folder instead of PDF. Text recognition (OCR) on the pictures later, only for searching – see below.
+- **Idea, not decided:** diarization already during a recording – parked: clustering needs the whole recording.
+- **Later:** OCR on the snapshots so Ctrl+F finds slide text (Windows/Mac have built-in OCR, Linux not; medium
+  effort). Screen snapshots on the Mac (ScreenCaptureKit permission) and windows on Mac/Linux untested/missing.
 
 ## 0.7.34 – next
 
