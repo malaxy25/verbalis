@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from . import __version__
-from .screens import listing as screen_listing
+from .screens import for_transcript as screen_listing
 from .transcript import merge, save, segment_dict, sentences
 
 if TYPE_CHECKING:

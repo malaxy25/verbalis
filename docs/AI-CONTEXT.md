@@ -39,7 +39,8 @@ src/verbalis/
   logs.py          log view/export            migration.py from «Mitschrift» ≤ 0.6
   settings.py      ~/.verbalis/settings.json
   screens.py       screen snapshots while recording (monitor or Windows window, kept on change;
-                   screens/HH-MM-SS.png, linked in transcript.md for Claude)
+                   screens/HH-MM-SS.png; after the recording cut to the shared content and chosen
+                   (shown >= 10 s, no repeats) into screens_crop/, which transcript.md links for the AI)
 packaging/         PyInstaller recipe, Inno Setup script, pinned build versions
 tools/             shortcut script, upstream model check, test catalogue, UI preview
 ```

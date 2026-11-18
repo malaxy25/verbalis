@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-385 tests in 39 files.
+392 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -443,7 +443,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_screens.py` (16)
+### `test_screens.py` (23)
 
 Screen snapshots during a recording (screens.py): which pictures are kept, their files, the Markdown links
 
@@ -461,8 +461,15 @@ Screen snapshots during a recording (screens.py): which pictures are kept, their
 - **Capture of a missing window fails before the recording**
 - **Recording with snapshots links them in the transcript**
 - **Wrong screen choice starts no recording**
+- **No snapshot time before the recording runs** – Bug 18.11.2026: the capture starts before the recorder (to report a closed window first); a picture taken in
 - **Unknown screen setting falls back to none**
 - **Meeting windows are listed apart with calls first** – Bug 18 Nov 2026: the Teams call window was hard to find among all windows (and Teams' main window looks
+- **Content box is where the pictures differ** – Bar, video tiles and taskbar of a Teams call are cut away without text recognition.
+- **Short and repeated pictures are not chosen**
+- **Two white slides with different text are not the same** – A coarse picture hash (as in the first script) took two mostly white slides for one – compared per pixel.
+- **A very short recording keeps its longest shown picture**
+- **Png written by save is read back**
+- **Prepare cuts chooses and the transcript links the chosen**
 
 ### `test_search.py` (7)
 

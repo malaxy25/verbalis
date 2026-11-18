@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import __version__
-from .screens import listing as screen_listing
+from .screens import for_transcript as screen_listing
 
 
 def _level_bar(rms: float, width: int = 20) -> str:

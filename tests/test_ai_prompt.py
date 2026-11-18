@@ -48,8 +48,10 @@ def test_texts_saved_before_the_visible_placeholders_get_them():
 
 def test_lines_with_only_empty_placeholders_are_left_out():
     text = fill_prompt(DEFAULT_PROMPTS[1]["text"], VALUES)
-    assert text == ("Lies das Transkript C:/r/transcript.md.\n\nAufnahme: Konzept (18.11.2026, 14:00)\n"
-                    "Teilnehmende: Mike\n\nFasse die Besprechung nach Themen zusammen.\n")
+    assert text == ("Lies das Transkript C:/r/transcript.md.\nDas Transkript ist aus Schweizerdeutsch übersetzt, "
+                    "Fachbegriffe sind teils verhört. Korrigiere sie anhand der Bilder und des Zusammenhangs.\n\n"
+                    "Aufnahme: Konzept (18.11.2026, 14:00)\nTeilnehmende: Mike\n\n"
+                    "Fasse die Besprechung nach Themen zusammen.\n")
 
 
 def test_path_goes_in_front_when_the_text_has_no_transkript_placeholder():
@@ -68,14 +70,16 @@ def test_copied_text_has_path_details_and_notes(home):
     assert "Schnappschüsse" not in text   # no pictures in this recording
     assert "Aufnahme: Konzept SLRG (" in text and " Min.)" in text
     assert "Projekt: SLRG\nTeilnehmende: Mike\nNotizen: Mike schickt die Folien nach.\n" in text   # notes not lost
-    assert text.endswith("lege es unter dem Projekt im Vault ab.\n")
+    assert text.endswith("Vorschläge als Vorschlag. Personennamen nicht korrigieren.\n")
 
 
 def test_copied_text_mentions_the_snapshots_when_there_are_some(home):
     s = make_service()
     rid = finished_recording(s)
     screens.save(home / "recordings" / rid, 3, np.zeros((20, 30, 3), np.uint8))
-    assert "Die Bildschirm-Schnappschüsse liegen im Ordner screens/ daneben" in s.ai_prompt(rid, 1)
+    text = s.ai_prompt(rid, 1)
+    assert "Bilder in screens_crop/ sind bereits ausgewählt" in text and "Keine eigene Texterkennung" in text
+    assert "](screens_crop/00-00-03.png)" in (home / "recordings" / rid / "transcript.md").read_text(encoding="utf-8")
 
 
 def test_text_that_no_longer_exists_is_reported(home):

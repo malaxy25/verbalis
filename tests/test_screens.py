@@ -171,12 +171,12 @@ def test_recording_with_snapshots_links_them_in_the_transcript(home):
     folder = home / "recordings" / rid
     t = s.transcript(rid)
     assert len(t["screens"]) == 2 and t["screens"][0]["file"].startswith("screens/")
-    assert "](screens/" in (folder / "transcript.md").read_text(encoding="utf-8")
+    assert wait_until(lambda: "](screens_crop/" in (folder / "transcript.md").read_text(encoding="utf-8"))
     assert s.settings()["screen"] == "monitor:1"   # remembered for the next recording
     assert s.screen_image(rid, t["screens"][0]["file"], thumb=True).startswith("data:image/png;base64,")
     # an edit rewrites transcript.md – the pictures stay linked
     s.edit_transcript(rid, 0, "Neu geschrieben.")
-    assert "](screens/" in (folder / "transcript.md").read_text(encoding="utf-8")
+    assert "](screens_crop/" in (folder / "transcript.md").read_text(encoding="utf-8")
 
 
 def test_wrong_screen_choice_starts_no_recording(home):
@@ -189,6 +189,30 @@ def test_wrong_screen_choice_starts_no_recording(home):
     with pytest.raises(RuntimeError, match="gibt es nicht mehr"):
         s.start_recording("Mic", "", consent=True, screen="window:Teams")
     assert s.state()["recording"] is None
+
+
+def test_no_snapshot_time_before_the_recording_runs(home):
+    """Bug 18.11.2026: the capture starts before the recorder (to report a closed window first); a picture taken in
+    between got the computer's uptime as recording time – a file «124-26-38.png» in a 43-minute recording."""
+    seen = {}
+
+    class Probe:
+        def __init__(self, folder, target, position):
+            self.position = position
+            self.count, self.problem = 0, None
+
+        def start(self):
+            seen["before"] = self.position()
+
+        def stop(self):
+            pass
+
+    s = make_service(screen_factory=Probe)
+    s.start_recording("Mic", "", consent=True, screen="monitor:1")
+    probe = s._rec_info["screens"]
+    assert seen["before"] is None
+    assert 0 <= probe.position() < 60
+    s.stop_recording()
 
 
 def test_unknown_screen_setting_falls_back_to_none():
@@ -216,3 +240,76 @@ def test_meeting_windows_are_listed_apart_with_calls_first():
     assert meeting_kind("Chat | Anna | Microsoft Teams") == "app"
     assert meeting_kind("Meeting | Microsoft Teams") == "call"
     assert meeting_kind("Meeting-Notizen.docx - Word") is None
+
+
+# ------------------------------------------------------------------ preparing the pictures for an AI
+
+def call_screen(slide: int, seed: int, h: int = 300, w: int = 480) -> np.ndarray:
+    """A full-screen Teams call: a meeting bar on top, the shared content (a slide with some lines), video tiles on
+    the right and the taskbar at the bottom – only the content differs much from picture to picture."""
+    rng = np.random.default_rng(seed)
+    p = np.full((h, w, 3), 230, np.uint8)
+    p[:36] = 40                                          # meeting bar
+    p[36:280, :390] = 255                                # shared content
+    text = np.random.default_rng(slide)
+    for y, width in zip(text.integers(0, 215, 12), text.integers(150, 370, 12)):   # lines of text
+        p[50 + y:56 + y, 20:20 + width] = (slide * 37) % 200
+    p[40:80, 400:470] = rng.integers(100, 110, (40, 70, 3))   # a tile, slightly noisy
+    p[280:] = 20                                         # taskbar
+    return p
+
+
+def test_content_box_is_where_the_pictures_differ():
+    """Bar, video tiles and taskbar of a Teams call are cut away without text recognition."""
+    box = screens.content_box([screens._grey(call_screen(s, s)) for s in range(8)])
+    top, bottom, left, right = box
+    assert 36 / 300 - 0.03 <= top <= 55 / 300 and 0.85 <= bottom <= 280 / 300 + 0.02
+    assert left <= 0.06 and 0.7 <= right <= 400 / 480   # the tiles start at 400 px
+    assert screens.content_box([screens._grey(call_screen(s, s)) for s in range(2)]) is None   # too few to tell
+    noise = [np.random.default_rng(s).integers(0, 255, (75, 120)).astype(np.int16) for s in range(5)]
+    assert screens.content_box(noise) is None   # everything changes: nothing to cut
+
+
+def test_short_and_repeated_pictures_are_not_chosen():
+    a, b, c = (screens._grey(call_screen(n, n)) for n in range(3))
+    #              0 a     20 b (4 s)  24 c    40 a again  60 b (3 s until the end)
+    verdicts = screens.choose([0, 20, 24, 40, 60], [a, b, c, a.copy(), b], end_s=63)
+    assert verdicts == ["", "short", "", "0", "short"]
+    assert screens.choose([0], [a], end_s=None) == [""]   # end unknown: kept
+
+
+def test_two_white_slides_with_different_text_are_not_the_same():
+    """A coarse picture hash (as in the first script) took two mostly white slides for one – compared per pixel."""
+    assert screens.choose([0, 30], [screens._grey(call_screen(1, 0)), screens._grey(call_screen(2, 0))], 60) == ["", ""]
+
+
+def test_a_very_short_recording_keeps_its_longest_shown_picture():
+    a, b = screens._grey(call_screen(1, 0)), screens._grey(call_screen(2, 0))
+    assert screens.choose([0, 2], [a, b], end_s=8) == ["short", ""]
+
+
+def test_png_written_by_save_is_read_back(tmp_path):
+    p = call_screen(3, 3)
+    path = screens.save(tmp_path, 1, p)
+    assert np.array_equal(screens.read_png(path), p)
+
+
+def test_prepare_cuts_chooses_and_the_transcript_links_the_chosen(tmp_path):
+    for t, slide in [(0, 1), (30, 2), (45, 3), (60, 4), (90, 1)]:   # slide 1 again at 90
+        screens.save(tmp_path, t, call_screen(slide, t))
+    screens.save(tmp_path, 95, call_screen(5, 95))                   # shown 2 s until the end
+    assert screens.prepare(tmp_path, end_s=97) is True
+    assert screens.prepare(tmp_path, end_s=97) is False               # up to date
+    entries = screens.for_transcript(tmp_path)
+    assert [(t, note) for t, _, note in entries] == [(0, ""), (30, ""), (45, ""), (60, ""), (90, "gleich wie 00:00"),
+                                                    (95, "nur kurz gezeigt")]
+    assert entries[0][1] == "screens_crop/00-00-00.png" and entries[5][1] == "screens/00-01-35.png"
+    cut = screens.read_png(tmp_path / "screens_crop" / "00-00-00.png")
+    assert cut.shape[0] < 300 * 0.9 and cut.shape[1] < 480 * 0.9
+    md = to_markdown([Segment(100, 110, "Fragen?", "Mike")], "T", {}, entries)
+    assert "**[00:00] Bildschirm:** ![Bildschirm 00:00](screens_crop/00-00-00.png)" in md
+    assert "**[01:30] Bildschirm:** gleich wie 00:00 (screens/00-01-30.png)" in md
+    # a later picture (a recording continued): the old choice no longer counts until prepared again
+    screens.save(tmp_path, 120, call_screen(6, 120))
+    assert all(p.startswith("screens/") and not note for _, p, note in screens.for_transcript(tmp_path))
+    assert screens.prepare(tmp_path, end_s=150) is True

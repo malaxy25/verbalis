@@ -149,9 +149,10 @@ def _time(seconds: float) -> str:
 
 
 def to_markdown(paragraphs: list[Segment], title: str, header: dict[str, str],
-                screens: list[tuple[float, str]] | None = None) -> str:
-    """screens: (recording second, relative path) of the screen snapshots – each is linked before the first
-    paragraph that starts at or after it, so a reader (or Claude) sees what was on the screen."""
+                screens: list[tuple] | None = None) -> str:
+    """screens: (recording second, relative path[, note]) of the screen snapshots – each is linked before the first
+    paragraph that starts at or after it, so a reader (or Claude) sees what was on the screen. With a note (a
+    picture left out for the AI, screens.for_transcript) it is named, not linked."""
     lines = [f"# {title}", ""]
     lines += [f"- **{k}:** {v}" for k, v in header.items()]
     lines.append("")
@@ -159,8 +160,9 @@ def to_markdown(paragraphs: list[Segment], title: str, header: dict[str, str],
 
     def pictures(until: float | None) -> None:
         while pending and (until is None or pending[0][0] <= until):
-            t, path = pending.pop(0)
-            lines.extend([f"**[{_time(t)}] Bildschirm:** ![Bildschirm {_time(t)}]({path})", ""])
+            t, path, *note = pending.pop(0)
+            shown = f"{note[0]} ({path})" if note and note[0] else f"![Bildschirm {_time(t)}]({path})"
+            lines.extend([f"**[{_time(t)}] Bildschirm:** {shown}", ""])
 
     for p in paragraphs:
         if p.aside:   # interjection: small, doesn't interrupt the conversation (and stays with its paragraph)
@@ -189,7 +191,7 @@ def segment_from_dict(data: dict) -> Segment:
 
 
 def save(folder: Path, filename: str, paragraphs: list[Segment], title: str, header: dict[str, str],
-         tracks: dict[str, str] | None = None, screens: list[tuple[float, str]] | None = None) -> Path:
+         tracks: dict[str, str] | None = None, screens: list[tuple] | None = None) -> Path:
     """tracks: track → display name, e.g. {"me": "Andrea", "others": "Gegenüber"}.
 
     `header` holds user-facing labels and values (German), shown in the

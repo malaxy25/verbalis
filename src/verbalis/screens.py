@@ -271,6 +271,192 @@ def save(folder: Path, seconds: float, picture: np.ndarray) -> Path:
     return path
 
 
+def read_png(path: Path) -> np.ndarray:
+    """A snapshot written by `save` (8-bit RGB, no row filters – what mss writes) as height × width × 3."""
+    import struct
+    import zlib
+
+    data = Path(path).read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path.name}: kein PNG")
+    pos, chunks, w, h = 8, [], 0, 0
+    while pos + 8 <= len(data):
+        n, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + n]
+        if kind == b"IHDR":
+            w, h, depth, color = struct.unpack(">IIBB", body[:10])
+            if (depth, color) != (8, 2):
+                raise ValueError(f"{path.name}: unerwartetes PNG-Format")
+        elif kind == b"IDAT":
+            chunks.append(body)
+        elif kind == b"IEND":
+            break
+        pos += 12 + n
+    raw = np.frombuffer(zlib.decompress(b"".join(chunks)), np.uint8).reshape(h, 1 + w * 3)
+    if raw[:, 0].any():
+        raise ValueError(f"{path.name}: PNG mit Zeilenfiltern wird nicht gelesen")
+    return raw[:, 1:].reshape(h, w, 3)
+
+
+# ------------------------------------------------------------------ preparing the pictures for an AI (0.7.46)
+#
+# A recording of a Teams call keeps ~3 pictures a minute, most of them in-between states (clicking, scrolling),
+# each showing the meeting's own bar, the people's video tiles and the taskbar too. Before «Für KI kopieren» the
+# pictures are cut to the shared content and only the ones that were shown for a while are chosen; they land in
+# screens_crop/, and transcript.md links those (the others are named as text). The originals stay as they were.
+#
+# The content area needs no text recognition: it is where the pictures differ from one another. The bar and the
+# taskbar hardly change between two kept pictures, the video tiles rarely (they don't make pictures, see BUSY),
+# the shared screen almost every time.
+
+CROP_FOLDER = "screens_crop"
+INDEX = "index.json"
+MIN_SHOWN_S = 10         # shown for less = an in-between state while clicking or scrolling: not chosen
+PROFILE_SHARE = 0.2      # a row/column belongs to the content if it changes at least this share of the busiest one
+GAP_SHARE = 0.05         # gaps up to this share of the picture inside the content are bridged (a white slide area)
+PAD_SHARE = 0.01
+
+
+def _grey(picture: np.ndarray, step: int = 4) -> np.ndarray:
+    p = picture[::step, ::step].astype(np.int16)
+    return (p[:, :, 0] * 3 + p[:, :, 1] * 6 + p[:, :, 2]) // 10
+
+
+def _span(profile: np.ndarray) -> tuple[int, int] | None:
+    """The main stretch of a change profile: runs above PROFILE_SHARE of its top, small gaps bridged, the run with
+    the most change."""
+    top = profile.max()
+    if top <= 0:
+        return None
+    above = np.flatnonzero(profile >= top * PROFILE_SHARE)
+    gap = max(1, int(len(profile) * GAP_SHARE))
+    runs = [[above[0], above[0]]]
+    for i in above[1:]:
+        if i - runs[-1][1] <= gap:
+            runs[-1][1] = i
+        else:
+            runs.append([i, i])
+    start, end = max(runs, key=lambda r: profile[r[0]:r[1] + 1].sum())
+    return int(start), int(end) + 1
+
+
+def content_box(greys: list[np.ndarray]) -> tuple[float, float, float, float] | None:
+    """(top, bottom, left, right) as shares of the picture: where pictures of the same size differ from the one
+    before. None if there are too few pictures or the whole picture changes (nothing to cut away)."""
+    if len(greys) < 3:
+        return None
+    count = np.zeros(greys[0].shape, np.int32)
+    for a, b in zip(greys, greys[1:]):
+        count += np.abs(a - b) > PIXEL_STEP
+    rows, cols = _span(count.mean(axis=1)), _span(count.mean(axis=0))
+    if rows is None or cols is None:
+        return None
+    h, w = count.shape
+    top, bottom = max(0.0, rows[0] / h - PAD_SHARE), min(1.0, rows[1] / h + PAD_SHARE)
+    left, right = max(0.0, cols[0] / w - PAD_SHARE), min(1.0, cols[1] / w + PAD_SHARE)
+    area = (bottom - top) * (right - left)
+    if area > 0.9 or area < 0.1:   # nothing worth cutting – or something odd: keep the whole picture
+        return None
+    return top, bottom, left, right
+
+
+def _cut(picture: np.ndarray, box) -> np.ndarray:
+    if box is None:
+        return picture
+    h, w = picture.shape[:2]
+    return picture[int(box[0] * h):int(np.ceil(box[1] * h)), int(box[2] * w):int(np.ceil(box[3] * w))]
+
+
+def choose(times: list[float], greys: list[np.ndarray], end_s: float | None) -> list[str]:
+    """For each picture (its cut, coarse grey version): "" chosen, "short" (shown less than MIN_SHOWN_S) or the
+    index of the earlier chosen picture it repeats (differs in less than CHANGED_SHARE), as text. If none would be
+    chosen (a very short recording), the one shown longest is."""
+    result, chosen = [], []
+    for i, (t, grey) in enumerate(zip(times, greys)):
+        until = times[i + 1] if i + 1 < len(times) else end_s
+        same = next((j for j in chosen if changed_share(greys[j], grey) < CHANGED_SHARE), None)
+        if same is not None:
+            result.append(str(same))
+        elif until is not None and until - t < MIN_SHOWN_S:
+            result.append("short")
+        else:
+            result.append("")
+            chosen.append(i)
+    if not chosen and times:
+        shown = [(times[i + 1] if i + 1 < len(times) else (end_s or t)) - t for i, t in enumerate(times)]
+        result[shown.index(max(shown))] = ""
+    return result
+
+
+def prepare(folder: Path, end_s: float | None = None) -> bool:
+    """Cut and choose the snapshots for an AI (screens_crop/ and its index.json). Does nothing if that is up to
+    date with screens/; True if it was (re)done."""
+    import json
+
+    import mss.tools
+
+    pictures = listing(folder)
+    target = folder / CROP_FOLDER
+    if not pictures:
+        return False
+    try:
+        old = json.loads((target / INDEX).read_text(encoding="utf-8"))
+        if [p for _, p in pictures] == [e["source"] for e in old["pictures"]]:
+            return False
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    loaded = [read_png(folder / p) for _, p in pictures]
+    boxes = {}
+    for shape in {p.shape for p in loaded}:
+        boxes[shape] = content_box([_grey(p) for p in loaded if p.shape == shape])
+    cut = [_cut(p, boxes[p.shape]) for p in loaded]
+    verdicts = choose([t for t, _ in pictures], [_grey(c) for c in cut], end_s)
+    target.mkdir(exist_ok=True)
+    for stale in target.glob("*.png"):
+        stale.unlink()
+    entries = []
+    for (t, source), picture, verdict in zip(pictures, cut, verdicts):
+        entry = {"t": t, "source": source}
+        if verdict == "":
+            name = Path(source).name
+            h, w = picture.shape[:2]
+            mss.tools.to_png(np.ascontiguousarray(picture).tobytes(), (w, h), level=6, output=str(target / name))
+            entry["file"] = f"{CROP_FOLDER}/{name}"
+        elif verdict == "short":
+            entry["short"] = True
+        else:
+            entry["same_as"] = pictures[int(verdict)][0]
+        entries.append(entry)
+    (target / INDEX).write_text(json.dumps({"pictures": entries}, indent=1), encoding="utf-8")
+    log.info("Snapshots of %s prepared: %d of %d chosen", folder.name, sum("file" in e for e in entries), len(entries))
+    return True
+
+
+def for_transcript(folder: Path) -> list[tuple[float, str, str]]:
+    """The snapshots for transcript.md: (second, path, note). Prepared: the chosen ones from screens_crop/ with an
+    empty note, the others from screens/ with why they were left out. Not (yet) prepared: all originals."""
+    import json
+
+    from .transcript import _time
+
+    pictures = listing(folder)
+    try:
+        index = json.loads((folder / CROP_FOLDER / INDEX).read_text(encoding="utf-8"))["pictures"]
+        if [p for _, p in pictures] != [e["source"] for e in index]:
+            raise ValueError("stale")
+    except (OSError, ValueError, KeyError, TypeError):
+        return [(t, p, "") for t, p in pictures]
+    result = []
+    for e in index:
+        if "file" in e:
+            result.append((e["t"], e["file"], ""))
+        elif "same_as" in e:
+            result.append((e["t"], e["source"], f"gleich wie {_time(e['same_as'])}"))
+        else:
+            result.append((e["t"], e["source"], "nur kurz gezeigt"))
+    return result
+
+
 def image_path(folder: Path, relative: str, thumb: bool = False) -> Path:
     """A snapshot file of this recording – only names from `listing`, no paths elsewhere."""
     name = Path(relative).name

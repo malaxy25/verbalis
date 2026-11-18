@@ -897,13 +897,16 @@ class Service:
                 known["only_microphone"] = True
             rec = self._recorder_factory(devices.microphone, devices.loopback, folder)
             capture = None
+            recording = threading.Event()   # nothing is kept before the recording runs (its clock starts there)
             if screen:   # a closed window is reported before anything is recorded
-                capture = self._screen_factory(folder, screen, lambda: None if rec.paused else rec.active_seconds())
+                capture = self._screen_factory(
+                    folder, screen, lambda: rec.active_seconds() if recording.is_set() and not rec.paused else None)
                 capture.start()
             # consent and start are on disk before the first sample – they survive a crash
             try:
                 pipeline.start_meta(folder, start, getattr(rec, "samplerate", 48_000), consent, names, known)
                 rec.start()
+                recording.set()
             except BaseException:
                 if capture is not None:
                     capture.stop()
@@ -1015,6 +1018,9 @@ class Service:
             self._rec, self._rec_info = None, {}
         state = self._finish(rec, info, reason)
         self._finish_live(info["id"])
+        if info.get("screens") is not None and info["screens"].count:
+            threading.Thread(target=self._prepare_screens, args=(info["folder"], rec.active_seconds()),
+                             daemon=True, name="screens-prepare").start()
         if note:
             pipeline.update_meta(info["folder"], ended_by=note)
             self._notice = note
@@ -1594,10 +1600,23 @@ class Service:
     def _write_transcript(self, folder: Path, data: dict) -> None:
         data.pop("markdown", None)
         (folder / "transcript.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        self._write_markdown(folder, data)
+
+    def _prepare_screens(self, folder: Path, end_s: float | None = None) -> None:
+        """Cut and choose the snapshots for an AI (screens.prepare); an existing transcript.md then links those."""
+        try:
+            if end_s is None:
+                end_s = pipeline.read_meta(folder).get("duration_s")
+            if screens.prepare(folder, end_s) and (folder / "transcript.json").exists():
+                self._write_markdown(folder, json.loads((folder / "transcript.json").read_text(encoding="utf-8")))
+        except Exception:   # the originals are still linked: worse for the AI, but nothing is lost
+            log.exception("Preparing the snapshots of %s failed", folder.name)
+
+    def _write_markdown(self, folder: Path, data: dict) -> None:
         paragraphs = [segment_from_dict(s) for s in data["segments"]]
         (folder / "transcript.md").write_text(
             to_markdown(paragraphs, data.get("title") or f"Transkript {folder.name}", data.get("header", {}),
-                        screens.listing(folder)),
+                        screens.for_transcript(folder)),
             encoding="utf-8")
 
     def edit_transcript(self, recording_id: str, index: int, text: str) -> dict:
@@ -2381,6 +2400,7 @@ class Service:
         prompts = self._s.prompts
         if not 0 <= index < len(prompts):
             raise RuntimeError("Diese Anweisung gibt es nicht mehr – bitte in den Einstellungen prüfen.")
+        self._prepare_screens(folder)   # usually done already after the recording; else once now (a few seconds)
         meta = pipeline.read_meta(folder)
         start = pipeline.recording_start(folder)
         names: list[str] = []
@@ -2399,8 +2419,7 @@ class Service:
                   "datum": f"{start:%d.%m.%Y, %H:%M}" if start else "", "projekt": meta.get("project") or "",
                   "teilnehmende": ", ".join(names), "notizen": str(meta.get("notes") or "").strip(),
                   "dauer": f"{max(1, round(meta['duration_s'] / 60))} Min." if meta.get("duration_s") else "",
-                  "bilder": f"Die Bildschirm-Schnappschüsse liegen im Ordner {screens.FOLDER}/ daneben und "
-                                     "sind im Transkript verlinkt." if screens.listing(folder) else ""}
+                  "bilder": screens_hint(folder)}
         return fill_prompt(prompts[index]["text"], values)
 
     def screen_sources(self) -> dict:
@@ -2591,6 +2610,22 @@ class Service:
 
 
 _PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+
+def screens_hint(folder: Path) -> str:
+    """{bilder}: how the AI should use the snapshots – empty without any."""
+    entries = screens.for_transcript(folder)
+    if not entries:
+        return ""
+    if not any(path.startswith(screens.CROP_FOLDER + "/") for _, path, _ in entries):
+        return (f"Die Bildschirm-Schnappschüsse im Ordner {screens.FOLDER}/ daneben sind im Transkript verlinkt. "
+                "Schau sie an, sie zeigen, worüber gesprochen wird. Keine eigene Texterkennung (OCR).")
+    return (f"Die im Transkript verlinkten Bilder in {screens.CROP_FOLDER}/ sind bereits ausgewählt und auf den "
+            "gezeigten Inhalt zugeschnitten. Schau sie alle an, sie sind neben dem Gesprochenen der wichtigste "
+            "Inhalt: Nutze daraus die genauen Namen von Masken, Feldern und Aktionen, Ticket-Nummern und "
+            f"Folientitel. Die übrigen Bilder (nur kurz gezeigt oder wiederholt) und alle Originale liegen in "
+            f"{screens.FOLDER}/ – nur öffnen, wenn ein Detail im Gespräch vorkommt und auf keinem ausgewählten "
+            "Bild steht. Keine eigene Texterkennung (OCR).")
 
 
 def fill_prompt(template: str, values: dict[str, str]) -> str:

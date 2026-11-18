@@ -20,6 +20,14 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
   first; `screens.meeting_kind`) / «Weitere Fenster»; exactly one call open and choice gone or «Keine» → chosen
   automatically (not after «Keine» by hand). Devices and windows reload when Verbalis gets the focus back; reloading
   keeps the choice on screen (before, «Geräte neu laden» reset an unsaved microphone choice to the saved one).
+  (5) Pictures prepared for the AI (`screens.prepare`, after the recording and at «Für KI kopieren»): cut to where
+  the pictures differ (no OCR: bar, tiles, taskbar barely change), chosen = shown >= 10 s and not a repeat (pixel
+  compare), into `screens_crop/` + `index.json`; transcript.md links those, names the others as text. No picture
+  limit (Andrea), no downscaling (Claude scales > 1568 px itself, small UI text stays legible). Tested on the
+  Teams recording of 18 Nov: 123 → 65 pictures, 4 s. Andrea's own script (Tocco-Brain `screens_prep.py`, Windows
+  OCR + fixed percentages) replaced by this. Fixed: a picture taken before the recorder ran got the PC uptime as
+  time («124-26-38.png»). Defaults got the Swiss German / decisions / names lines; vault paths stay in Andrea's
+  own settings.
 - **Next step:** Andrea tests all three in the app, the snapshots in a real Teams call (window «Meeting |
   Microsoft Teams»): missing pictures for small changes? near-duplicates? window black/cut off? Then tune, write
   CHANGELOG, raise to 0.7.46 – push only when Andrea says so. Mac: test the rail/Cmd+B and snapshots there;

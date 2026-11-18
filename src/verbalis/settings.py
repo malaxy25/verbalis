@@ -15,6 +15,8 @@ QUALITY_BEAM = {"accurate": 5, "fast": 1}
 # whose placeholders are all empty. The defaults carry an id, so each one can be put back on its own.
 PROMPT_INTRO = """Lies das Transkript {transkript}.
 {bilder}
+Das Transkript ist aus Schweizerdeutsch übersetzt, Fachbegriffe sind teils verhört. Korrigiere sie anhand der \
+Bilder und des Zusammenhangs.
 
 Aufnahme: {titel} ({datum}, {dauer})
 Projekt: {projekt}
@@ -23,7 +25,9 @@ Notizen: {notizen}
 """
 DEFAULT_PROMPTS = [
     {"id": "meeting", "name": "Meeting",
-     "text": PROMPT_INTRO + "\nFasse die Besprechung als Meeting zusammen und lege es unter dem Projekt im Vault ab."},
+     "text": PROMPT_INTRO + "\nFasse die Besprechung als Meeting zusammen und lege es unter dem Projekt im Vault ab. "
+                            "Nur ausdrücklich Entschiedenes als Entscheid notieren, Vorschläge als Vorschlag. "
+                            "Personennamen nicht korrigieren."},
     {"id": "training", "name": "Schulung",
      "text": PROMPT_INTRO + "\nFasse die Besprechung nach Themen zusammen."},
 ]
