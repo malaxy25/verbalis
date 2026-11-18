@@ -2372,6 +2372,49 @@ class Service:
         data["screens"] = [{"t": t, "file": path} for t, path in screens.listing(folder)]
         return data
 
+    def ai_prompt(self, recording_id: str, index: int) -> str:
+        """«Für KI kopieren»: where the transcript (and its snapshots) are, the details of the
+        recording and the chosen instruction. Placeholders in the instruction: {transkript} {titel} {datum}
+        {projekt} {teilnehmende}."""
+        folder = self._path(recording_id)
+        path = folder / "transcript.md"
+        if not path.exists():
+            raise RuntimeError("Diese Aufnahme hat noch kein Transkript.")
+        prompts = self._s.prompts
+        if not 0 <= index < len(prompts):
+            raise RuntimeError("Diese Anweisung gibt es nicht mehr – bitte in den Einstellungen prüfen.")
+        meta = pipeline.read_meta(folder)
+        start = pipeline.recording_start(folder)
+        names: list[str] = []
+        for group in (meta.get("participants") or {}).values():
+            names += [n for n in group if n not in names]
+        try:
+            data = json.loads((folder / "transcript.json").read_text(encoding="utf-8"))
+            tracks = data.get("tracks") or {}
+            for info in (data.get("speakers") or {}).values():
+                name = info.get("name") or ""
+                if name and name not in names and not is_default_name(name, tracks.get(info.get("track"), "")):
+                    names.append(name)
+        except (OSError, ValueError):
+            pass
+        values = {"transkript": str(path), "titel": meta.get("title") or pipeline.default_title(start),
+                  "datum": f"{start:%d.%m.%Y, %H:%M}" if start else "", "projekt": meta.get("project") or "",
+                  "teilnehmende": ", ".join(names)}
+        lines = [f"Lies das Transkript {path}."]
+        if screens.listing(folder):
+            lines.append(f"Die Bildschirm-Schnappschüsse liegen im Ordner {screens.FOLDER}/ daneben und sind im "
+                         "Transkript verlinkt.")
+        lines.append("")
+        lines.append(f"Aufnahme: {values['titel']}" + (f" ({values['datum']})" if values["datum"] else ""))
+        if values["projekt"]:
+            lines.append(f"Projekt: {values['projekt']}")
+        if values["teilnehmende"]:
+            lines.append(f"Teilnehmende: {values['teilnehmende']}")
+        text = prompts[index]["text"]
+        for key, value in values.items():
+            text = text.replace("{" + key + "}", value)
+        return "\n".join(lines + ["", text]).strip() + "\n"
+
     def screen_sources(self) -> dict:
         """Monitors and windows for the snapshot choice in the recording view."""
         return screens.sources()

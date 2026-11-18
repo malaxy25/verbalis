@@ -10,6 +10,13 @@ from .transcription.models import DEFAULT_MODEL, verbalis_home
 
 QUALITY_BEAM = {"accurate": 5, "fast": 1}
 
+# «Für KI kopieren» in the transcript menu (Claude Code or another AI that reads files): one entry per instruction
+# (name, text). The path of the transcript and the details of the recording are put in front (Service.ai_prompt).
+DEFAULT_PROMPTS = [
+    {"name": "Meeting", "text": "Fasse die Besprechung als Meeting zusammen und lege es unter dem Projekt im Vault ab."},
+    {"name": "Schulung", "text": "Fasse die Besprechung nach Themen zusammen."},
+]
+
 
 @dataclass
 class Settings:
@@ -37,6 +44,7 @@ class Settings:
                                       # (after entering the number of people)
     live_transcribe: str = "on"       # "on" = transcribe already while recording (live.py; on since 0.7.42)
     keep_display_on: str = "on"       # "on" = the screen stays on while recording (awake.py; since 0.7.45)
+    ai_prompts: str = ""              # JSON list of {"name", "text"}; empty = DEFAULT_PROMPTS
     last_seen_version: str = ""       # version whose «what's new» was shown last
     tour: str = ""                    # "done" once the introduction was finished or closed
 
@@ -55,6 +63,12 @@ class Settings:
     @property
     def max_recording_s(self) -> float | None:
         return int(self.max_recording_min) * 60 if self.max_recording_min and int(self.max_recording_min) else None
+
+    @property
+    def prompts(self) -> list[dict]:
+        if not self.ai_prompts:
+            return [dict(p) for p in DEFAULT_PROMPTS]
+        return json.loads(self.ai_prompts)
 
     @property
     def beam_size(self) -> int:
@@ -100,6 +114,7 @@ class Settings:
             s.live_transcribe = "off"
         if s.keep_display_on not in ("on", "off"):
             s.keep_display_on = "on"
+        s.ai_prompts = _clean_prompts(s.ai_prompts)
         if s.screen and not s.screen.startswith(("monitor:", "window:")):
             s.screen = ""
         if s.call_detection not in ("on", "off"):
@@ -115,8 +130,26 @@ class Settings:
         self.path().write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False), encoding="utf-8")
 
     def as_dict(self) -> dict:
-        return {**asdict(self), "recordings_path": str(self.recordings),
+        return {**asdict(self), "recordings_path": str(self.recordings), "prompts": self.prompts,
                 "storage_warning": sync_warning(self.recordings)}
+
+
+def _clean_prompts(value: str) -> str:
+    """Only entries with a name or a text, as JSON; empty for invalid input or the defaults unchanged."""
+    if not value:
+        return ""
+    try:
+        data = json.loads(value)
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(data, list):
+        return ""
+    prompts = [{"name": str(p.get("name") or "").strip()[:60], "text": str(p.get("text") or "").strip()[:5000]}
+               for p in data if isinstance(p, dict)]
+    prompts = [p for p in prompts if p["name"] or p["text"]]
+    if prompts == DEFAULT_PROMPTS:
+        return ""   # the defaults stay «defaults» (a better default text later reaches everybody)
+    return json.dumps(prompts, ensure_ascii=False)
 
 
 SYNC_FOLDERS = ("onedrive", "dropbox", "google drive", "googledrive", "icloud", "mobile documents",

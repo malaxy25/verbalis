@@ -625,6 +625,11 @@
   fieldset legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 4px; }
   fieldset label { display: flex; gap: 8px; align-items: baseline; }
   .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+  .prompt-list { display: grid; gap: 12px; margin-top: 6px; }
+  .prompt-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+  .prompt-item input, .prompt-item textarea { padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+  .prompt-item textarea { grid-column: 1 / -1; min-height: 70px; resize: vertical; }
   .correction-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 180px; overflow-y: auto; }
   .correction-list li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .correction-list .target { font-weight: 600; font-size: 14px; margin-right: 4px; }
@@ -852,6 +857,7 @@
       <button type="button" role="tab" id="tab-general" data-tab="general" aria-controls="panel-general">Allgemein</button>
       <button type="button" role="tab" id="tab-transcription" data-tab="transcription" aria-controls="panel-transcription">Transkription</button>
       <button type="button" role="tab" id="tab-speakers" data-tab="speakers" aria-controls="panel-speakers">Sprecher</button>
+      <button type="button" role="tab" id="tab-ai" data-tab="ai" aria-controls="panel-ai">KI</button>
       <button type="button" role="tab" id="tab-retention" data-tab="retention" aria-controls="panel-retention">Aufbewahrung</button>
       <button type="button" role="tab" id="tab-updates" data-tab="updates" aria-controls="panel-updates">Updates</button>
       <button type="button" role="tab" id="tab-log" data-tab="log" aria-controls="panel-log">Log</button>
@@ -959,6 +965,18 @@
           <span>Kurze Einwürfe</span>
           <label class="consent-like"><input type="checkbox" name="asides"> Kurze Einwürfe am Rand zeigen</label>
           <small>«ja», «genau», «mhm» während jemand anderes spricht stehen klein neben dem Absatz und unterbrechen ihn nicht. Ausgeschaltet: als eigener Absatz an der Stelle, wo sie gesagt wurden. Gilt für neue Transkripte.</small>
+        </div>
+      </section>
+      <section class="tab-panel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden>
+        <div class="field">
+          <span>Anweisungen für «Für KI kopieren»</span>
+          <small>Im Menü «⋯» eines Transkripts gibt es pro Anweisung einen Eintrag. Kopiert wird: wo das Transkript liegt
+            (und die Bildschirm-Schnappschüsse), Titel, Datum, Projekt und Teilnehmende – und danach die Anweisung. Den
+            Text in Claude Code oder eine andere KI einfügen, die Dateien lesen kann.</small>
+          <div class="prompt-list" id="prompt-list"></div>
+          <div class="field-row"><button type="button" class="action" id="btn-prompt-add">Anweisung hinzufügen</button></div>
+          <small>Platzhalter in der Anweisung: {projekt}, {titel}, {datum}, {teilnehmende}, {transkript} (Pfad).
+            Leere Einträge werden beim Speichern entfernt.</small>
         </div>
       </section>
       <section class="tab-panel" id="panel-retention" role="tabpanel" aria-labelledby="tab-retention" hidden>
@@ -2087,6 +2105,19 @@ function moreMenu(a) {
     return button;
   };
 
+  // «Für KI kopieren»: path, details and one of the instructions from Settings → KI
+  (state.settings.prompts || []).forEach((p, index) => {
+    const label = `Für KI kopieren: ${p.name || "Anweisung " + (index + 1)}`;
+    const button = item(label, async () => {
+      try {
+        await copyText(await call("ai_prompt", a.id, index));
+        button.lastChild.textContent = "Kopiert – in die KI einfügen";
+        setTimeout(() => { close(); button.lastChild.textContent = label; }, 1200);
+      } catch (e) { close(); showMessage(e.message); }
+    }, { title: p.text });
+    menu.append(button);
+  });
+  if ((state.settings.prompts || []).length) menu.append(element("hr"));
   if (a.audio) {
     menu.append(item("Audio behalten", async () => {
       close();
@@ -2661,7 +2692,7 @@ async function reportByMail() {
 
 /* ---------- Log ---------- */
 
-const TABS = ["general", "transcription", "speakers", "retention", "updates", "log", "diagnose"];
+const TABS = ["general", "transcription", "speakers", "ai", "retention", "updates", "log", "diagnose"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -3152,8 +3183,30 @@ async function openSettings(tab) {
   loadModelUpdates();      // asks Hugging Face in the background, the dialog doesn't wait
   try { renderCorrectionList(await call("corrections")); } catch (_) { renderCorrectionList([]); }
   $("model-status").textContent = "Die gewählte Kachel wird mit «Einstellungen speichern» zum Standard.";
+  renderPrompts(e.prompts || []);
   settingsSnapshot = JSON.stringify(collectSettings());
   $("dlg-settings").showModal();
+}
+
+/* Settings → KI: the instructions for «Für KI kopieren» (name + text each). */
+function promptItem(p = { name: "", text: "" }) {
+  const item = element("div", { class: "prompt-item" },
+    element("input", { type: "text", class: "prompt-name", "aria-label": "Name im Menü", placeholder: "Name im Menü, z.B. Meeting", autocomplete: "off" }),
+    element("button", { type: "button", class: "link-button", onclick: () => item.remove() }, "Entfernen"),
+    element("textarea", { class: "prompt-text", "aria-label": "Anweisung", placeholder: "z.B. Fasse die Besprechung nach Themen zusammen." }));
+  item.querySelector(".prompt-name").value = p.name || "";
+  item.querySelector(".prompt-text").value = p.text || "";
+  return item;
+}
+
+function renderPrompts(list) {
+  $("prompt-list").replaceChildren(...list.map((p) => promptItem(p)));
+}
+
+function collectPrompts() {
+  return [...document.querySelectorAll("#prompt-list .prompt-item")].map((item) => ({
+    name: item.querySelector(".prompt-name").value.trim(), text: item.querySelector(".prompt-text").value.trim(),
+  })).filter((p) => p.name || p.text);
 }
 
 function renderCorrectionList(list) {
@@ -3752,6 +3805,7 @@ function collectSettings() {
   data.live_transcribe = form.elements.live_transcribe.checked ? "on" : "off";
   data.keep_display_on = form.elements.keep_display_on.checked ? "on" : "off";
   data.call_detection = form.elements.call_detection.checked ? "on" : "off";
+  data.ai_prompts = JSON.stringify(collectPrompts());
   const choice = chosenModel();
   data.model = choice === CUSTOM ? (form.elements.model_custom ? form.elements.model_custom.value.trim() : "") : choice;
   return data;
@@ -4232,6 +4286,11 @@ async function init() {
     call("open_project_page").catch((e) => showMessage(e.message));
   });
   $("btn-corr-add").addEventListener("click", addCorrection);
+  $("btn-prompt-add").addEventListener("click", () => {
+    const item = promptItem();
+    $("prompt-list").append(item);
+    item.querySelector(".prompt-name").focus();
+  });
   $("btn-update").addEventListener("click", openUpdate);
   $("btn-model-update").addEventListener("click", openModelUpdates);
   $("btn-update-later").addEventListener("click", () => $("dlg-update").close());

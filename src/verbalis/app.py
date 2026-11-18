@@ -65,6 +65,9 @@ class Api:
         return self._call(self._s.start_recording, microphone, speakers, bool(consent), planned_id or "",
                           screen or "")
 
+    def ai_prompt(self, recording_id, index):
+        return self._call(self._s.ai_prompt, recording_id, int(index))
+
     def screen_sources(self):
         return self._call(self._s.screen_sources)
 
