@@ -11,6 +11,8 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
   Kept when the screen changed (≥ 3 % of the steady pixels) and is still for 2 s; areas that keep moving (Teams
   video tiles) are learned and ignored. `screens/HH-MM-SS.png`, linked in `transcript.md` for Claude Code.
   Purpose: Claude relates comments to the shown slide/section (concept reviews, trainings).
+  Also «Für KI kopieren: <Anweisung>» in the transcript menu «⋯» (path + details + instruction; instructions in
+  Settings → KI, defaults Meeting/Schulung; named «KI», not Claude, on purpose). Commit 24e97cf, not pushed.
 - **Next step:** Andrea tests it in a real Teams call (window «Meeting | Microsoft Teams»): missing pictures for
   small changes? too many near-duplicates? Teams window black/cut off? Then tune and release as 0.7.46 (version,
   CHANGELOG, push only when Andrea says so). Still to check: 0.7.45 on the Mac (`caffeinate`, «heraustrennen»).
