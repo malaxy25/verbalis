@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-376 tests in 38 files.
+379 tests in 38 files.
 
 ### `test_acceleration.py` (10)
 
@@ -87,15 +87,18 @@ Experimental tests in the diagnosis: speed test, MLX wheels, notification and ca
 - **Call check lists program names only**
 - **Speed test prefers a recording of at least a minute** – The first test on Windows took the newest recording: 31 s of silence, 0 words – nothing to compare.
 
-### `test_ai_prompt.py` (5)
+### `test_ai_prompt.py` (8)
 
-«Für KI kopieren»: the instructions in the settings and the text put on the clipboard.
+«Für KI kopieren»: the texts in the settings and the text put on the clipboard.
 
-- **Default instructions until own ones are saved**
-- **Copied text has path details and instruction**
+- **Default texts until own ones are saved**
+- **Default texts show every placeholder** – What is copied must be visible in the settings: the defaults carry all placeholders themselves.
+- **A changed default keeps its id so it can be put back alone**
+- **Lines with only empty placeholders are left out**
+- **Path goes in front when the text has no transkript placeholder**
+- **Copied text has path details and notes**
 - **Copied text mentions the snapshots when there are some**
-- **Instruction that no longer exists is reported**
-- **Settings offer the default instructions for restoring** – «Standard wiederherstellen» in Settings → KI fills the list with these (also after own ones were saved).
+- **Text that no longer exists is reported**
 
 ### `test_app.py` (9)
 

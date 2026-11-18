@@ -629,7 +629,8 @@
   .prompt-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
   .prompt-item input, .prompt-item textarea { padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
     background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
-  .prompt-item textarea { grid-column: 1 / -1; min-height: 70px; resize: vertical; }
+  .prompt-item textarea { grid-column: 1 / -1; min-height: 190px; resize: vertical; font-size: 13px; }
+  .prompt-buttons { display: flex; gap: 12px; align-items: center; }
   .correction-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 180px; overflow-y: auto; }
   .correction-list li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .correction-list .target { font-weight: 600; font-size: 14px; margin-right: 4px; }
@@ -970,14 +971,16 @@
       <section class="tab-panel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden>
         <div class="field">
           <span>Anweisungen für «Für KI kopieren»</span>
-          <small>Im Menü «⋯» eines Transkripts gibt es pro Anweisung einen Eintrag. Kopiert wird: wo das Transkript liegt
-            (und die Bildschirm-Schnappschüsse), Titel, Datum, Dauer, Projekt, Teilnehmende und Notizen – und danach die Anweisung. Den
-            Text in Claude Code oder eine andere KI einfügen, die Dateien lesen kann.</small>
+          <small>Im Menü «⋯» eines Transkripts gibt es pro Anweisung einen Eintrag. Kopiert wird genau dieser Text, die
+            Platzhalter in {geschweiften Klammern} durch die Angaben der Aufnahme ersetzt. Den Text in Claude Code oder eine
+            andere KI einfügen, die Dateien lesen kann.</small>
+          <small>Platzhalter: {transkript} (Pfad zur Datei), {schnappschuesse} (Hinweis auf die Bilder, falls es welche gibt),
+            {titel}, {datum}, {dauer}, {projekt}, {teilnehmende}, {notizen}. Eine Zeile, in der alle Platzhalter leer sind,
+            fällt weg – z.B. «Projekt:» ohne Projekt.</small>
           <div class="prompt-list" id="prompt-list"></div>
-          <div class="field-row"><button type="button" class="action" id="btn-prompt-add">Anweisung hinzufügen</button>
-            <button type="button" class="link-button" id="btn-prompt-defaults" title="Ersetzt die Liste durch die Standard-Anweisungen. Gilt erst mit «Einstellungen speichern» – «Abbrechen» macht es rückgängig.">Standard wiederherstellen</button></div>
-          <small>Platzhalter in der Anweisung: {projekt}, {titel}, {datum}, {teilnehmende}, {notizen}, {transkript} (Pfad).
-            Leere Einträge werden beim Speichern entfernt.</small>
+          <div class="field-row"><button type="button" class="action" id="btn-prompt-add">Anweisung hinzufügen</button></div>
+          <small>Leere Einträge werden beim Speichern entfernt. «Standard» setzt einen mitgelieferten Eintrag zurück – gespeichert
+            wird erst mit «Einstellungen speichern».</small>
         </div>
       </section>
       <section class="tab-panel" id="panel-retention" role="tabpanel" aria-labelledby="tab-retention" hidden>
@@ -3189,14 +3192,22 @@ async function openSettings(tab) {
   $("dlg-settings").showModal();
 }
 
-/* Settings → KI: the instructions for «Für KI kopieren» (name + text each). */
+/* Settings → KI: the texts for «Für KI kopieren» (name + text each). A delivered entry (with id) has «Standard»,
+   which puts back only this entry – in the fields; saved with «Einstellungen speichern». */
 function promptItem(p = { name: "", text: "" }) {
-  const item = element("div", { class: "prompt-item" },
+  const original = (state.settings.default_prompts || []).find((d) => p.id && d.id === p.id);
+  const fill = (from) => {
+    item.querySelector(".prompt-name").value = from.name || "";
+    item.querySelector(".prompt-text").value = from.text || "";
+  };
+  const item = element("div", { class: "prompt-item", "data-id": p.id || "" },
     element("input", { type: "text", class: "prompt-name", "aria-label": "Name im Menü", placeholder: "Name im Menü, z.B. Meeting", autocomplete: "off" }),
-    element("button", { type: "button", class: "link-button", onclick: () => item.remove() }, "Entfernen"),
-    element("textarea", { class: "prompt-text", "aria-label": "Anweisung", placeholder: "z.B. Fasse die Besprechung nach Themen zusammen." }));
-  item.querySelector(".prompt-name").value = p.name || "";
-  item.querySelector(".prompt-text").value = p.text || "";
+    element("div", { class: "prompt-buttons" },
+      original ? element("button", { type: "button", class: "link-button", title: `«${original.name}» wie ausgeliefert`,
+        onclick: () => fill(original) }, "Standard") : null,
+      element("button", { type: "button", class: "link-button", onclick: () => item.remove() }, "Entfernen")),
+    element("textarea", { class: "prompt-text", "aria-label": "Text für die KI", spellcheck: "false" }));
+  fill(p);
   return item;
 }
 
@@ -3206,6 +3217,7 @@ function renderPrompts(list) {
 
 function collectPrompts() {
   return [...document.querySelectorAll("#prompt-list .prompt-item")].map((item) => ({
+    ...(item.dataset.id ? { id: item.dataset.id } : {}),
     name: item.querySelector(".prompt-name").value.trim(), text: item.querySelector(".prompt-text").value.trim(),
   })).filter((p) => p.name || p.text);
 }
@@ -4287,13 +4299,11 @@ async function init() {
     call("open_project_page").catch((e) => showMessage(e.message));
   });
   $("btn-corr-add").addEventListener("click", addCorrection);
-  $("btn-prompt-add").addEventListener("click", () => {
-    const item = promptItem();
+  $("btn-prompt-add").addEventListener("click", () => {   // starts with the usual details, the instruction follows
+    const item = promptItem({ name: "", text: (state.settings.prompt_intro || "") + "\n" });
     $("prompt-list").append(item);
     item.querySelector(".prompt-name").focus();
   });
-  // only fills the fields: saved with «Einstellungen speichern», undone with «Abbrechen»
-  $("btn-prompt-defaults").addEventListener("click", () => renderPrompts(state.settings.default_prompts || []));
   $("btn-update").addEventListener("click", openUpdate);
   $("btn-model-update").addEventListener("click", openModelUpdates);
   $("btn-update-later").addEventListener("click", () => $("dlg-update").close());

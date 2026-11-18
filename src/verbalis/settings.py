@@ -11,11 +11,23 @@ from .transcription.models import DEFAULT_MODEL, verbalis_home
 QUALITY_BEAM = {"accurate": 5, "fast": 1}
 
 # «Für KI kopieren» in the transcript menu (Claude Code or another AI that reads files): one entry per instruction
-# (name, text). The path of the transcript and the details of the recording are put in front (Service.ai_prompt).
+# (name, text). The whole text is visible in the settings; Service.ai_prompt fills the placeholders and drops a line
+# whose placeholders are all empty. The defaults carry an id, so each one can be put back on its own.
+PROMPT_INTRO = """Lies das Transkript {transkript}.
+{schnappschuesse}
+
+Aufnahme: {titel} ({datum}, {dauer})
+Projekt: {projekt}
+Teilnehmende: {teilnehmende}
+Notizen: {notizen}
+"""
 DEFAULT_PROMPTS = [
-    {"name": "Meeting", "text": "Fasse die Besprechung als Meeting zusammen und lege es unter dem Projekt im Vault ab."},
-    {"name": "Schulung", "text": "Fasse die Besprechung nach Themen zusammen."},
+    {"id": "meeting", "name": "Meeting",
+     "text": PROMPT_INTRO + "\nFasse die Besprechung als Meeting zusammen und lege es unter dem Projekt im Vault ab."},
+    {"id": "training", "name": "Schulung",
+     "text": PROMPT_INTRO + "\nFasse die Besprechung nach Themen zusammen."},
 ]
+DEFAULT_IDS = {p["id"] for p in DEFAULT_PROMPTS}
 
 
 @dataclass
@@ -131,7 +143,7 @@ class Settings:
 
     def as_dict(self) -> dict:
         return {**asdict(self), "recordings_path": str(self.recordings), "prompts": self.prompts,
-                "default_prompts": DEFAULT_PROMPTS, "storage_warning": sync_warning(self.recordings)}
+                "default_prompts": DEFAULT_PROMPTS, "prompt_intro": PROMPT_INTRO, "storage_warning": sync_warning(self.recordings)}
 
 
 def _clean_prompts(value: str) -> str:
@@ -144,9 +156,17 @@ def _clean_prompts(value: str) -> str:
         return ""
     if not isinstance(data, list):
         return ""
-    prompts = [{"name": str(p.get("name") or "").strip()[:60], "text": str(p.get("text") or "").strip()[:5000]}
-               for p in data if isinstance(p, dict)]
-    prompts = [p for p in prompts if p["name"] or p["text"]]
+    prompts = []
+    for p in data:
+        if not isinstance(p, dict):
+            continue
+        entry = {"name": str(p.get("name") or "").strip()[:60], "text": str(p.get("text") or "").strip()[:5000]}
+        if p.get("id") in DEFAULT_IDS:   # a default entry, perhaps changed: «Standard» can put it back
+            entry = {"id": p["id"], **entry}
+        if entry["name"] or entry["text"]:
+            prompts.append(entry)
+    if [{**p, "text": p["text"].strip()} for p in DEFAULT_PROMPTS] == prompts:
+        prompts = DEFAULT_PROMPTS
     if prompts == DEFAULT_PROMPTS:
         return ""   # the defaults stay «defaults» (a better default text later reaches everybody)
     return json.dumps(prompts, ensure_ascii=False)

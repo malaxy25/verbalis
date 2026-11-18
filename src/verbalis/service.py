@@ -2373,9 +2373,7 @@ class Service:
         return data
 
     def ai_prompt(self, recording_id: str, index: int) -> str:
-        """«Für KI kopieren»: where the transcript (and its snapshots) are, the details of the
-        recording and the chosen instruction. Placeholders in the instruction: {transkript} {titel} {datum}
-        {projekt} {teilnehmende} {notizen}."""
+        """«Für KI kopieren»: the chosen text from Settings → KI with its placeholders filled (fill_prompt)."""
         folder = self._path(recording_id)
         path = folder / "transcript.md"
         if not path.exists():
@@ -2399,25 +2397,11 @@ class Service:
             pass
         values = {"transkript": str(path), "titel": meta.get("title") or pipeline.default_title(start),
                   "datum": f"{start:%d.%m.%Y, %H:%M}" if start else "", "projekt": meta.get("project") or "",
-                  "teilnehmende": ", ".join(names), "notizen": str(meta.get("notes") or "").strip()}
-        lines = [f"Lies das Transkript {path}."]
-        if screens.listing(folder):
-            lines.append(f"Die Bildschirm-Schnappschüsse liegen im Ordner {screens.FOLDER}/ daneben und sind im "
-                         "Transkript verlinkt.")
-        lines.append("")
-        lines.append(f"Aufnahme: {values['titel']}" + (f" ({values['datum']})" if values["datum"] else ""))
-        if meta.get("duration_s"):
-            lines.append(f"Dauer: {max(1, round(meta['duration_s'] / 60))} Min.")
-        if values["projekt"]:
-            lines.append(f"Projekt: {values['projekt']}")
-        if values["teilnehmende"]:
-            lines.append(f"Teilnehmende: {values['teilnehmende']}")
-        if values["notizen"]:   # typed by hand during or after the recording – otherwise lost for the AI
-            lines += ["", "Notizen dazu:", values["notizen"]]
-        text = prompts[index]["text"]
-        for key, value in values.items():
-            text = text.replace("{" + key + "}", value)
-        return "\n".join(lines + ["", text]).strip() + "\n"
+                  "teilnehmende": ", ".join(names), "notizen": str(meta.get("notes") or "").strip(),
+                  "dauer": f"{max(1, round(meta['duration_s'] / 60))} Min." if meta.get("duration_s") else "",
+                  "schnappschuesse": f"Die Bildschirm-Schnappschüsse liegen im Ordner {screens.FOLDER}/ daneben und "
+                                     "sind im Transkript verlinkt." if screens.listing(folder) else ""}
+        return fill_prompt(prompts[index]["text"], values)
 
     def screen_sources(self) -> dict:
         """Monitors and windows for the snapshot choice in the recording view."""
@@ -2604,6 +2588,27 @@ class Service:
         self._queue.put(None)
         if wait_s:
             self._worker.join(wait_s)
+
+
+_PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+
+def fill_prompt(template: str, values: dict[str, str]) -> str:
+    """The text for «Für KI kopieren»: placeholders replaced; a line whose placeholders are all empty is left out
+    (no «Projekt:» without a project); unknown {words} stay. Without {transkript} the path goes in front – the AI
+    must know which file to read."""
+    if "{transkript}" not in template:
+        template = f"Lies das Transkript {{transkript}}.\n\n{template}"
+    lines = []
+    for line in template.splitlines():
+        keys = [k for k in _PLACEHOLDER.findall(line) if k in values]
+        if keys and not any(values[k] for k in keys):
+            continue
+        line = _PLACEHOLDER.sub(lambda m: values.get(m[1], m[0]), line)
+        line = re.sub(r"\(\s*\)", "", re.sub(r",\s*\)", ")", re.sub(r"\(\s*,\s*", "(", line))).rstrip()
+        lines.append(line)
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines))
+    return text.strip() + "\n"
 
 
 def speaker_plan(s: Settings, meta: dict) -> tuple[dict[str, bool], dict[str, int], list[str]]:
