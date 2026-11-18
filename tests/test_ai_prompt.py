@@ -46,3 +46,10 @@ def test_instruction_that_no_longer_exists_is_reported(home):
     rid = finished_recording(s)
     with pytest.raises(RuntimeError, match="gibt es nicht mehr"):
         s.ai_prompt(rid, 5)
+
+
+def test_settings_offer_the_default_instructions_for_restoring():
+    """«Standard wiederherstellen» in Settings → KI fills the list with these (also after own ones were saved)."""
+    own = Settings.from_dict({"ai_prompts": json.dumps([{"name": "Eigen", "text": "x"}])})
+    assert own.as_dict()["default_prompts"] == DEFAULT_PROMPTS
+    assert own.as_dict()["prompts"] == [{"name": "Eigen", "text": "x"}]

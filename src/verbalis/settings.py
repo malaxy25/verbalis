@@ -131,7 +131,7 @@ class Settings:
 
     def as_dict(self) -> dict:
         return {**asdict(self), "recordings_path": str(self.recordings), "prompts": self.prompts,
-                "storage_warning": sync_warning(self.recordings)}
+                "default_prompts": DEFAULT_PROMPTS, "storage_warning": sync_warning(self.recordings)}
 
 
 def _clean_prompts(value: str) -> str:

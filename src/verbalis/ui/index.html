@@ -974,7 +974,8 @@
             (und die Bildschirm-Schnappschüsse), Titel, Datum, Dauer, Projekt, Teilnehmende und Notizen – und danach die Anweisung. Den
             Text in Claude Code oder eine andere KI einfügen, die Dateien lesen kann.</small>
           <div class="prompt-list" id="prompt-list"></div>
-          <div class="field-row"><button type="button" class="action" id="btn-prompt-add">Anweisung hinzufügen</button></div>
+          <div class="field-row"><button type="button" class="action" id="btn-prompt-add">Anweisung hinzufügen</button>
+            <button type="button" class="link-button" id="btn-prompt-defaults" title="Ersetzt die Liste durch die Standard-Anweisungen. Gilt erst mit «Einstellungen speichern» – «Abbrechen» macht es rückgängig.">Standard wiederherstellen</button></div>
           <small>Platzhalter in der Anweisung: {projekt}, {titel}, {datum}, {teilnehmende}, {notizen}, {transkript} (Pfad).
             Leere Einträge werden beim Speichern entfernt.</small>
         </div>
@@ -4291,6 +4292,8 @@ async function init() {
     $("prompt-list").append(item);
     item.querySelector(".prompt-name").focus();
   });
+  // only fills the fields: saved with «Einstellungen speichern», undone with «Abbrechen»
+  $("btn-prompt-defaults").addEventListener("click", () => renderPrompts(state.settings.default_prompts || []));
   $("btn-update").addEventListener("click", openUpdate);
   $("btn-model-update").addEventListener("click", openModelUpdates);
   $("btn-update-later").addEventListener("click", () => $("dlg-update").close());

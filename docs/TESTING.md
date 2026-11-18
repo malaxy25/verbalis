@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-375 tests in 38 files.
+376 tests in 38 files.
 
 ### `test_acceleration.py` (10)
 
@@ -87,7 +87,7 @@ Experimental tests in the diagnosis: speed test, MLX wheels, notification and ca
 - **Call check lists program names only**
 - **Speed test prefers a recording of at least a minute** – The first test on Windows took the newest recording: 31 s of silence, 0 words – nothing to compare.
 
-### `test_ai_prompt.py` (4)
+### `test_ai_prompt.py` (5)
 
 «Für KI kopieren»: the instructions in the settings and the text put on the clipboard.
 
@@ -95,6 +95,7 @@ Experimental tests in the diagnosis: speed test, MLX wheels, notification and ca
 - **Copied text has path details and instruction**
 - **Copied text mentions the snapshots when there are some**
 - **Instruction that no longer exists is reported**
+- **Settings offer the default instructions for restoring** – «Standard wiederherstellen» in Settings → KI fills the list with these (also after own ones were saved).
 
 ### `test_app.py` (9)
 
