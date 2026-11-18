@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-380 tests in 38 files.
+382 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -578,6 +578,13 @@ Merging both tracks into paragraphs and the Markdown output.
 The recording list in the UI: groups open and close. Runs the list functions of index.html in Node.js.
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
+
+### `test_ui_sidebar.py` (2)
+
+Folding the recording list to a narrow rail (Ctrl/Cmd+B). Runs setSidebar of index.html in Node.js.
+
+- **List folds and remembers only on purpose**
+- **Sidebar setting is open or closed**
 
 ### `test_ui_speakers.py` (9)
 
