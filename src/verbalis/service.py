@@ -2236,6 +2236,7 @@ class Service:
                 log.info("Swapping app bundle %s → %s", new_app, bundle)
                 updates.start_swap(script)
             else:
+                updates.check_windows_signature(target)
                 log.info("Starting installer %s", target)
                 subprocess.Popen([str(target)], close_fds=True)
         except Exception as e:

@@ -18,6 +18,8 @@ AppName=Verbalis
 AppVersion={#AppVersion}
 AppVerName=Verbalis {#AppVersion}
 AppPublisher=Andrea Frehner
+; SignPath checks the product name of the signed installer (packaging/signpath/), the app's update check too
+VersionInfoProductName=Verbalis
 AppPublisherURL=https://github.com/malaxy25/verbalis
 AppSupportURL=https://github.com/malaxy25/verbalis/issues
 DefaultDirName={localappdata}\Programs\Verbalis

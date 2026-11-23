@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+- **Code signing prepared** (switches on with the GitHub secrets, see `docs/CODE-SIGNING.md`): Mac builds can be
+  signed with an Apple Developer ID (hardened runtime, every binary on its own, entitlements for microphone and
+  Python) and notarized, DMG included; the Windows installer can be signed by SignPath Foundation. Without the
+  secrets nothing changes.
+- **Updates across the certificate switch:** with `APPLE_TEAM_ID` set, a Mac signed with the own certificate also
+  accepts updates signed by that Developer ID team. On Windows an update installer can be required to carry a
+  valid SignPath Foundation signature for the product Verbalis (`WINDOWS_PUBLISHER`, off until signed releases exist).
+
 ## 0.7.46 – 2026-11-23
 - **Screen snapshots while recording (experimental):** choose none, a whole monitor or one window (windows only
   on Windows). A picture is kept on a clear change once the screen is still; moving areas such as Teams video tiles

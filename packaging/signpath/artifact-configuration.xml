@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows release (paste into SignPath: project «verbalis» →
+  Artifact configurations → default). The release workflow uploads the installer as a GitHub artifact,
+  which GitHub wraps in a ZIP – hence <zip-file>. product-name is enforced as SignPath Foundation requires;
+  the app's update check relies on it too (updates.check_windows_signature).
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Verbalis-*-setup.exe" product-name="Verbalis">
+      <authenticode-sign description="Verbalis" description-url="https://github.com/malaxy25/verbalis"/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

@@ -23,6 +23,14 @@ on:
 
 permissions:
   contents: write   # needed to create the release
+  actions: read     # SignPath reads the build and downloads the unsigned installer
+
+# Code signing (docs/CODE-SIGNING.md) switches itself on when its secrets exist – without them the
+# release is built exactly as before (Mac: own certificate, Windows: unsigned).
+#   Mac, Developer ID + notarization: secrets MACOS_DEVID_CERT, MACOS_DEVID_PASSWORD, APPLE_API_KEY,
+#     APPLE_API_KEY_ID, APPLE_API_ISSUER.
+#   Windows, SignPath: secret SIGNPATH_API_TOKEN, variable SIGNPATH_ORGANIZATION_ID (optional variables
+#     SIGNPATH_PROJECT_SLUG, SIGNPATH_SIGNING_POLICY_SLUG). Only for real releases, not manual builds.
 
 jobs:
   version:
@@ -127,6 +135,55 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
           Get-ChildItem dist\Verbalis-*-setup.exe | ForEach-Object { "{0}  {1:N0} MB" -f $_.Name, ($_.Length / 1MB) }
 
+      # SignPath Foundation signs the installer (free for open source). Every signing request waits for
+      # Andrea's approval on signpath.io – the job waits too (up to 5 hours).
+      - name: Code signing configured?
+        id: signpath
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          RELEASE: ${{ needs.version.outputs.release }}
+        run: |
+          $on = [bool]$env:TOKEN -and [bool]$env:ORG -and $env:RELEASE -eq "true"
+          if (-not $on) { "SignPath not configured or not a release – the installer stays unsigned" }
+          "enabled=$($on.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+
+      - name: Upload the unsigned installer for SignPath
+        id: unsigned
+        if: steps.signpath.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: unsigned-windows-installer   # must not match «Verbalis-*» (publish takes those)
+          path: dist/Verbalis-*-setup.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign with SignPath (waits for the approval)
+        if: steps.signpath.outputs.enabled == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'verbalis' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 18000
+          output-artifact-directory: dist/signed
+
+      - name: Use the signed installer
+        if: steps.signpath.outputs.enabled == 'true'
+        run: |
+          $signed = Get-ChildItem dist\signed -Recurse -Filter "Verbalis-*-setup.exe" | Select-Object -First 1
+          if (-not $signed) { throw "SignPath returned no installer" }
+          $sig = Get-AuthenticodeSignature -LiteralPath $signed.FullName
+          $product = (Get-Item -LiteralPath $signed.FullName).VersionInfo.ProductName
+          "Signature: $($sig.Status) – $($sig.SignerCertificate.Subject) – product $product"
+          if ($sig.Status -ne "Valid") { throw "signature not valid: $($sig.Status)" }
+          if ($product -ne "Verbalis") { throw "unexpected product name: $product" }
+          Copy-Item -LiteralPath $signed.FullName -Destination "dist\$($signed.Name)" -Force
+          Remove-Item -Recurse -Force dist\signed
+
       - uses: actions/upload-artifact@v6
         with:
           name: Verbalis-${{ needs.version.outputs.version }}-windows
@@ -139,6 +196,8 @@ jobs:
     if: needs.version.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest      # Apple Silicon (arm64)
     continue-on-error: true    # must not block the Windows release
+    outputs:
+      notarized: ${{ steps.notarize.outputs.notarized }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -182,8 +241,13 @@ jobs:
         env:
           CERT: ${{ secrets.MACOS_SIGNING_CERT }}
           PASSWORD: ${{ secrets.MACOS_SIGNING_PASSWORD }}
+          DEVID_CERT: ${{ secrets.MACOS_DEVID_CERT }}
         run: |
           set -euo pipefail
+          if [ -n "$DEVID_CERT" ]; then
+            echo "Developer ID configured – signed in the next step instead"
+            exit 0
+          fi
           if [ -z "$CERT" ]; then
             echo "::warning::Secret MACOS_SIGNING_CERT missing – the app keeps its ad-hoc signature"
             exit 0
@@ -212,6 +276,46 @@ jobs:
           rm -f "$RUNNER_TEMP/verbalis-signing.p12"
           security delete-keychain "$keychain"
 
+      # Developer ID (paid Apple account): hardened runtime, every binary signed on its own, then
+      # notarized after the self-test. The Team ID must already be in updates.APPLE_TEAM_ID of a released
+      # version, or installed apps (own certificate) would refuse this update – see docs/CODE-SIGNING.md.
+      - name: Sign with Developer ID
+        id: devid
+        env:
+          CERT: ${{ secrets.MACOS_DEVID_CERT }}
+          PASSWORD: ${{ secrets.MACOS_DEVID_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CERT" ]; then
+            echo "Secret MACOS_DEVID_CERT missing – not notarized (own certificate)"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/verbalis-devid.keychain-db"
+          keychain_password=$(uuidgen)
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/verbalis-devid.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/verbalis-devid.p12" -k "$keychain" -P "$PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/verbalis-devid.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          line=$(security find-identity -v -p codesigning "$keychain" | grep "Developer ID Application" | head -1)
+          identity=$(echo "$line" | awk '{print $2}')
+          team=$(echo "$line" | sed -E 's/.*\(([A-Z0-9]{10})\)".*/\1/')
+          test -n "$identity"
+          echo "Identity: $line"
+          shipped=$(python3 -c "from verbalis import updates; print(updates.APPLE_TEAM_ID)")
+          if [ "$team" != "$shipped" ]; then
+            echo "::error::Certificate team $team is not updates.APPLE_TEAM_ID ($shipped). Release the Team ID first (docs/CODE-SIGNING.md)."
+            exit 1
+          fi
+          bash tools/macos/sign_developer_id.sh dist/Verbalis.app "$identity" "$keychain"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "SIGN_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+
       - name: Self-test of the app bundle
         env:
           VERBALIS_HOME: ${{ runner.temp }}/verbalis-home
@@ -221,6 +325,24 @@ jobs:
           set -euo pipefail
           dist/Verbalis.app/Contents/MacOS/verbalis-cli --version
           dist/Verbalis.app/Contents/MacOS/verbalis-cli selftest
+
+      - name: Notarize the app
+        id: notarize
+        if: steps.devid.outputs.enabled == 'true'
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APPLE_API_KEY" ] || [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER" ]; then
+            echo "::error::Developer ID is set but the App Store Connect API key (APPLE_API_KEY, _KEY_ID, _ISSUER) is missing"
+            exit 1
+          fi
+          printf '%s\n' "$APPLE_API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          echo "APPLE_API_KEY_FILE=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          APPLE_API_KEY_FILE="$RUNNER_TEMP/AuthKey.p8" bash tools/macos/notarize.sh dist/Verbalis.app
+          echo "notarized=true" >> "$GITHUB_OUTPUT"
 
       - name: Pack the app
         run: |
@@ -271,6 +393,23 @@ jobs:
             "dist/Verbalis-${{ needs.version.outputs.version }}-macos-arm64.dmg"
           ls -lh dist/*.dmg
 
+      - name: Sign and notarize the disk image
+        if: steps.notarize.outputs.notarized == 'true'
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          dmg="dist/Verbalis-${{ needs.version.outputs.version }}-macos-arm64.dmg"
+          codesign --force --timestamp --keychain "$SIGN_KEYCHAIN" --sign "$SIGN_IDENTITY" "$dmg"
+          bash tools/macos/notarize.sh "$dmg"
+
+      - name: Remove signing keys
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          if [ -n "${SIGN_KEYCHAIN:-}" ]; then security delete-keychain "$SIGN_KEYCHAIN" || true; fi
+
       - uses: actions/upload-artifact@v6
         with:
           name: Verbalis-${{ needs.version.outputs.version }}-macos
@@ -299,6 +438,7 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
           MAC_RESULT: ${{ needs.macos.result }}
+          MAC_NOTARIZED: ${{ needs.macos.outputs.notarized }}
         run: |
           python3 - <<'PY'
           import os, re
@@ -315,12 +455,15 @@ jobs:
           notes += ["", f"**Windows:** download and run `Verbalis-{version}-setup.exe`. An update is installed the "
                         "same way – settings, correction list, models and recordings are kept."]
           if os.environ["MAC_RESULT"] == "success":
+              first_start = ("Verbalis is notarized by Apple: on the first start just confirm «Öffnen». "
+                             if os.environ.get("MAC_NOTARIZED") == "true" else
+                             "On the first start macOS blocks the app because it is not notarized yet: close the message, then "
+                             "System Settings → Privacy & Security → «Open Anyway» (once; updates keep it). ")
               notes += ["", f"**Mac (Apple Silicon):** open `Verbalis-{version}-macos-arm64.dmg` and drag "
                             "Verbalis onto «Programme» (Applications) – or just open Verbalis: it offers to move itself "
                             "there (into the personal Applications folder without an administrator account). "
                             "The ZIP is for the automatic updates. "
-                            "On the first start macOS blocks the app because it is not notarized yet: close the message, then "
-                            "System Settings → Privacy & Security → «Open Anyway» (once; updates keep it). From macOS 14.2 Verbalis records the "
+                            + first_start + "From macOS 14.2 Verbalis records the "
                             "others' audio itself (allow the «Audio Recording» permission); "
                             "only older Macs need BlackHole, see the README."]
           open("release-notes.md", "w", encoding="utf-8").write("\n".join(notes) + "\n")

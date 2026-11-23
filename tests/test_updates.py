@@ -398,3 +398,82 @@ def test_mac_update_refused_when_the_running_app_is_not_signed(tmp_path):
     with pytest.raises(RuntimeError, match="nicht signiert"):
         updates.check_same_signer(tmp_path / "new.app", tmp_path / "Verbalis.app",
                                   run=FakeCodesign('cdhash H"abc"'))
+
+
+TEAM = "AB12CD34EF"
+
+
+def test_certificate_switch_accepts_the_developer_id_team_too(tmp_path):
+    """Switching from the self-made certificate to Developer ID: an installed app only accepts updates
+    signed like itself, so it would have refused the first notarized build. With APPLE_TEAM_ID set it
+    accepts the old certificate or that Developer ID team – nothing else."""
+    codesign = FakeCodesign(SIGNED)
+    updates.check_same_signer(tmp_path / "new.app", tmp_path / "Verbalis.app", run=codesign, team_id=TEAM)
+    requirement = codesign.calls[-1][4].removeprefix("-R=")
+    assert requirement.startswith(f"({SIGNED}) or (")
+    assert 'identifier "ch.frehner.verbalis" and anchor apple generic' in requirement
+    assert f'certificate leaf[subject.OU] = "{TEAM}"' in requirement
+    assert "1.2.840.113635.100.6.1.13" in requirement   # Developer ID Application, not any Apple certificate
+
+
+def test_without_team_id_only_the_own_certificate_counts(tmp_path):
+    codesign = FakeCodesign(SIGNED)
+    updates.check_same_signer(tmp_path / "new.app", tmp_path / "Verbalis.app", run=codesign, team_id="")
+    assert codesign.calls[-1][4] == f"-R={SIGNED}"
+
+
+def test_developer_id_app_keeps_its_own_requirement():
+    running = updates.developer_id_requirement(TEAM)
+    assert updates.accepted_requirement(running, TEAM) == running
+
+
+def test_team_id_must_look_like_one():
+    for bad in ("", "abc", "AB12CD34E", 'AB12CD34EF" or true'):
+        with pytest.raises(ValueError):
+            updates.developer_id_requirement(bad)
+
+
+def test_shipped_team_id_is_empty_or_valid():
+    if updates.APPLE_TEAM_ID:
+        updates.developer_id_requirement(updates.APPLE_TEAM_ID)
+
+
+class FakePowershell:
+    def __init__(self, status="Valid", subject="CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, C=US",
+                 product="Verbalis"):
+        self.info, self.calls = {"status": status, "subject": subject, "product": product}, []
+
+    def __call__(self, args, **kwargs):
+        import subprocess
+        self.calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args, 0, stdout=json.dumps(self.info), stderr="")
+
+
+def test_windows_installer_not_checked_without_publisher(tmp_path):
+    ps = FakePowershell(status="NotSigned")
+    updates.check_windows_signature(tmp_path / "x.exe", run=ps, publisher="")
+    assert not ps.calls
+
+
+def test_windows_installer_signed_by_the_publisher_is_accepted(tmp_path):
+    ps = FakePowershell()
+    updates.check_windows_signature(tmp_path / "x.exe", run=ps, publisher="SignPath Foundation")
+    args, kwargs = ps.calls[0]
+    assert args[0] == "powershell" and kwargs["env"]["VERBALIS_CHECK_FILE"] == str(tmp_path / "x.exe")
+
+
+@pytest.mark.parametrize("fake, message", [
+    (FakePowershell(status="NotSigned"), "Signatur ungültig"),
+    (FakePowershell(status="HashMismatch"), "Signatur ungültig"),
+    (FakePowershell(subject="CN=Someone Else, O=Evil Ltd"), "signiert von"),
+    (FakePowershell(subject="CN=SignPath Foundation Fake, O=X"), "signiert von"),
+    (FakePowershell(product="Other Tool"), "Produkt"),
+])
+def test_windows_installer_with_wrong_signature_is_refused_and_deleted(tmp_path, fake, message):
+    """Signed Windows releases: an installer that is unsigned, tampered, from another publisher or – since
+    SignPath Foundation signs many projects with one certificate – of another product must not run."""
+    installer = tmp_path / "Verbalis-9.9.9-setup.exe"
+    installer.write_bytes(b"MZ")
+    with pytest.raises(RuntimeError, match=message):
+        updates.check_windows_signature(installer, run=fake, publisher="SignPath Foundation")
+    assert not installer.exists()

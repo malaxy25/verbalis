@@ -169,7 +169,11 @@ dictionaries, recordings (`me.flac`, `others.flac`, `meta.json`, `transcript.md/
 - **«Problem melden»** (`feedback.py`, 0.7.29): POST to a Google Apps Script web app; URL and token from GitHub
   secrets → `packaging/feedback.json` (gitignored, bundled by the spec) or env `VERBALIS_FEEDBACK_URL/TOKEN`.
   Never recordings or transcripts; names and device names are removed. Script: `tools/feedback/apps-script.js`.
-- **Not notarized / Windows not signed** yet (SmartScreen and Gatekeeper warn on first install).
+- **Not notarized / Windows not signed** yet (SmartScreen and Gatekeeper warn on first install). Prepared
+  (Nov 2026): Developer ID + notarization and SignPath, switched on by secrets – `docs/CODE-SIGNING.md`. Order
+  matters: a release with `updates.APPLE_TEAM_ID` must ship before the first Developer ID build (installed apps
+  only accept their own signer); `WINDOWS_PUBLISHER` only after the first signed Windows release. With the
+  hardened runtime, MLX from `~/.verbalis/mlx` needs `disable-library-validation` (in the entitlements).
 
 ## How work is delivered (important pitfalls)
 

@@ -32,6 +32,17 @@ RELEASES_PAGE = f"https://github.com/{REPO}/releases"
 SECTION = re.compile(r"^## (\d+(?:\.\d+)*)\b(.*)$")
 ASSET_SUFFIX = {"win32": "-setup.exe", "darwin": "-macos-arm64.zip"}   # update file per platform
 
+# Code signing (docs/CODE-SIGNING.md). Neither value is a secret – both are visible in every signed file.
+# APPLE_TEAM_ID: the Apple Developer ID team that signs Verbalis once Andrea is enrolled. While it is set,
+#   an app signed with the old self-made certificate also accepts updates signed by this team – the bridge
+#   for the certificate switch. It must ship in a release BEFORE the first Developer ID build.
+# WINDOWS_PUBLISHER: signer of the Windows installer (SignPath Foundation). Empty = not checked. Set it only
+#   once a signed release is out – an app with it refuses unsigned installers.
+APPLE_TEAM_ID = ""
+WINDOWS_PUBLISHER = ""
+MAC_IDENTIFIER = "ch.frehner.verbalis"
+WINDOWS_PRODUCT = "Verbalis"
+
 
 def parse_version(text: str) -> tuple[int, ...]:
     """'v0.7.4' / '0.7.4' → (0, 7, 4); anything unparsable → ()."""
@@ -256,12 +267,33 @@ rm -f "$0"
     return script
 
 
-def check_same_signer(new_app: Path, running_app: Path, run: Callable = subprocess.run) -> None:
+def developer_id_requirement(team_id: str) -> str:
+    """Code requirement for Verbalis signed with a Developer ID Application certificate of `team_id`
+    (the same form Apple writes as designated requirement for Developer ID apps)."""
+    if not re.fullmatch(r"[A-Z0-9]{10}", team_id or ""):
+        raise ValueError(f"not an Apple Team ID: {team_id!r}")
+    return (f'identifier "{MAC_IDENTIFIER}" and anchor apple generic'
+            ' and certificate 1[field.1.2.840.113635.100.6.2.6] exists'
+            ' and certificate leaf[field.1.2.840.113635.100.6.1.13] exists'
+            f' and certificate leaf[subject.OU] = "{team_id}"')
+
+
+def accepted_requirement(running: str, team_id: str = "") -> str:
+    """What an update must satisfy: the running app's designated requirement – and, during the switch from
+    the self-made certificate to Developer ID, alternatively the Developer ID of `team_id`."""
+    if not team_id or team_id in running:
+        return running
+    return f"({running}) or ({developer_id_requirement(team_id)})"
+
+
+def check_same_signer(new_app: Path, running_app: Path, run: Callable = subprocess.run,
+                      team_id: str | None = None) -> None:
     """Raise unless the new app is signed with the same certificate as the running one.
 
     The running app's «designated requirement» names its identifier and certificate; `codesign` checks
     that the downloaded app satisfies it and that its signature is intact. So an update can only come
     from whoever holds the Verbalis certificate – a compromised GitHub account alone is not enough.
+    With APPLE_TEAM_ID set, an app signed by that Developer ID team is accepted too (certificate switch).
     """
     shown = run(["codesign", "--display", "--requirements", "-", str(running_app)],
                 capture_output=True, text=True)
@@ -270,12 +302,62 @@ def check_same_signer(new_app: Path, running_app: Path, run: Callable = subproce
     if "certificate" not in requirement:   # ad-hoc or unsigned: nothing to compare with
         raise RuntimeError("Diese Verbalis-Installation ist nicht signiert, darum lässt sich das Update nicht "
                            "prüfen. Bitte die neue Version von der Release-Seite laden.")
+    requirement = accepted_requirement(requirement, APPLE_TEAM_ID if team_id is None else team_id)
     checked = run(["codesign", "--verify", "--deep", "--strict", f"-R={requirement}", str(new_app)],
                   capture_output=True, text=True)
     if checked.returncode != 0:
         detail = (checked.stderr or checked.stdout or "").strip()
         raise RuntimeError("Das heruntergeladene Update ist nicht mit dem Verbalis-Zertifikat signiert und wurde "
                            f"nicht installiert. ({detail[-200:]})")
+
+
+_AUTHENTICODE_SCRIPT = (
+    "$f = $env:VERBALIS_CHECK_FILE; $s = Get-AuthenticodeSignature -LiteralPath $f; "
+    "$v = (Get-Item -LiteralPath $f).VersionInfo; "
+    "[pscustomobject]@{status = [string]$s.Status; subject = [string]$s.SignerCertificate.Subject; "
+    "product = [string]$v.ProductName} | ConvertTo-Json -Compress"
+)
+
+
+def _subject_names(subject: str) -> set[str]:
+    """'CN=SignPath Foundation, O=SignPath Foundation, L=…' → {'SignPath Foundation', …} (CN and O only)."""
+    names = set()
+    for part in re.split(r",\s*(?=[A-Z]+=)", subject or ""):
+        key, _, value = part.partition("=")
+        if key.strip() in ("CN", "O"):
+            names.add(value.strip().strip('"'))
+    return names
+
+
+def check_windows_signature(installer: Path, run: Callable = subprocess.run,
+                            publisher: str | None = None) -> None:
+    """Raise unless the downloaded installer carries a valid Authenticode signature of WINDOWS_PUBLISHER
+    for the product Verbalis. Without a publisher configured (unsigned releases) nothing is checked.
+
+    The SignPath Foundation certificate is shared by many open-source projects, so the product name inside
+    the signed file (enforced by the SignPath artifact configuration) is checked as well.
+    """
+    publisher = WINDOWS_PUBLISHER if publisher is None else publisher
+    if not publisher:
+        return
+    shown = run(["powershell", "-NoProfile", "-NonInteractive", "-Command", _AUTHENTICODE_SCRIPT],
+                env={**os.environ, "VERBALIS_CHECK_FILE": str(installer)}, capture_output=True, text=True,
+                timeout=120, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        info = json.loads(shown.stdout or "")
+    except ValueError:
+        info = {}
+    problem = None
+    if info.get("status") != "Valid":
+        problem = f"Signatur ungültig oder fehlt ({info.get('status') or (shown.stderr or '').strip()[-120:]})"
+    elif publisher not in _subject_names(info.get("subject", "")):
+        problem = f"signiert von «{info.get('subject')}» statt von «{publisher}»"
+    elif (info.get("product") or "").strip() != WINDOWS_PRODUCT:
+        problem = f"Produkt «{info.get('product')}» statt «{WINDOWS_PRODUCT}»"
+    if problem:
+        installer.unlink(missing_ok=True)
+        raise RuntimeError(f"Das heruntergeladene Update wurde nicht ausgeführt: {problem}. "
+                           "Bitte die neue Version von der Release-Seite laden.")
 
 
 def unpack_mac_update(zip_path: Path, workdir: Path, extract: Callable | None = None) -> Path:

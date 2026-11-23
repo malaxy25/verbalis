@@ -103,3 +103,47 @@ def test_monthly_model_check_keeps_the_exit_code_of_its_tools():
     for script in scripts:
         line = next(x for x in script.splitlines() if "report=$(" in x)
         assert "|| status=$?" in line
+
+
+def _step(job, name):
+    return next(s for s in JOBS[job]["steps"] if s.get("name") == name)
+
+
+def test_windows_signing_only_with_secrets_and_only_for_releases():
+    """Code signing must switch itself on: without the SignPath secrets the release is built as before."""
+    probe = _step("windows", "Code signing configured?")
+    assert "secrets.SIGNPATH_API_TOKEN" in probe["env"]["TOKEN"]
+    assert "needs.version.outputs.release" in probe["env"]["RELEASE"]
+    for name in ("Upload the unsigned installer for SignPath", "Sign with SignPath (waits for the approval)",
+                 "Use the signed installer"):
+        assert _step("windows", name)["if"] == "steps.signpath.outputs.enabled == 'true'"
+    names = [s.get("name", "") for s in JOBS["windows"]["steps"]]
+    assert names.index("Use the signed installer") < len(names) - 1   # before the final upload
+
+
+def test_unsigned_installer_is_never_published():
+    upload = _step("windows", "Upload the unsigned installer for SignPath")
+    pattern = next(s for s in JOBS["publish"]["steps"]
+                   if str(s.get("uses", "")).startswith("actions/download-artifact"))["with"]["pattern"]
+    import fnmatch
+    assert not fnmatch.fnmatch(upload["with"]["name"], pattern)
+
+
+def test_mac_developer_id_replaces_the_own_certificate_only_when_configured():
+    legacy = _step("macos", "Sign with the Verbalis certificate")
+    assert "MACOS_DEVID_CERT" in legacy["env"]["DEVID_CERT"] and 'if [ -n "$DEVID_CERT" ]' in legacy["run"]
+    devid = _step("macos", "Sign with Developer ID")
+    assert "updates.APPLE_TEAM_ID" in devid["run"]   # refuses to switch before the bridge release
+    assert _step("macos", "Notarize the app")["if"] == "steps.devid.outputs.enabled == 'true'"
+    names = [s.get("name", "") for s in JOBS["macos"]["steps"]]
+    assert names.index("Self-test of the app bundle") < names.index("Notarize the app") < names.index("Pack the app")
+
+
+def test_entitlements_cover_microphone_and_python():
+    import plistlib
+    app = plistlib.loads((ROOT / "packaging" / "macos" / "verbalis.entitlements").read_bytes())
+    assert app == {"com.apple.security.device.audio-input": True,
+                   "com.apple.security.cs.allow-unsigned-executable-memory": True,
+                   "com.apple.security.cs.disable-library-validation": True}
+    helper = plistlib.loads((ROOT / "packaging" / "macos" / "audiotap.entitlements").read_bytes())
+    assert helper == {"com.apple.security.device.audio-input": True}

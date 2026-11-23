@@ -61,6 +61,14 @@ in the README and in `BACKLOG.md`):
   (use `verbalis compare` with a corrected transcript)
 - the window itself (pywebview / WebView2 / WebKit)
 - installer and update on a clean Windows machine or Mac
+- **Permissions after the certificate switch** (docs/CODE-SIGNING.md), once on the first notarized Mac
+  build: update from the bridge release via the update notice → the update installs (Team ID accepted);
+  first start opens without «Dennoch öffnen»; on the next recording macOS asks again for **Mikrofon**,
+  **Systemaudio** (Bildschirm- & Systemaudioaufnahme) and, with snapshots on, **Bildschirmaufnahme** –
+  allow all three, then check that both tracks have sound and snapshots are saved. Also: an MLX speed
+  test still loads the add-on (library validation off).
+- **Signed Windows installer:** the first signed release shows «SignPath Foundation» as publisher in the
+  SmartScreen/UAC dialog; after `WINDOWS_PUBLISHER` is set, an update via the notice still installs.
 
 **User interface:** the HTML/JavaScript UI can be opened in any browser with a fake
 backend: `python tools/ui_preview.py` writes `tools/ui-preview/preview.html`
@@ -70,7 +78,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-394 tests in 39 files.
+406 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -413,7 +421,7 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Device that never opens is not retried**
 - **User is told once that a device is gone**
 
-### `test_release_workflow.py` (8)
+### `test_release_workflow.py` (12)
 
 The release workflow: only after green tests, only for a new version, exactly the tested commit.
 
@@ -425,6 +433,10 @@ The release workflow: only after green tests, only for a new version, exactly th
 - **Fixed download names are never taken for an update** – frehner.tech links to fixed names (releases/latest/download/…) because the GitHub API it used for the
 - **Decision step**
 - **Monthly model check keeps the exit code of its tools** – 0.7.43: GitHub runs steps with `bash -e`, so `report=$(python3 tools/find_new_models.py)` ended the step
+- **Windows signing only with secrets and only for releases** – Code signing must switch itself on: without the SignPath secrets the release is built as before.
+- **Unsigned installer is never published**
+- **Mac developer id replaces the own certificate only when configured**
+- **Entitlements cover microphone and python**
 
 ### `test_robustness.py` (13)
 
@@ -618,7 +630,7 @@ The introduction in the UI: its last step. Runs the tour functions of index.html
 
 - **Test recording is deleted once and the step stays** – 0.7.30 draft: after «Probeaufnahme löschen» the button stayed (the step count shrank and the card was
 
-### `test_updates.py` (28)
+### `test_updates.py` (36)
 
 Update check, installer download, macOS bundle swap, what's new from the changelog.
 
@@ -650,6 +662,14 @@ Update check, installer download, macOS bundle swap, what's new from the changel
 - **Update without checksum is not downloaded** – 0.7.28: without a SHA-256 from GitHub the size alone was enough to run a downloaded installer.
 - **Mac update must be signed like the running app** – 0.7.28: a downloaded Mac update was installed without checking who signed it – a compromised GitHub
 - **Mac update refused when the running app is not signed**
+- **Certificate switch accepts the developer id team too** – Switching from the self-made certificate to Developer ID: an installed app only accepts updates
+- **Without team id only the own certificate counts**
+- **Developer id app keeps its own requirement**
+- **Team id must look like one**
+- **Shipped team id is empty or valid**
+- **Windows installer not checked without publisher**
+- **Windows installer signed by the publisher is accepted**
+- **Windows installer with wrong signature is refused and deleted** – Signed Windows releases: an installer that is unsigned, tampered, from another publisher or – since
 
 ### `test_wasapi_fix.py` (5)
 

@@ -142,8 +142,8 @@ code requirement (same certificate), checked in the release build with the real 
 - [ ] **GitHub account and repo** **[ops]**: two-factor / passkey on the account; protect `main` (no force
   push, no deletion); signing secrets only in a GitHub «Environment» used by the release job; pin
   third-party actions (`softprops/action-gh-release`, ideally all) to a commit SHA – Dependabot updates them.
-- [ ] **Windows: check the update's signature before running it** – only possible once Windows is signed
-  (see «Code signing»). **[ops]**
+- [ ] **Windows: check the update's signature before running it** – built (`updates.check_windows_signature`),
+  switched on by `WINDOWS_PUBLISHER` after the first signed release (see «Code signing»). **[ops]**
 - [ ] **Recordings at rest** are not encrypted: rely on BitLocker/FileVault (document for users and tocco IT);
   later maybe «Audio nach N Tagen löschen». **[privacy]**
 
@@ -222,11 +222,12 @@ Still open:
 - [ ] **Installer test, part 2** – on the second PC: a full recording with transcription (after the 0.7.13 device fix), and uninstall. **[ops]**
 - [ ] **Offline use** – the spelling dictionary is downloaded on first use like the models; for machines without internet provide both on an internal share. **[ops]**
 - [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
-- [ ] **Code signing** – Windows: SignPath Foundation offers free certificates for open-source projects (fully automated build required, each release approved by hand; SmartScreen reputation still builds up over time). macOS: Apple Developer Program (99 USD/year) for signing and notarization. Alternative for Windows: Certum «Open
-  Source Code Signing» (about 50–100 EUR/year, cloud key usable from CI). Notarization needs more than the
-  certificate: hardened runtime (`--options runtime`), `--timestamp`, every binary in the PyInstaller bundle
-  signed on its own instead of `--deep`, entitlements for audio input (maybe more for Python). Changing
-  the certificate makes macOS ask for the permissions once more. **[ops]**
+- [ ] **Code signing** – decided 23 Nov 2026: Mac = Apple Developer Program (individual, Developer ID +
+  notarization), Windows = SignPath Foundation. **Pipeline prepared** (not released yet, switches on with the
+  secrets): `docs/CODE-SIGNING.md` is the checklist. Next: Andrea enrolls at Apple and applies at SignPath →
+  bridge release with `updates.APPLE_TEAM_ID` → secrets → first signed release → `WINDOWS_PUBLISHER`.
+  Risks: entitlements only verified by the CI self-test, not yet on a real Mac (TCC prompts, process tap,
+  MLX); SignPath approval needed for every release (Windows job waits up to 5 h). **[ops]**
 
 - [ ] Talk to IT and data protection: local processing, consent per recording, retention (audio deleted after N days).
 - [x] **Licence of the default model gcoli checked (15 Oct 2026):** model MIT; base `whisper-large-v3-turbo` MIT;

@@ -83,10 +83,11 @@ For Macs with Apple Silicon (M1 or newer). Tested on real Macs since 0.7.24.
 1. Open `Verbalis-X.Y.Z-macos-arm64.dmg` and drag **Verbalis** onto «Programme» – or just open
    Verbalis: it offers to move itself there (into the personal «Programme» folder without an
    administrator account) and starts again from there.
-2. **First start: macOS blocks the app**, because it is not notarized by Apple yet («Verbalis»
+2. **First start: macOS blocks the app** as long as it is not notarized by Apple («Verbalis»
    kann nicht geöffnet werden). Close the message, then open Systemeinstellungen → Datenschutz &
    Sicherheit, scroll down to the notice about Verbalis and click **«Dennoch öffnen»**, confirm with
-   your password. This is needed once; updates keep it.
+   your password. This is needed once; updates keep it. Notarized versions (see
+   [Code signing policy](#code-signing-policy)) only ask once whether to open an app from the internet.
 3. On the first recording macOS asks twice: for the **Mikrofon** and for **audio recording**
    (Bildschirm- & Systemaudioaufnahme – the others' voices). Allow both. If you clicked «Nicht
    erlauben»: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon or Bildschirm- &
@@ -271,7 +272,8 @@ To compare an old and a new Flix: the old conversion stays available as
 
 - Records and transcribes **only on this computer**. Audio and transcripts are never
   uploaded. Network access is limited to: update check (GitHub), model and dictionary
-  downloads (Hugging Face, LibreOffice on GitHub) – no recording data is sent.
+  downloads (Hugging Face, LibreOffice on GitHub) and «Problem melden» (only when the user sends
+  a report) – no recording data is sent.
 - **Storage:** `~/.verbalis/recordings/` in the user's profile (Windows:
   `C:\Users\<name>\.verbalis`), readable with that user's permissions only, as far as the
   operating system enforces it. A different folder can be set; Verbalis warns if it lies in a
@@ -299,7 +301,6 @@ To compare an old and a new Flix: the old conversion stays available as
 - backups: whether and where `~/.verbalis` is backed up, and how long
 - the consent and information process for customer calls, and who is responsible for the data
 - what happens to recordings when an employee leaves or a device is replaced
-- code signing of the installers (see `BACKLOG.md`)
 
 Recordings contain personal data; they are excluded from the repo via `.gitignore`.
 
@@ -319,7 +320,7 @@ When the **Tests** workflow is green for that push and the version has no tag ye
 
 Then it creates the tag `v<version>`. The installer installs per user into
 `%LOCALAPPDATA%\Programs\Verbalis` without admin rights; installing a newer
-version updates in place and keeps `~/.verbalis`. Without a code signature Windows
+version updates in place and keeps `~/.verbalis`. As long as the installer is not signed, Windows
 SmartScreen warns on first install («Weitere Informationen» → «Trotzdem ausführen»).
 
 The workflow can also be started manually (Actions → Release → Run workflow): it then
@@ -329,6 +330,23 @@ The build uses the exact versions in `packaging/requirements-build.txt`.
 
 Local build: `pip install -c packaging/requirements-build.txt -e ".[build]"`, then
 `pyinstaller packaging/verbalis.spec --noconfirm`.
+
+## Code signing policy
+
+Windows: free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org). macOS: signed with an Apple Developer ID and notarized
+by Apple. Setup and order of the switch: [docs/CODE-SIGNING.md](docs/CODE-SIGNING.md).
+
+- Only installers built by the GitHub Actions release workflow from this repository are signed –
+  nothing built on a personal computer. Every Windows signing request is approved by hand.
+- **Committers and reviewers:** [Andrea Frehner](https://github.com/malaxy25) (owner). Changes by
+  others come as pull requests and are reviewed before merging.
+- **Approvers:** [Andrea Frehner](https://github.com/malaxy25).
+- **Privacy:** this program will not transfer any information to other networked systems unless
+  specifically requested by the user or the person installing or operating it – see
+  [Privacy, storage and law](#privacy-storage-and-law): the update check and model downloads can be
+  switched off or need a confirmation, «Problem melden» is only sent on request, recordings and
+  transcripts never leave the computer.
 
 ## Development
 
