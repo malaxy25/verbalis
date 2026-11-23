@@ -224,8 +224,11 @@ Still open:
 - [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
 - [ ] **Code signing** – decided 23 Nov 2026: Mac = Apple Developer Program (individual, Developer ID +
   notarization), Windows = SignPath Foundation. **Pipeline prepared** (not released yet, switches on with the
-  secrets): `docs/CODE-SIGNING.md` is the checklist. Next: Andrea enrolls at Apple and applies at SignPath →
-  bridge release with `updates.APPLE_TEAM_ID` → secrets → first signed release → `WINDOWS_PUBLISHER`.
+  secrets): `docs/CODE-SIGNING.md` is the checklist. **Status 23 Nov 2026:** SignPath Foundation application
+  sent (waiting for the answer). Apple **on hold** (Andrea: CHF 109/year, waits for now; enrollment started, not
+  paid – can be continued later). Until then Mac stays on the own certificate as today. Next: SignPath answer →
+  secrets → first signed Windows release → `WINDOWS_PUBLISHER`. Apple later: enroll → Team ID → bridge release
+  with `updates.APPLE_TEAM_ID` → secrets → first Developer ID release.
   Risks: entitlements only verified by the CI self-test, not yet on a real Mac (TCC prompts, process tap,
   MLX); SignPath approval needed for every release (Windows job waits up to 5 h). **[ops]**
 
