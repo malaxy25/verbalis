@@ -4,10 +4,10 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## Current state (18 Nov 2026)
+## Current state (23 Nov 2026)
 
-- **Last session:** features for 0.7.46, committed locally (c591233 … HEAD, 19 commits), **not pushed**,
-  no version raised. (1) Screen snapshots while recording (`screens.py`): none / monitor / one window (Windows);
+- **Released 0.7.46 (23 Nov 2026)** on Andrea's request; snapshots marked experimental in the CHANGELOG.
+  The in-app tests under «Next step» were not done before the release – still to do. Contents: (1) Screen snapshots while recording (`screens.py`): none / monitor / one window (Windows);
   kept on a clear change once the screen is still; moving areas (Teams video tiles) are learned and ignored;
   `screens/HH-MM-SS.png`, linked in `transcript.md`. (2) «Für KI kopieren: <Anweisung>» in the transcript menu
   «⋯»: the whole text with German placeholders ({transkript} {bilder} {titel} {datum} {dauer} {projekt}
