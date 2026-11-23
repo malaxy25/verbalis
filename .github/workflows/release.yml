@@ -151,7 +151,7 @@ jobs:
       - name: Upload the unsigned installer for SignPath
         id: unsigned
         if: steps.signpath.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-windows-installer   # must not match «Verbalis-*» (publish takes those)
           path: dist/Verbalis-*-setup.exe
@@ -184,7 +184,7 @@ jobs:
           Copy-Item -LiteralPath $signed.FullName -Destination "dist\$($signed.Name)" -Force
           Remove-Item -Recurse -Force dist\signed
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: Verbalis-${{ needs.version.outputs.version }}-windows
           path: dist/Verbalis-*-setup.exe
@@ -410,7 +410,7 @@ jobs:
           rm -f "$RUNNER_TEMP/AuthKey.p8"
           if [ -n "${SIGN_KEYCHAIN:-}" ]; then security delete-keychain "$SIGN_KEYCHAIN" || true; fi
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: Verbalis-${{ needs.version.outputs.version }}-macos
           path: |
@@ -428,7 +428,7 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.sha }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: Verbalis-*
           path: dist
