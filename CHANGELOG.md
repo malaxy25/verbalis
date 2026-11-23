@@ -18,6 +18,9 @@
   floats over the content; red dot recording, blue transcribing), recordings folder, settings and version.
   Ctrl/Cmd+↑/↓ goes to the newer/older recording.
 - **Fix:** a snapshot taken before the recorder ran was named after the PC's uptime («124-26-38.png»).
+- **Fix: speaker diarization on new installs.** sherpa-onnx re-uploaded the speaker model on 19 Nov 2026 (only
+  the producer version in its header changed, the model is the same), so its download failed with «Prüfsumme
+  falsch» – also for 0.7.45. Both versions of the file are accepted now.
 
 ## 0.7.45 – 2026-11-06
 - **No sleep mode while recording or processing:** a recording that ran into sleep mode stopped. While Verbalis

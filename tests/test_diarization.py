@@ -98,6 +98,28 @@ def test_models_are_downloaded_once_and_checked(tmp_path, monkeypatch, no_real_d
         no_real_diarization.real_ensure_models(tmp_path / "other", opener=opener)
 
 
+def test_model_download_accepts_each_known_checksum():
+    """Bug 0.7.46: sherpa-onnx re-uploaded the embedding model (only the header's producer version changed),
+    so new installs and the release self-test failed with «Prüfsumme falsch». Every listed checksum counts."""
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def opener(data):
+        return lambda request, timeout=None: Response(data)
+
+    old, new = b"model, old header", b"model, new header"
+    known = (hashlib.sha256(old).hexdigest(), hashlib.sha256(new).hexdigest())
+    assert diarization._fetch("https://example.test/emb", known, opener(old)) == old
+    assert diarization._fetch("https://example.test/emb", known, opener(new)) == new
+    with pytest.raises(RuntimeError, match="Prüfsumme"):
+        diarization._fetch("https://example.test/emb", known, opener(b"something else"))
+    assert len(diarization.EMBEDDING["sha256"]) == 2   # both versions of the real file
+
+
 # ---------------------------------------------------------------- in the transcript
 
 class TwoSentences:

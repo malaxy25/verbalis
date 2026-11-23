@@ -48,7 +48,10 @@ SEGMENTATION = {
 }
 EMBEDDING = {
     "url": RELEASES + "speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
-    "sha256": "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
+    # sherpa-onnx replaced the file on 19 Nov 2026: only the producer version in the header changed
+    # (pytorch 2.4.1 -> 2.14.1, one byte longer), the model itself is byte for byte the same. Both count.
+    "sha256": ("1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
+               "f1ee61be04000b50392a63442e5dd9feaea7e81dddd494d3647cf1c3d88a1498"),
     "file": "embedding.onnx",
 }
 THRESHOLD = 0.7          # cosine distance for clustering; higher = fewer speakers
@@ -80,10 +83,12 @@ def models_ready(folder: Path | None = None) -> bool:
     return all((folder / m["file"]).exists() for m in (SEGMENTATION, EMBEDDING))
 
 
-def _fetch(url: str, sha256: str, opener=urllib.request.urlopen) -> bytes:
+def _fetch(url: str, sha256: str | tuple[str, ...], opener=urllib.request.urlopen) -> bytes:
+    """Download and check against the known checksum (or any of several, e.g. a re-uploaded file)."""
+    allowed = (sha256,) if isinstance(sha256, str) else tuple(sha256)
     with opener(urllib.request.Request(url, headers={"User-Agent": "Verbalis"}), timeout=120) as response:
         data = response.read()
-    if hashlib.sha256(data).hexdigest() != sha256:
+    if hashlib.sha256(data).hexdigest() not in allowed:
         raise RuntimeError("Ein Modell für die Sprechererkennung ist beschädigt angekommen (Prüfsumme falsch).")
     return data
 

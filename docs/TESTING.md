@@ -70,7 +70,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-393 tests in 39 files.
+394 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -221,7 +221,7 @@ Device selection, including macOS where the others' voices come from a virtual i
 - **Soundcard without the windows warning class** – 0.7.19 bug on macOS: «module 'soundcard' has no attribute 'SoundcardRuntimeWarning'» –
 - **Microphone only choice has no second device**
 
-### `test_diarization.py` (25)
+### `test_diarization.py` (26)
 
 Speaker diarization: assigning speakers, model download, transcript, naming, merging, samples.
 
@@ -230,6 +230,7 @@ Speaker diarization: assigning speakers, model download, transcript, naming, mer
 - **Segment goes to the speaker who talks most or the nearest**
 - **Several voices on the microphone are persons** – 0.7.30 (Andrea): on site the others speak into the same microphone – «Andrea 1, Andrea 2» was wrong.
 - **Models are downloaded once and checked**
+- **Model download accepts each known checksum** – Bug 0.7.46: sherpa-onnx re-uploaded the embedding model (only the header's producer version changed),
 - **Transcript has speakers of the others**
 - **Switched off means no speakers**
 - **Failing diarization keeps the transcript**
