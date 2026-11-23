@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.46 – 2026-11-23
+- **Screen snapshots while recording (experimental):** choose none, a whole monitor or one window (windows only
+  on Windows). A picture is kept on a clear change once the screen is still; moving areas such as Teams video tiles
+  are learned and ignored. Pictures go to `screens/HH-MM-SS.png` and are linked in `transcript.md`. The choice is
+  grouped into «Ganzer Bildschirm», «Meetings» (Teams/Zoom/Webex/Meet/3CX, running calls first) and «Weitere
+  Fenster»; with exactly one call open it is chosen automatically. Device and window lists reload when Verbalis gets
+  the focus back, without losing an unsaved choice. Not tested on the Mac yet.
+- **Snapshots prepared for the AI:** after the recording (and at «Für KI kopieren») the pictures are cut to the
+  shared content and chosen – shown at least N seconds (Settings → KI, default 5) and no repeats – into
+  `screens_crop/`; `transcript.md` links those. About 4 s for 123 pictures.
+- **«Für KI kopieren: <Anweisung>»** in the transcript menu «⋯»: copies the transcript with an instruction defined
+  in Settings → KI. The whole text is visible there with placeholders ({transkript} {bilder} {titel} {datum}
+  {dauer} {projekt} {teilnehmende} {notizen}); lines with only empty placeholders drop out; «Standard» puts a
+  delivered entry back.
+- **Foldable recording list:** «‹» or Ctrl/Cmd+B folds it to a narrow rail (remembered) with search, +, ☰ (the list
+  floats over the content; red dot recording, blue transcribing), recordings folder, settings and version.
+  Ctrl/Cmd+↑/↓ goes to the newer/older recording.
+- **Fix:** a snapshot taken before the recorder ran was named after the PC's uptime («124-26-38.png»).
+
 ## 0.7.45 – 2026-11-06
 - **No sleep mode while recording or processing:** a recording that ran into sleep mode stopped. While Verbalis
   records (also paused) or transcribes and tells speakers apart, the computer no longer goes to sleep (Windows: a
