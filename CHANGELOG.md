@@ -1,7 +1,10 @@
 # Changelog
 
 ## Unreleased
-- **Search finds more and says where:** «In allen Aufnahmen» now also searches the notes, the speaker names in the
+- **One search for everything:** the switch «Dieses Transkript / Alle Aufnahmen» is gone. The search always lists
+  every recording with a hit and marks the hits in the open transcript (↑↓ as before). A folded list opens for
+  the results and folds again when the search closes.
+- **Search finds more and says where:** it now also searches the notes, the speaker names in the
   transcript and the date/folder name (e.g. «2026-11-23» or «23.11.»), besides title, project and participants.
   Each result says where it was found («Gefunden in: Titel · Personen · Transkript»); recordings found by these
   details come first, those found only in the transcript after them.

@@ -30,6 +30,7 @@ const SHORTCUT = "Ctrl+B";
 const saved = [];
 function call(name, data) { saved.push(data); return Promise.resolve({ ...state.settings, ...data }); }
 const state = { settings: { sidebar: "open" } };
+const search = { unfolded: false };
 function closeListFlyout() {}
 """
 

@@ -495,11 +495,11 @@ Screen snapshots during a recording (screens.py): which pictures are kept, their
 
 ### `test_search.py` (8)
 
-Search in transcripts: the rules (verbalis/search.py, the same in index.html) and «Alle Aufnahmen».
+Search in transcripts: the rules (verbalis/search.py, the same in index.html) and the search across all recordings.
 
 - **Search rules**
 - **Accents and sharp s**
-- **Window uses the same rules as python** – The open transcript is searched in the window: it must find exactly what «Alle Aufnahmen» finds.
+- **Window uses the same rules as python** – The open transcript is searched in the window: it must find exactly what the search across all recordings finds.
 - **Snippet is cut around the first hit**
 - **Search across recordings newest first**
 - **Search sees edits and skips broken transcripts**

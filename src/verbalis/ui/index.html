@@ -119,10 +119,6 @@
   .search-bar .icon-button:hover { border-color: var(--line); color: var(--ink); }
   .search-bar .icon-button:disabled { opacity: 0.4; cursor: default; border-color: transparent; }
   #search-close { margin-left: auto; }
-  .search-scope { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-  .search-scope button { border: 0; background: var(--surface); padding: 3px 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
-  .search-scope button + button { border-left: 1px solid var(--line); }
-  .search-scope button[aria-checked="true"] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
   ::highlight(search) { background: var(--amber-soft); color: inherit; text-decoration: underline 2px var(--amber); }
   ::highlight(search-current) { background: var(--amber); color: var(--surface); }
   .paragraph.search-current, .aside.search-current { box-shadow: -3px 0 0 var(--amber); }
@@ -804,14 +800,10 @@
   </section>
 
   <div class="search-bar" id="search-bar" role="search" hidden>
-    <input type="text" id="search-input" placeholder="Im Transkript suchen" aria-label="Suchbegriff" autocomplete="off" spellcheck="false">
+    <input type="text" id="search-input" placeholder="In allen Aufnahmen suchen" aria-label="Suchbegriff" autocomplete="off" spellcheck="false">
     <span class="search-count" id="search-count" aria-live="polite"></span>
     <button type="button" class="icon-button" id="search-prev" title="Vorheriger Treffer (Shift+Enter)" aria-label="Vorheriger Treffer">↑</button>
     <button type="button" class="icon-button" id="search-next" title="Nächster Treffer (Enter)" aria-label="Nächster Treffer">↓</button>
-    <div class="search-scope" role="radiogroup" aria-label="Suchen in">
-      <button type="button" role="radio" data-scope="this" aria-checked="true">Dieses Transkript</button>
-      <button type="button" role="radio" data-scope="all" aria-checked="false">Alle Aufnahmen</button>
-    </div>
     <button type="button" class="icon-button" id="search-close" title="Suche schliessen (Esc)" aria-label="Suche schliessen">×</button>
   </div>
   <section class="content" id="content" aria-live="polite"></section>
@@ -3521,15 +3513,17 @@ function closeWhatsNew() {
 }
 
 /* ---------- Search ---------- */
-/* The open transcript is searched here in the window; «Alle Aufnahmen» asks Python (`search`) and shows the
+/* The open transcript is searched here in the window; the list of all recordings comes from Python (`search`) and shows the
    recordings found in the sidebar instead of the list. Same rules on both sides (verbalis/search.py):
    case and accents ignored, «ä» = «ae», «ö» = «oe», «ü» = «ue», «ß» = «ss»; several words = all of them in
    one paragraph. Hits are marked with the CSS Highlight API, the text itself stays unchanged. */
 
 const SEARCH_DELAY_MS = 300;
 const SEARCH_FOLD = { "ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss" };
-const search = { open: false, query: "", terms: [], scope: "this", ranges: [], current: -1,
-                 results: null, seq: 0, timer: null, jumpTo: null, frame: 0 };
+/* One search for everything (24.11.2026): the list shows every recording with a hit, the open transcript marks its
+   hits (↑↓). unfolded: the list was folded and opened for the results – folded again when the search closes. */
+const search = { open: false, query: "", terms: [], ranges: [], current: -1,
+                 results: null, seq: 0, timer: null, jumpTo: null, frame: 0, unfolded: false };
 
 function foldText(text) {
   let folded = "";
@@ -3563,7 +3557,7 @@ function matchSpans(text, terms) {
 }
 
 function searchingAll() {
-  return search.open && search.scope === "all" && search.terms.length > 0;
+  return search.open && search.terms.length > 0;
 }
 
 /* A Range over characters start…end of el's text, across its text nodes. */
@@ -3630,7 +3624,7 @@ function updateSearchCount() {
   const n = search.ranges.length;
   const open = !!document.querySelector("#content .transcript");
   $("search-count").textContent = !search.terms.length ? "" : n ? `${search.current + 1} von ${n}`
-    : open ? "Keine Treffer" : (search.scope === "all" ? "" : "Kein Transkript offen");
+    : open ? "Hier keine Treffer" : "";
   $("search-prev").disabled = $("search-next").disabled = n < 2;
 }
 
@@ -3669,6 +3663,7 @@ function closeSearch() {
   if (HAS_HIGHLIGHT) { CSS.highlights.delete("search"); CSS.highlights.delete("search-current"); }
   for (const el of document.querySelectorAll("#content .search-current")) el.classList.remove("search-current");
   if (wasAll) renderList();
+  if (search.unfolded) { search.unfolded = false; setSidebar(true, false); }
 }
 
 function onSearchInput() {
@@ -3693,6 +3688,7 @@ function setSidebar(collapsed, remember = true) {
   toggle.title = label;
   toggle.setAttribute("aria-label", label);
   const wanted = collapsed ? "closed" : "open";
+  if (remember) search.unfolded = false;   // folded or unfolded by hand: leave it so after the search
   if (remember && state.settings && state.settings.sidebar !== wanted) {
     state.settings.sidebar = wanted;
     call("save_settings", { sidebar: wanted }).then((s) => { state.settings = s; }).catch(() => {});
@@ -3740,20 +3736,15 @@ function markRailNews() {
   $("btn-settings-rail").classList.toggle("has-news", !$("btn-update").hidden || !$("btn-model-update").hidden);
 }
 
-function setSearchScope(scope) {
-  search.scope = scope;
-  if (scope === "all") setSidebar(false, false);   // the results are in the list: show it (not remembered)
-  for (const b of document.querySelectorAll(".search-scope button")) b.setAttribute("aria-checked", String(b.dataset.scope === scope));
-  $("search-input").placeholder = scope === "all" ? "In allen Aufnahmen suchen" : "Im Transkript suchen";
-  refreshSearchResults();
-  $("search-input").focus();
-}
-
-/* «Alle Aufnahmen»: ask Python a moment after the last keystroke; an older answer arriving late is dropped. */
+/* Ask Python a moment after the last keystroke; an older answer arriving late is dropped. */
 function refreshSearchResults() {
   clearTimeout(search.timer);
   const seq = ++search.seq;
   search.results = null;
+  if (searchingAll() && document.body.classList.contains("sidebar-collapsed")) {
+    search.unfolded = true;          // the results are in the list: show it (not remembered)
+    setSidebar(false, false);
+  }
   renderList();
   if (!searchingAll()) return;
   search.timer = setTimeout(async () => {
@@ -3823,7 +3814,6 @@ function setupSearch() {
     if (event.key === "Enter") { event.preventDefault(); stepSearch(event.shiftKey ? -1 : 1); }
     else if (event.key === "Escape") { event.preventDefault(); closeSearch(); }
   });
-  for (const b of document.querySelectorAll(".search-scope button")) b.addEventListener("click", () => setSearchScope(b.dataset.scope));
   document.addEventListener("keydown", (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "f") return;
     event.preventDefault();   // instead of the webview's own find, which differs per platform
