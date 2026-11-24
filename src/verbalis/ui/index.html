@@ -134,6 +134,8 @@
     text-align: left; border: 0; border-radius: 6px; background: var(--surface-2); cursor: pointer; }
   .list .search-result .snippet:hover { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
   .list .search-result .snippet time { color: var(--muted); margin-right: 6px; font-variant-numeric: tabular-nums; }
+  .list .search-result .found-in { display: block; font-size: 12px; color: var(--muted); }
+  .list .search-group { padding: 10px 12px 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
   .list .search-result mark { background: var(--amber-soft); color: inherit; box-shadow: 0 1px 0 var(--amber); }
   .list .search-info { padding: 12px; color: var(--muted); font-size: 13px; }
   .list .group { margin-top: 6px; }
@@ -3780,7 +3782,15 @@ function renderSearchResults(list) {
   if (!results) { list.append(element("li", { class: "search-info" }, "Suche läuft …")); return; }
   if (!results.length) { list.append(element("li", { class: "search-info" }, "Keine Aufnahme gefunden.")); return; }
   list.append(element("li", { class: "search-info" }, results.length === 1 ? "1 Aufnahme gefunden" : `${results.length} Aufnahmen gefunden`));
+  // two groups: found by title, names, project, notes or date first – then those found only in the transcript
+  const grouped = results.some((r) => r.in_details) && results.some((r) => !r.in_details);
+  let group = null;
   for (const r of results) {
+    if (grouped && r.in_details !== group) {
+      group = r.in_details;
+      list.append(element("li", { class: "search-group" }, group ? "Nach Titel, Personen, Projekt, Notizen oder Datum"
+        : "Nur im Transkript"));
+    }
     const open = (index) => {
       search.jumpTo = index == null ? null : { id: r.id, index };
       if (state.selected !== r.id) { state.selected = r.id; renderList(); renderContent(); }
@@ -3792,7 +3802,8 @@ function renderSearchResults(list) {
           onclick: () => open(r.snippets.length ? r.snippets[0].index : null) },
         element("span", { class: "date" }, ...markedText(r.title || shortDate(r))),
         element("span", { class: "duration" }, !r.places ? "" : r.places === 1 ? "1 Stelle" : `${r.places} Stellen`),
-        element("span", { class: "when" }, ...markedText(when))),
+        element("span", { class: "when" }, ...markedText(when)),
+        (r.found_in || []).length ? element("span", { class: "found-in" }, "Gefunden in: " + r.found_in.join(" · ")) : null),
       ...r.snippets.map((sn) => element("button", { type: "button", class: "snippet", title: "Diese Stelle zeigen",
           onclick: () => open(sn.index) },
         element("time", {}, timeText(sn.start)), sn.speaker ? `${sn.speaker}: ` : "", ...markedText(sn.text))),

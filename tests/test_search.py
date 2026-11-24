@@ -102,3 +102,26 @@ def test_search_shows_at_most_three_snippets():
     write_segments(s, rid, [f"Budget {i}" for i in range(5)])
     [result] = s.search("budget")
     assert result["places"] == 5 and len(result["snippets"]) == search.MAX_SNIPPETS
+
+
+def test_search_finds_names_notes_date_and_says_where():
+    """24.11.2026: «EBZ» should find the recording «Feedback EBZ Maurice» – and say where it was found; recordings
+    found by their details come before those found only in the transcript."""
+    s = make_service()
+    talk = finished_recording(s)
+    write_segments(s, talk, ["Beim EBZ läuft es gut."])
+    time.sleep(1.1)
+    meeting = finished_recording(s)
+    write_segments(s, meeting, ["Danke für das Feedback."])
+    s.update_details(meeting, {"title": "Feedback EBZ Maurice", "participants": {"others": "Maurice"},
+                               "notes": "Offene Punkte Rechnungsstellung"})
+
+    results = s.search("ebz")
+    assert [r["id"] for r in results] == [meeting, talk]            # details first, then the transcript
+    assert results[0]["found_in"] == ["Titel"] and results[1]["found_in"] == ["Transkript"]
+    assert s.search("maurice")[0]["found_in"] == ["Titel", "Personen"]
+    assert s.search("rechnungsstellung")[0]["found_in"] == ["Notizen"]
+    assert [r["id"] for r in s.search("andrea")] == [meeting, talk]  # the speaker named in the transcript
+    by_folder = s.search(meeting[:10])                               # the folder name, e.g. 2026-11-23
+    assert meeting in [r["id"] for r in by_folder] and "Datum" in by_folder[0]["found_in"]
+    assert s.search("ebz feedback")[0]["found_in"] == ["Titel"]   # «Feedback» alone in a paragraph is no place

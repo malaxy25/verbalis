@@ -82,7 +82,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-412 tests in 39 files.
+413 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -493,7 +493,7 @@ Screen snapshots during a recording (screens.py): which pictures are kept, their
 - **Prepare cuts chooses and the transcript links the chosen**
 - **Minimum shown time is a setting and a change prepares anew**
 
-### `test_search.py` (7)
+### `test_search.py` (8)
 
 Search in transcripts: the rules (verbalis/search.py, the same in index.html) and «Alle Aufnahmen».
 
@@ -504,6 +504,7 @@ Search in transcripts: the rules (verbalis/search.py, the same in index.html) an
 - **Search across recordings newest first**
 - **Search sees edits and skips broken transcripts**
 - **Search shows at most three snippets**
+- **Search finds names notes date and says where** – 24.11.2026: «EBZ» should find the recording «Feedback EBZ Maurice» – and say where it was found; recordings
 
 ### `test_service.py` (44)
 

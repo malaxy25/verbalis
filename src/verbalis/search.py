@@ -62,11 +62,27 @@ def snippet(text: str, hits: list[tuple[int, int]]) -> str:
     return ("… " if start > 0 else "") + text[start:end] + (" …" if end < len(text) else "")
 
 
-def details_text(meta: dict, title: str) -> str:
-    """Title, project and participants – a recording is found by these too."""
-    people = meta.get("participants") or {}
-    names = [n for track in people.values() for n in (track if isinstance(track, list) else [track])]
-    return " ".join([title, meta.get("project") or "", *map(str, names)])
+def people(meta: dict, segments: list[dict]) -> list[str]:
+    """The names of a recording: participants entered and the speakers named in the transcript."""
+    entered = meta.get("participants") or {}
+    names = [n for track in entered.values() for n in (track if isinstance(track, list) else [track])]
+    names += [seg.get("speaker") or "" for seg in segments]
+    return [n for n in dict.fromkeys(map(str, names)) if n.strip()]
+
+
+def fields(meta: dict, title: str, folder: str, date: str, segments: list[dict]) -> dict[str, str]:
+    """Besides the transcript a recording is found by these – the keys are what the user reads («gefunden in»).
+    «Datum» holds the folder name (2026-11-23_143147) and the date as shown (Mo 23.11.2026)."""
+    return {"Titel": title, "Projekt": meta.get("project") or "", "Personen": " ".join(people(meta, segments)),
+            "Notizen": str(meta.get("notes") or ""), "Datum": f"{folder} {date}"}
+
+
+def found_in(texts: dict[str, str], words: list[str]) -> tuple[bool, list[str]]:
+    """Whether every word is in these fields together, and which fields have a word (in this order)."""
+    together = bool(spans(" | ".join(texts.values()), words))
+    if not together:
+        return False, []
+    return True, [label for label, text in texts.items() if any(spans(text, [w]) for w in words)]
 
 
 def find(segments: list[dict], words: list[str]) -> list[dict]:

@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- **Search finds more and says where:** «In allen Aufnahmen» now also searches the notes, the speaker names in the
+  transcript and the date/folder name (e.g. «2026-11-23» or «23.11.»), besides title, project and participants.
+  Each result says where it was found («Gefunden in: Titel · Personen · Transkript»); recordings found by these
+  details come first, those found only in the transcript after them.
 - **Switch devices during a recording:** microphone, system audio and the screen for snapshots can be changed
   while recording – no new recording. The track writes on into the same file, the moment of switching stays
   silent, timing stays in sync. A device that can't be opened is reported and the old one records on.

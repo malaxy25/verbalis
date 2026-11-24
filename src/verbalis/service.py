@@ -2517,8 +2517,10 @@ class Service:
             subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(path)])
 
     def search(self, query: str) -> list[dict]:
-        """All recordings with a paragraph containing every word of `query` (or with them in the title, project
-        or participants), newest first, each with up to three snippets. The search terms are not logged."""
+        """All recordings with a paragraph containing every word of `query` or with them in the title, project,
+        names (participants, speakers), notes or date/folder name. Those found by these details come first
+        (the user usually searches for a meeting), each group newest first; `found_in` says where
+        («Titel», «Personen», …, «Transkript»), up to three snippets each. The search terms are not logged."""
         words = search.terms(query)
         base = self._s.recordings
         if not words or not base.exists():
@@ -2529,15 +2531,19 @@ class Service:
             if not folder.is_dir() or not VALID_ID.match(folder.name) or not pipeline.is_recording_folder(folder):
                 continue
             meta = pipeline.read_meta(folder)
-            title = meta.get("title") or pipeline.default_title(_parse_time(meta.get("start"))
-                                                                or pipeline.recording_start(folder))
-            found = search.find(self._search_segments(folder), words)
-            in_details = bool(search.spans(search.details_text(meta, title), words))
+            start = _parse_time(meta.get("start")) or pipeline.recording_start(folder)
+            title = meta.get("title") or pipeline.default_title(start)
+            date = f"{pipeline.WEEKDAYS[start.weekday()]} {start:%d.%m.%Y}" if start else ""
+            segments = self._search_segments(folder)
+            found = search.find(segments, words)
+            in_details, where = search.found_in(search.fields(meta, title, folder.name, date, segments), words)
             if found or in_details:
                 result.append({"id": folder.name, "title": title, "start": meta.get("start") or folder.name,
                                "project": meta.get("project") or "", "places": len(found),
                                "hits": sum(f["hits"] for f in found), "in_details": in_details,
+                               "found_in": where + (["Transkript"] if found else []),
                                "snippets": found[:search.MAX_SNIPPETS]})
+        result.sort(key=lambda r: not r["in_details"])   # stable: each group stays newest first
         log.info("Search across recordings: %d of them with hits, %.2f s", len(result), time.monotonic() - started)
         return result
 
