@@ -67,6 +67,10 @@ in the README and in `BACKLOG.md`):
   **Systemaudio** (Bildschirm- & Systemaudioaufnahme) and, with snapshots on, **Bildschirmaufnahme** –
   allow all three, then check that both tracks have sound and snapshots are saved. Also: an MLX speed
   test still loads the add-on (library validation off).
+- **Switching devices while recording:** during a Teams call with a headset, switch «Mikrofon» to the laptop
+  microphone and back, «Systemton kommt über» to the loudspeakers and back, and the screen to another window
+  and to «Keine». The recording goes on, both tracks have sound after each switch (a moment of silence is
+  fine), meta.json lists `switches` and `devices_used`, and the snapshots keep their times in the transcript.
 - **Signed Windows installer:** the first signed release shows «SignPath Foundation» as publisher in the
   SmartScreen/UAC dialog; after `WINDOWS_PUBLISHER` is set, an update via the notice still installs.
 
@@ -78,7 +82,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-406 tests in 39 files.
+412 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -399,7 +403,7 @@ tools/presentation.py – prepares a presented talk for the /presentation-transc
 - **Scenes ignore a moving webcam tile and skip transitions**
 - **Whole run finds scenes and the offset between video and recording**
 
-### `test_recorder.py` (17)
+### `test_recorder.py` (20)
 
 Two-track recorder: padding dropouts with silence, pausing without padding.
 
@@ -420,6 +424,9 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Lost device without replacement gives a readable error** – The closing error (0x100000001) hid the real one (0x88890004 = device disconnected).
 - **Device that never opens is not retried**
 - **User is told once that a device is gone**
+- **Switch continues the same file in sync** – The user picks another microphone during the recording: same file, the gap is silence, timing stays.
+- **Switch to a device that does not open goes back**
+- **Recorder switch needs an existing track**
 
 ### `test_release_workflow.py` (12)
 
@@ -456,7 +463,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_screens.py` (24)
+### `test_screens.py` (25)
 
 Screen snapshots during a recording (screens.py): which pictures are kept, their files, the Markdown links
 
@@ -475,6 +482,7 @@ Screen snapshots during a recording (screens.py): which pictures are kept, their
 - **Recording with snapshots links them in the transcript**
 - **Wrong screen choice starts no recording**
 - **No snapshot time before the recording runs** – Bug 18.11.2026: the capture starts before the recorder (to report a closed window first); a picture taken in
+- **Screen can be switched during the recording** – 24.11.2026: switch the snapshots to another window or off while recording – the count goes on.
 - **Unknown screen setting falls back to none**
 - **Meeting windows are listed apart with calls first** – Bug 18 Nov 2026: the Teams call window was hard to find among all windows (and Teams' main window looks
 - **Content box is where the pictures differ** – Bar, video tiles and taskbar of a Teams call are cut away without text recognition.
@@ -497,7 +505,7 @@ Search in transcripts: the rules (verbalis/search.py, the same in index.html) an
 - **Search sees edits and skips broken transcripts**
 - **Search shows at most three snippets**
 
-### `test_service.py` (42)
+### `test_service.py` (44)
 
 App flow without a window: recording → queue → transcript.
 
@@ -543,6 +551,8 @@ App flow without a window: recording → queue → transcript.
 - **Model tiles say whether the model is up to date** – 0.7.26: «Stand 540fb2e, 8.10.2026» didn't say whether it is the newest – now the tile says so.
 - **Split paragraph where another person takes over** – 0.7.32: a paragraph that started with one person and went on with another (seen in a Teams call)
 - **Remaining time during speaker diarization** – 0.7.32: after transcribing, the progress was near 100 % while diarization of a long call still ran
+- **Devices can be switched during the recording** – 24.11.2026: the microphone, the system audio and the screen were locked while recording.
+- **System audio cannot be added to a microphone only recording**
 
 ### `test_spelling.py` (5)
 

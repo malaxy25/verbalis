@@ -54,6 +54,9 @@ class FakeRecorder:
     def status(self):
         return [TrackStatus(n, self.folder / f"{n}.wav", 48000 * 5, 0, 0.1) for n in ("me", "others")]
 
+    def switch(self, track, device):
+        self.switched = getattr(self, "switched", []) + [(track, device.name)]
+
 
 class FakeTranscriber:
     def __init__(self, model, fail=False):
@@ -787,3 +790,41 @@ def test_remaining_time_during_speaker_diarization():
     assert diarization_rest(60, 0.25, 1500) == pytest.approx(180)              # 60 s for 25 % → 180 s left
     assert diarization_rest(60, 0.25, 1500, later_s=1500) == pytest.approx(420)   # + the next track: 240 s
     assert diarization_rest(2, 0.5, 1500) is None and diarization_rest(60, 0.01, 1500) is None
+
+
+def test_devices_can_be_switched_during_the_recording(home):
+    """24.11.2026: the microphone, the system audio and the screen were locked while recording."""
+    def pick(microphone, speakers):
+        return SimpleNamespace(microphone=SimpleNamespace(name=microphone or "Mic"),
+                               loopback=SimpleNamespace(name=speakers or "Lautsprecher (Realtek)"))
+
+    s = Service(settings=Settings(name="Andrea", model="test-model", auto_transcribe="off", live_transcribe="off"),
+                recorder_factory=FakeRecorder, select_devices=pick, list_devices=lambda: {})
+    with pytest.raises(RuntimeError, match="keine Aufnahme"):
+        s.switch_device("me", "USB-Mikrofon")
+    s.start_recording("Mic", "Headset", consent=True)
+    assert s.switch_device("me", "USB-Mikrofon") is None
+    hint = s.switch_device("others", "Lautsprecher (Realtek)")
+    assert "doppelt" in hint                                     # loudspeakers: the microphone hears the others
+    assert s.switch_device("others", "Kopfhörer (Jabra Evolve)") is None
+    assert s._rec.switched == [("me", "USB-Mikrofon"), ("others", "Lautsprecher (Realtek)"),
+                               ("others", "Kopfhörer (Jabra Evolve)")]
+    state = s.state()["recording"]
+    assert state["devices"] == {"me": "USB-Mikrofon", "others": "Kopfhörer (Jabra Evolve)"}
+    assert state["others_device"] == "Kopfhörer (Jabra Evolve)"   # the silence hint names the current device
+    assert s.settings()["microphone"] == "USB-Mikrofon"           # remembered for the next recording
+    with pytest.raises(RuntimeError, match="abzuschalten"):
+        s.switch_device("others", "__none__")
+    s.stop_recording()
+
+
+def test_system_audio_cannot_be_added_to_a_microphone_only_recording(home):
+    def mic_only(microphone, speakers):
+        return SimpleNamespace(microphone=SimpleNamespace(name="Mic"), loopback=None)
+
+    s = Service(settings=Settings(name="Andrea", model="test-model", auto_transcribe="off", live_transcribe="off"),
+                recorder_factory=FakeRecorder, select_devices=mic_only, list_devices=lambda: {})
+    s.start_recording("Mic", "__none__", consent=True)
+    with pytest.raises(RuntimeError, match="nur mit dem Mikrofon"):
+        s.switch_device("others", "Lautsprecher")
+    s.stop_recording()

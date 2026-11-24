@@ -18,6 +18,11 @@ Pause: while paused, the tracks keep reading from the devices (so no stale
 audio piles up in the driver buffers) but write nothing. The paused time is
 subtracted from the elapsed time, so no silence is padded for it – the
 recording simply continues where it stopped.
+
+Switch: the user can choose another device during a recording (switch()). The track leaves the
+old device, opens the new one and writes on into the same file – the short gap is filled with
+silence like a lost device. If the new device can't be opened, the track goes back to the old one
+and reports it (TrackStatus.switch_problem); the recording never fails because of a switch.
 """
 
 from __future__ import annotations
@@ -141,6 +146,8 @@ class TrackStatus:
     lost_since: float | None = None   # the device disappeared and isn't back yet (clock time)
     reconnects: int = 0               # how often the device was lost and opened again
     devices: list[str] = field(default_factory=list)   # devices recorded from, in order
+    switches: int = 0                 # how often the user chose another device during the recording
+    switch_problem: str | None = None   # the last switch failed (the old device records on)
 
 
 class Track(threading.Thread):
@@ -167,6 +174,11 @@ class Track(threading.Thread):
         self.paused = paused            # is the recording paused right now?
         self.paused_time = paused_time  # total paused seconds so far
         self.status = TrackStatus(name=name, path=path)
+        self._switch_to: Any = None     # set by switch(): the device to continue with
+
+    def switch(self, device: Any) -> None:
+        """Continue the recording with another device (from another thread)."""
+        self._switch_to = device
 
     def run(self) -> None:
         try:
@@ -223,6 +235,7 @@ class Track(threading.Thread):
         block = int(self.samplerate * BLOCK_SECONDS)
         s = self.status
         opened = False
+        switched_from: Any = None   # the device before a switch – back to it if the new one fails to open
         with sf.SoundFile(   # "x": never overwrite an existing recording
             s.path, "x", samplerate=self.samplerate, channels=1, subtype="PCM_16"
         ) as file:
@@ -230,6 +243,10 @@ class Track(threading.Thread):
                 try:
                     with self._open_device(block) as rec:
                         opened = True
+                        if switched_from is not None:
+                            switched_from = None
+                            s.switches += 1
+                            s.switch_problem = None
                         name = getattr(self.device, "name", "?")
                         if not s.devices or s.devices[-1] != name:
                             s.devices.append(name)
@@ -239,8 +256,20 @@ class Track(threading.Thread):
                             s.lost_since = None
                             s.reconnects += 1
                         self._write(rec, file, block)
-                    return
+                    if self._switch_to is None or self.stop_event.is_set():
+                        return
+                    switched_from, self.device, self._switch_to = self.device, self._switch_to, None
+                    log.info("Track %s: switching from «%s» to «%s»", s.name, getattr(switched_from, "name", "?"),
+                             getattr(self.device, "name", "?"))
+                    continue
                 except Exception as e:
+                    if switched_from is not None:   # the chosen device doesn't open: record on with the old one
+                        log.warning("Track %s: «%s» could not be opened – back to «%s»", s.name,
+                                    getattr(self.device, "name", "?"), getattr(switched_from, "name", "?"),
+                                    exc_info=True)
+                        s.switch_problem = str(readable(e, getattr(self.device, "name", "?"))) or type(e).__name__
+                        self.device, switched_from = switched_from, None
+                        continue
                     # reconnect only a device that worked and then failed – not one that never opened
                     # (wrong format), not a full disk
                     lost = isinstance(e, DeviceLost) or (opened and s.lost_since is not None)
@@ -252,6 +281,10 @@ class Track(threading.Thread):
                         log.warning("Track %s: device lost (%s) – reconnecting", s.name, e, exc_info=True)
                 if self.stop_event.wait(RECONNECT_WAIT_S):
                     return
+                if self._switch_to is not None:   # chosen by the user while the device was gone
+                    self.device, self._switch_to = self._switch_to, None
+                    s.switches += 1
+                    continue
                 try:
                     device = self.replace(s.name, self.device)
                 except Exception:
@@ -263,7 +296,7 @@ class Track(threading.Thread):
     def _write(self, rec, file, block: int) -> None:
         s = self.status
         reader = _Reader(rec, getattr(self.device, "name", "?"))
-        while not self.stop_event.is_set():
+        while not self.stop_event.is_set() and self._switch_to is None:
             try:
                 data = reader.read(block)
             except Exception as e:
@@ -365,6 +398,14 @@ class TwoTrackRecorder:
                                      self.samplerate, **common))
         for track in self.tracks:
             track.start()
+
+    def switch(self, track: str, device: Any) -> None:
+        """Record track ("me"/"others") from another device from now on."""
+        for t in self.tracks:
+            if t.status.name == track:
+                t.switch(device)
+                return
+        raise ValueError(f"Keine Spur «{track}» in dieser Aufnahme.")
 
     def pause(self) -> None:
         with self._lock:

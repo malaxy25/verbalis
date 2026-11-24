@@ -920,7 +920,7 @@ class Service:
                               "devices": names, "limit_s": self._s.max_recording_s,
                               # a recognised call: ask to stop the recording when it is over
                               "call_app": self._call["apps"][0] if self._call else None,
-                              "call_seen": time.monotonic(), "screens": capture}
+                              "call_seen": time.monotonic(), "screens": capture, "screen": screen}
             # Remember the chosen devices for next time
             if (microphone, speakers, screen) != (self._s.microphone, self._s.speakers, self._s.screen):
                 self.save_settings({"microphone": microphone, "speakers": speakers, "screen": screen})
@@ -995,6 +995,80 @@ class Service:
                 self._live_done.pop(rid, None)
         if live.take_over(self._path(recording_id)):
             log.info("Transcription of %s continues from the live transcription", recording_id)
+
+    # Words in an output device's name that point to loudspeakers (the microphone then hears the others too).
+    LOUDSPEAKER_WORDS = ("lautsprecher", "speaker")
+    HEADSET_WORDS = ("headset", "kopfhörer", "headphone", "earphone", "airpods", "buds")
+
+    def switch_device(self, track: str, name: str = "") -> str | None:
+        """During a recording: record the microphone ("me") or the system audio ("others") from another device.
+        name "" = the system default. Same file, the short gap stays silent (recorder.Track.switch).
+        Returns a hint for the user or None."""
+        from .audio.devices import MICROPHONE_ONLY
+
+        with self._lock:
+            rec, info = self._rec, self._rec_info
+            if rec is None:
+                raise RuntimeError("Es läuft keine Aufnahme.")
+            if track not in ("me", "others"):
+                raise ValueError(f"Unbekannte Spur «{track}».")
+            if track == "others" and not info["devices"]["others"]:
+                raise RuntimeError("Diese Aufnahme läuft nur mit dem Mikrofon – der Systemton lässt sich erst bei "
+                                   "der nächsten Aufnahme dazunehmen.")
+            if name == MICROPHONE_ONLY:
+                raise RuntimeError("Den Systemton während der Aufnahme abzuschalten geht nicht – die Spur läuft "
+                                   "einfach weiter. «Nur Mikrofon» gilt ab der nächsten Aufnahme.")
+            if track == "me":
+                device = self._select_devices(name or None, MICROPHONE_ONLY).microphone
+            else:
+                device = self._select_devices(None, name or None).loopback
+            old = info["devices"][track]
+            new = getattr(device, "name", "") or name
+            rec.switch(track, device)
+            info["devices"][track] = new
+            if track == "others":
+                self._others_last_sound = time.monotonic()   # the new device gets a fresh minute
+            setting = "microphone" if track == "me" else "speakers"
+            if getattr(self._s, setting) != name:
+                self.save_settings({setting: name})
+        log.info("Recording %s: %s switched from «%s» to «%s»", info["id"], pipeline.TRACK_LABELS.get(track, track),
+                 old, new)
+        if track == "others":
+            lower = new.lower()
+            if any(w in lower for w in self.LOUDSPEAKER_WORDS) and not any(w in lower for w in self.HEADSET_WORDS):
+                return ("Falls das Lautsprecher sind (kein Headset): Das Mikrofon hört die anderen dann mit – "
+                        "im Transkript können ihre Sätze doppelt erscheinen.")
+        return None
+
+    def switch_screen(self, target: str = "") -> None:
+        """During a recording: take the snapshots of another monitor or window, or none ("") from now on.
+        The pictures are named after the recording time, so they stay in the right place in the transcript."""
+        with self._lock:
+            rec, info = self._rec, self._rec_info
+            if rec is None:
+                raise RuntimeError("Es läuft keine Aufnahme.")
+            if target == info.get("screen", ""):
+                return
+            old = info.get("screens")
+            if old is not None:
+                old.stop()
+            info["screen"] = ""
+            if target:
+                capture = self._screen_factory(info["folder"], target,
+                                               lambda: None if rec.paused else rec.active_seconds())
+                capture.count = old.count if old is not None else 0   # the total of this recording
+                try:
+                    capture.start()
+                except Exception:
+                    if old is not None:
+                        old.problem = None   # nothing taken any more – no stale message
+                    raise
+                info["screens"], info["screen"] = capture, target
+            elif old is not None:
+                old.problem = None
+            if self._s.screen != target:
+                self.save_settings({"screen": target})
+        log.info("Recording %s: screen snapshots now %s", info["id"], target or "off")
 
     def pause_recording(self) -> None:
         with self._lock:
@@ -2531,6 +2605,10 @@ class Service:
                     # long silence on the others track usually means the wrong output device
                     "others_silent_s": round(now - self._others_last_sound),
                     "others_device": info["devices"]["others"],
+                    "devices": dict(info["devices"]),
+                    "screen": info.get("screen", ""),
+                    "switch_problem": next((f"{pipeline.TRACK_LABELS.get(s.name, s.name)}: {s.switch_problem}"
+                                            for s in tracks.values() if getattr(s, "switch_problem", None)), None),
                     "only_microphone": others is None,
                     "live": self._live_status(info["id"]),
                     "screens": {"count": info["screens"].count, "problem": info["screens"].problem}

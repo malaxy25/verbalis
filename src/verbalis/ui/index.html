@@ -785,6 +785,7 @@
 
     <p class="silent-hint" id="silent-hint" role="status" hidden></p>
     <p class="disk-hint" id="disk-hint" role="status" hidden></p>
+    <p class="disk-hint" id="switch-hint" role="status" hidden></p>
     <p class="target-hint" id="target-hint" hidden></p>
     <div class="call-notice" id="rec-notice" role="status" hidden>
       <span id="rec-notice-text"></span>
@@ -2440,11 +2441,11 @@ function showRecording(recording) {
   if (running !== state.running) {
     state.running = running;
     $("recorder").classList.toggle("running", running);
-    $("sel-microphone").disabled = running;
-    $("sel-speakers").disabled = running;
-    $("sel-screen").disabled = running;
+    // devices and screen stay selectable: a change during the recording switches it (switchDuringRecording)
+    $("sel-speakers").disabled = running && recording.only_microphone;   // no system audio track to switch
+    const none = $("sel-speakers").querySelector(`option[value="${MICROPHONE_ONLY}"]`);
+    if (none) none.disabled = running;                                   // the track can't be switched off
     $("chk-consent").disabled = running;
-    $("btn-reload-devices").disabled = running;
     if (!running) {
       $("chk-consent").checked = false;   // consent applies to one recording only
       setLevel("me", -90);
@@ -2469,6 +2470,7 @@ function showRecording(recording) {
   }
   showSilentHint(recording);
   showDiskHint(recording);
+  showSwitchProblem(recording);
 }
 
 async function togglePauseRecording() {
@@ -2487,6 +2489,38 @@ async function togglePauseRecording() {
 
 const SILENT_AFTER_S = 60;
 
+/* A device or the screen chosen during the recording: the recording switches to it (same files, a moment of
+   silence). On failure the choice goes back to what records. */
+const SWITCH = { "sel-microphone": ["switch_device", "me"], "sel-speakers": ["switch_device", "others"],
+                 "sel-screen": ["switch_screen"] };
+
+async function switchDuringRecording(event) {
+  const select = event.target;
+  if (!state.running) { select.dataset.recorded = select.value; return; }
+  const [method, ...args] = SWITCH[select.id];
+  select.disabled = true;
+  try {
+    const hint = await call(method, ...args, select.value);
+    select.dataset.recorded = select.value;
+    showMessage(hint || "");
+  } catch (e) {
+    if (select.dataset.recorded !== undefined) select.value = select.dataset.recorded;
+    showMessage(e.message);
+  } finally {
+    select.disabled = select.id === "sel-speakers" && !!(state.lastState && state.lastState.recording
+      && state.lastState.recording.only_microphone);
+  }
+}
+
+function showSwitchProblem(recording) {
+  const box = $("switch-hint");
+  const text = recording && recording.switch_problem
+    ? `Gerätewechsel nicht möglich – ${recording.switch_problem} Es wird mit dem bisherigen Gerät weiter aufgenommen.`
+    : "";
+  box.hidden = !text;
+  box.textContent = text;
+}
+
 function showDiskHint(recording) {
   const hint = $("disk-hint");
   const minutes = recording ? recording.disk_minutes_left : undefined;
@@ -2503,7 +2537,8 @@ function showSilentHint(recording) {
   hint.hidden = !silent;
   if (silent) {
     hint.textContent = `Seit ${Math.floor(recording.others_silent_s / 60)} Min. kommt kein Ton über «${recording.others_device}». `
-      + "Falls Teams den Ton über ein anderes Gerät ausgibt: Aufnahme beenden, unter «Systemton kommt über» das richtige Gerät wählen und neu starten.";
+      + "Falls Teams den Ton über ein anderes Gerät ausgibt: unter «Systemton kommt über» das richtige Gerät wählen – "
+      + "die Aufnahme wechselt sofort.";
   }
 }
 
@@ -2521,6 +2556,7 @@ async function toggleRecording() {
       const id = await call("start_recording", $("sel-microphone").value, $("sel-speakers").value, $("chk-consent").checked, planned,
         $("sel-screen").value);
       state.selected = id;
+      for (const sel of Object.keys(SWITCH)) $(sel).dataset.recorded = $(sel).value;   // what records now
       $("time").textContent = "00:00";
     }
     await poll();
@@ -2690,7 +2726,7 @@ async function reloadDevices() {
   button.textContent = "Wird geladen …";
   await loadDevices();
   button.textContent = "Geräte neu laden";
-  button.disabled = state.running;
+  button.disabled = false;
 }
 
 /* ---------- «Problem melden» ---------- */
@@ -2991,6 +3027,7 @@ async function loadDevices() {
     const current = (id, saved) => ($(id).options.length ? $(id).value : saved);
     fillOptions($("sel-microphone"), g.microphones, g.default_microphone, current("sel-microphone", state.settings.microphone));
     fillOptions($("sel-speakers"), g.speakers, g.default_speakers, current("sel-speakers", state.settings.speakers), true);
+    if (state.running) $("sel-speakers").querySelector(`option[value="${MICROPHONE_ONLY}"]`).disabled = true;
     await loadScreenSources();
     const hint = $("device-hint");
     const notes = [...(g.problems || [])];
@@ -3028,7 +3065,7 @@ async function loadScreenSources() {
   const values = [...select.options].map((o) => o.value);
   const calls = (g.meetings || []).filter((m) => m.call);
   let value = values.includes(chosen) ? chosen : "";
-  if (!value && !state.screenNoneByHand && calls.length === 1) value = calls[0].value;
+  if (!value && !state.screenNoneByHand && !state.running && calls.length === 1) value = calls[0].value;
   select.value = value;
 }
 
@@ -4468,6 +4505,7 @@ async function init() {
   $("btn-reload-devices").addEventListener("click", reloadDevices);
   window.addEventListener("focus", refreshDevicesOnFocus);
   $("sel-screen").addEventListener("change", () => { state.screenNoneByHand = $("sel-screen").value === ""; });
+  for (const sel of Object.keys(SWITCH)) $(sel).addEventListener("change", switchDuringRecording);
   // No browser context menu; while correcting, the app shows its own spelling menu
   document.addEventListener("contextmenu", (event) => {
     if (!event.target.closest("input[type=text], textarea")) event.preventDefault();

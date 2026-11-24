@@ -104,6 +104,12 @@ class Api:
     def pause_recording(self):
         return self._call(self._s.pause_recording)
 
+    def switch_device(self, track, name=""):
+        return self._call(self._s.switch_device, track, name or "")
+
+    def switch_screen(self, target=""):
+        return self._call(self._s.switch_screen, target or "")
+
     def resume_recording(self):
         return self._call(self._s.resume_recording)
 

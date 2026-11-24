@@ -471,3 +471,82 @@ def test_user_is_told_once_that_a_device_is_gone(monkeypatch):
     monkeypatch.setattr(service_module, "LOST_DEVICE_AFTER_S", 0.1)
     s._check_lost_device(rec, info)
     assert "ist weg" in s._recording_error
+
+
+class SwitchingDevice:
+    """Delivers blocks; after `switch_after` blocks it asks the track to switch to `target` (as the UI would)."""
+
+    def __init__(self, name, clock, stop, track_ref, switch_after=None, target=None, stop_after=None, value=0.1):
+        self.name, self.clock, self.stop = name, clock, stop
+        self.track_ref, self.switch_after, self.target, self.stop_after, self.value = (
+            track_ref, switch_after, target, stop_after, value)
+        self.opened = 0
+
+    @contextmanager
+    def recorder(self, samplerate, blocksize=None):
+        device, count = self, {"n": 0}
+        device.opened += 1
+
+        class Rec:
+            def record(self, numframes):
+                count["n"] += 1
+                device.clock.t += numframes / samplerate
+                if device.switch_after and count["n"] == device.switch_after and device.opened == 1:
+                    device.clock.t += 0.5                           # opening the new device takes a moment
+                    device.track_ref[0].switch(device.target)
+                if device.stop_after and count["n"] >= device.stop_after:
+                    device.stop.set()
+                return np.full((numframes, 1), device.value, dtype=np.float32)
+
+        yield Rec()
+
+
+def test_switch_continues_the_same_file_in_sync(tmp_path):
+    """The user picks another microphone during the recording: same file, the gap is silence, timing stays."""
+    clock, stop, ref = FakeClock(), threading.Event(), []
+    new = SwitchingDevice("USB-Mikrofon", clock, stop, ref, stop_after=5, value=0.3)
+    old = SwitchingDevice("Laptop-Mikrofon", clock, stop, ref, switch_after=4, target=new)
+    path = tmp_path / "me.wav"
+    track = Track("me", old, path, stop, t0=0.0, samplerate=SR, clock=clock)
+    ref.append(track)
+    track.run()
+
+    assert track.status.error is None
+    assert track.status.switches == 1 and track.status.reconnects == 0
+    assert track.status.devices == ["Laptop-Mikrofon", "USB-Mikrofon"]
+    assert old.opened == 1 and new.opened == 1
+    data, _ = sf.read(str(path))
+    assert abs(len(data) / SR - clock.t) < 0.15                        # file length = recording time
+    assert abs(data[-1] - 0.3) < 0.01                                  # the end comes from the new device
+
+
+def test_switch_to_a_device_that_does_not_open_goes_back(tmp_path):
+    class Broken:
+        name = "Kaputt"
+
+        @contextmanager
+        def recorder(self, samplerate, blocksize=None, channels=None):
+            raise OSError("no such device")
+            yield
+
+    clock, stop, ref = FakeClock(), threading.Event(), []
+    old = SwitchingDevice("Headset", clock, stop, ref, switch_after=3, target=Broken(), stop_after=4)
+    track = Track("me", old, tmp_path / "me.wav", stop, t0=0.0, samplerate=SR, clock=clock)
+    ref.append(track)
+    track.run()
+
+    assert track.status.error is None
+    assert old.opened == 2                                             # back to the headset
+    assert track.status.switches == 0 and "no such device" in track.status.switch_problem
+    assert track.status.devices == ["Headset"]
+
+
+def test_recorder_switch_needs_an_existing_track(tmp_path):
+    import pytest
+
+    from verbalis.audio.recorder import TwoTrackRecorder
+
+    rec = TwoTrackRecorder(object(), None, tmp_path)
+    rec.tracks = [Track("me", object(), tmp_path / "me.wav", rec.stop_event, 0.0)]
+    with pytest.raises(ValueError):
+        rec.switch("others", object())

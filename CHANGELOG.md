@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- **Switch devices during a recording:** microphone, system audio and the screen for snapshots can be changed
+  while recording – no new recording. The track writes on into the same file, the moment of switching stays
+  silent, timing stays in sync. A device that can't be opened is reported and the old one records on.
+  Switching to loudspeakers notes that the others may appear twice. «Nur Mikrofon» can't be switched to or
+  from during a recording. meta.json lists `switches` and `devices_used`.
 - **Code signing prepared** (switches on with the GitHub secrets, see `docs/CODE-SIGNING.md`): Mac builds can be
   signed with an Apple Developer ID (hardened runtime, every binary on its own, entitlements for microphone and
   Python) and notarized, DMG included; the Windows installer can be signed by SignPath Foundation. Without the

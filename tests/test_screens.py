@@ -215,6 +215,41 @@ def test_no_snapshot_time_before_the_recording_runs(home):
     s.stop_recording()
 
 
+def test_screen_can_be_switched_during_the_recording(home):
+    """24.11.2026: switch the snapshots to another window or off while recording – the count goes on."""
+    made = []
+
+    class Probe:
+        def __init__(self, folder, target, position):
+            self.target, self.position = target, position
+            self.count, self.problem, self.stopped = 0, None, False
+            made.append(self)
+
+        def start(self):
+            if self.target == "window:Weg":
+                raise RuntimeError("Das Fenster «Weg» gibt es nicht mehr.")
+
+        def stop(self):
+            self.stopped = True
+
+    s = make_service(screen_factory=Probe)
+    s.start_recording("Mic", "", consent=True, screen="monitor:1")
+    made[0].count = 3
+    s.switch_screen("window:Teams")
+    assert made[0].stopped and made[1].target == "window:Teams" and made[1].count == 3
+    assert 0 <= made[1].position() < 60
+    assert s.state()["recording"]["screen"] == "window:Teams"
+    s.switch_screen("")                                          # off: the pictures so far stay counted
+    assert made[1].stopped and s.state()["recording"]["screens"]["count"] == 3
+    with pytest.raises(RuntimeError, match="gibt es nicht mehr"):
+        s.switch_screen("window:Weg")
+    assert s.state()["recording"]["screen"] == ""
+    s.switch_screen("monitor:2")                                 # also on in a recording started without
+    assert made[-1].target == "monitor:2" and made[-1].count == 3
+    assert s.settings()["screen"] == "monitor:2"
+    s.stop_recording()
+
+
 def test_unknown_screen_setting_falls_back_to_none():
     from verbalis.settings import Settings
 
