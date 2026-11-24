@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.48 – 2026-11-24
 - **«Beta» marks experimental features:** screen snapshots and switching devices during a recording carry a «Beta»
   badge. A click explains it and opens «Problem melden» prefilled for that feature. Settings → Allgemein →
   «Experimentelle Funktionen (Beta)» hides them all (the devices are then locked during a recording again).
