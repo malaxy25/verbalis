@@ -419,6 +419,19 @@
   .screen-status { flex-basis: 100%; color: var(--muted); font-size: 13px; }
   .screen-status.problem { color: var(--amber); }
   .screen-status[hidden] { display: none; }
+  /* «Beta»: features still marked experimental (BETA in the script) */
+  .beta { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--amber); border-radius: 999px;
+          background: none; color: var(--amber); font-size: 11px; font-weight: 600; line-height: 16px; vertical-align: middle;
+          cursor: pointer; }
+  .beta:hover, .beta:focus-visible { background: var(--amber); color: var(--surface); }
+  .no-beta .beta-feature, .no-beta .beta { display: none !important; }
+  .beta-pop { position: fixed; z-index: 50; max-width: 300px; padding: 10px 12px; border: 1px solid var(--line);
+              border-radius: 8px; background: var(--surface); box-shadow: 0 6px 24px rgba(0,0,0,.18); font-size: 13px; }
+  .beta-pop[hidden] { display: none; }
+  .beta-pop p { margin: 0 0 8px; }
+  .beta-pop small { display: block; margin-top: 6px; color: var(--muted); }
+  .switch-beta { flex-basis: 100%; color: var(--muted); font-size: 13px; }
+  .switch-beta[hidden] { display: none; }
   .paragraph.screen-shot .who { color: var(--muted); font-weight: 600; }
   .screen-shot button.shot { padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2);
     cursor: zoom-in; display: block; max-width: 100%; }
@@ -766,12 +779,14 @@
       <label>Systemton kommt über
         <select id="sel-speakers"></select>
       </label>
-      <label title="Schnappschüsse, wenn sich das Bild ändert (neue Folie, anderer Abschnitt) – im Transkript an der richtigen Stelle">Bildschirm-Schnappschüsse
+      <label class="beta-feature" title="Schnappschüsse, wenn sich das Bild ändert (neue Folie, anderer Abschnitt) – im Transkript an der richtigen Stelle"><span>Bildschirm-Schnappschüsse<button type="button" class="beta" data-beta="screens">Beta</button></span>
         <select id="sel-screen"></select>
       </label>
       <button type="button" class="link-button" id="btn-reload-devices">Geräte neu laden</button>
       <small class="device-hint" id="device-hint" hidden></small>
       <small class="screen-status" id="screen-status" role="status" hidden></small>
+      <small class="switch-beta beta-feature" id="switch-beta" hidden>Mikrofon, Systemton und Bildschirm lassen sich
+        während der Aufnahme wechseln.<button type="button" class="beta" data-beta="device_switch">Beta</button></small>
     </div>
 
     <label class="consent">
@@ -808,6 +823,12 @@
   </div>
   <section class="content" id="content" aria-live="polite"></section>
 </main>
+
+<div class="beta-pop" id="beta-pop" role="dialog" aria-labelledby="beta-pop-text" hidden>
+  <p id="beta-pop-text"></p>
+  <button type="button" class="action" id="beta-feedback">Rückmeldung geben …</button>
+  <small>Ausblenden: Einstellungen → Allgemein → «Experimentelle Funktionen (Beta)».</small>
+</div>
 
 <div class="tour" id="tour" hidden>
   <div class="tour-spot" id="tour-spot"></div>
@@ -960,6 +981,8 @@
             <small>Ausgeschaltet: Nach dem Meeting zuerst die Anzahl Personen erfassen und dann mit «Transkribieren» starten – die Sprecher werden so zuverlässiger erkannt.</small>
             <label class="consent-like"><input type="checkbox" name="live_transcribe"> Schon während der Aufnahme transkribieren</label>
             <small>Das Transkript ist kurz nach dem Ende fertig – es fehlen nur noch die letzten Minuten und die Sprechererkennung. Braucht während des Calls Rechenleistung; die Aufnahme und andere Programme haben Vorrang.</small>
+            <label class="consent-like"><input type="checkbox" name="experimental"> Experimentelle Funktionen (Beta)</label>
+            <small>Neue, noch wenig erprobte Funktionen sind mit «Beta» markiert, z.B. Bildschirm-Schnappschüsse und das Wechseln der Geräte während der Aufnahme. Ausgeschaltet sind sie nicht zu sehen.</small>
           </div>
           <fieldset>
             <legend>Tempo</legend>
@@ -2435,8 +2458,13 @@ function showRecording(recording) {
   if (running !== state.running) {
     state.running = running;
     $("recorder").classList.toggle("running", running);
-    // devices and screen stay selectable: a change during the recording switches it (switchDuringRecording)
-    $("sel-speakers").disabled = running && recording.only_microphone;   // no system audio track to switch
+    // devices and screen stay selectable: a change during the recording switches it (switchDuringRecording, Beta)
+    const locked = running && !betaOn();
+    $("sel-microphone").disabled = locked;
+    $("sel-screen").disabled = locked;
+    $("btn-reload-devices").disabled = locked;
+    $("sel-speakers").disabled = locked || (running && recording.only_microphone);   // no system audio track to switch
+    $("switch-beta").hidden = !running;
     const none = $("sel-speakers").querySelector(`option[value="${MICROPHONE_ONLY}"]`);
     if (none) none.disabled = running;                                   // the track can't be switched off
     $("chk-consent").disabled = running;
@@ -2722,6 +2750,58 @@ async function reloadDevices() {
   await loadDevices();
   button.textContent = "Geräte neu laden";
   button.disabled = false;
+}
+
+/* ---------- «Beta»: features still marked experimental ----------
+   A feature counts as stable by removing it here (and its «Beta» badge). The setting «experimental» hides all of
+   them; the badge opens a short note with a way to give feedback («Problem melden», prefilled). */
+const BETA = {
+  screens: { name: "Bildschirm-Schnappschüsse", since: "0.7.46" },
+  device_switch: { name: "Geräte während der Aufnahme wechseln", since: "0.7.47" },
+};
+const betaOn = () => !state.settings || state.settings.experimental !== "off";
+let betaShown = null;
+
+function applyBeta() {
+  document.body.classList.toggle("no-beta", !betaOn());
+  if (!betaOn() && !state.running) $("sel-screen").value = "";
+}
+
+function showBeta(button) {
+  const feature = BETA[button.dataset.beta];
+  if (!feature) return;
+  betaShown = button.dataset.beta;
+  $("beta-pop-text").textContent = `«${feature.name}» ist neu (seit ${feature.since}) und noch wenig erprobt. `
+    + "Klappt etwas nicht oder hast du eine Idee? Eine kurze Rückmeldung hilft.";
+  const pop = $("beta-pop");
+  pop.hidden = false;
+  const r = button.getBoundingClientRect();
+  pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+  pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
+  $("beta-feedback").focus();
+}
+
+function hideBeta() { $("beta-pop").hidden = true; }
+
+async function betaFeedback() {
+  const feature = BETA[betaShown];
+  hideBeta();
+  await openSettings("log");
+  await openReport();
+  if (feature && !$("report-message").value) {
+    $("report-message").value = `Rückmeldung zu «${feature.name}» (Beta): `;
+    $("report-message").setSelectionRange(9999, 9999);
+  }
+}
+
+function setupBeta() {
+  document.addEventListener("click", (event) => {
+    const badge = event.target.closest(".beta");
+    if (badge) { event.preventDefault(); showBeta(badge); return; }
+    if (!event.target.closest("#beta-pop")) hideBeta();
+  });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideBeta(); });
+  $("beta-feedback").addEventListener("click", betaFeedback);
 }
 
 /* ---------- «Problem melden» ---------- */
@@ -3061,6 +3141,7 @@ async function loadScreenSources() {
   const calls = (g.meetings || []).filter((m) => m.call);
   let value = values.includes(chosen) ? chosen : "";
   if (!value && !state.screenNoneByHand && !state.running && calls.length === 1) value = calls[0].value;
+  if (!betaOn()) value = "";   // Beta hidden: no snapshots
   select.value = value;
 }
 
@@ -3276,6 +3357,7 @@ async function openSettings(tab) {
   form.elements.asides.checked = e.asides !== "off";
   form.elements.auto_transcribe.checked = e.auto_transcribe === "on";
   form.elements.live_transcribe.checked = e.live_transcribe === "on";
+  form.elements.experimental.checked = e.experimental !== "off";
   form.elements.keep_display_on.checked = e.keep_display_on !== "off";
   form.elements.call_detection.checked = e.call_detection !== "off";
   $("audio-hint").textContent = AUDIO_HINT;
@@ -4025,6 +4107,7 @@ function collectSettings() {
   data.asides = form.elements.asides.checked ? "on" : "off";
   data.auto_transcribe = form.elements.auto_transcribe.checked ? "on" : "off";
   data.live_transcribe = form.elements.live_transcribe.checked ? "on" : "off";
+  data.experimental = form.elements.experimental.checked ? "on" : "off";
   data.keep_display_on = form.elements.keep_display_on.checked ? "on" : "off";
   data.call_detection = form.elements.call_detection.checked ? "on" : "off";
   data.ai_prompts = JSON.stringify(collectPrompts());
@@ -4057,6 +4140,7 @@ async function saveSettings(event) {
   if (!data.model) { showTab("transcription"); $("model-status").textContent = "Bitte ein Modell angeben."; return false; }
   try {
     state.settings = await call("save_settings", data);
+    applyBeta();
     $("dlg-settings").close();
     state.listSignature = "";
     await loadList();
@@ -4479,6 +4563,7 @@ async function init() {
   $("btn-log-export").addEventListener("click", exportLog);
   document.querySelectorAll("[data-report]").forEach((b) => b.addEventListener("click", openReport));
   $("btn-report-send").addEventListener("click", sendReport);
+  setupBeta();
   $("btn-report-mail").addEventListener("click", reportByMail);
   $("btn-report-cancel").addEventListener("click", () => $("dlg-report").close());
   $("btn-diag-audio").addEventListener("click", runAudioTest);
@@ -4547,6 +4632,7 @@ async function init() {
 
   try {
     state.settings = await call("settings");
+    applyBeta();
     const version = await call("version");
     $("version").textContent = "Version " + version;
     $("version-rail").textContent = version;

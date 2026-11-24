@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- **«Beta» marks experimental features:** screen snapshots and switching devices during a recording carry a «Beta»
+  badge. A click explains it and opens «Problem melden» prefilled for that feature. Settings → Allgemein →
+  «Experimentelle Funktionen (Beta)» hides them all (the devices are then locked during a recording again).
+
 ## 0.7.47 – 2026-11-24
 - **Progress without repetition:** while speakers are re-assigned or voices split, the percentage is shown once
   (below the bar), no longer also in a line that repeated the heading.

@@ -82,7 +82,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-413 tests in 39 files.
+414 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -310,7 +310,7 @@ Linux (experimental): call detection via pactl, notifications via notify-send, o
 - **Without notify send there are no notifications**
 - **Second app on linux is refused**
 
-### `test_live.py` (11)
+### `test_live.py` (12)
 
 Transcribing while recording (live.py): pieces of the growing WAV files, handed over to the normal transcription.
 
@@ -325,6 +325,7 @@ Transcribing while recording (live.py): pieces of the growing WAV files, handed 
 - **Text at a speaker mark** – 0.7.45: the list of marks shows what was said at each one – words from a little before to some seconds after.
 - **Service shows the text at each mark**
 - **No texts at marks without live transcription**
+- **Experimental features are shown by default and can be hidden** – 24.11.2026: features still in Beta are marked and can be hidden in the settings (Allgemein).
 
 ### `test_logs.py` (5)
 

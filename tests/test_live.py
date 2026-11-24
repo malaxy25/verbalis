@@ -179,3 +179,10 @@ def test_no_texts_at_marks_without_live_transcription():
     s.mark_speaker("Basil")
     assert s.speaker_mark_texts() == {"live": False, "texts": [None]}
     s.stop_recording()
+
+
+def test_experimental_features_are_shown_by_default_and_can_be_hidden():
+    """24.11.2026: features still in Beta are marked and can be hidden in the settings (Allgemein)."""
+    assert Settings().experimental == "on"
+    assert Settings.from_dict({"experimental": "off"}).experimental == "off"
+    assert Settings.from_dict({"experimental": "vielleicht"}).experimental == "on"
