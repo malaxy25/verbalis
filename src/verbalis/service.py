@@ -1841,7 +1841,8 @@ class Service:
         with self._lock:
             if recording_id in self._queued:
                 self._queued.remove(recording_id)
-            self._job = {"id": recording_id, "kind": "speakers", "phase": "Sprecher werden neu zugeordnet",
+            # the heading says what runs and the line below the percentage: no phase line (it only repeated both)
+            self._job = {"id": recording_id, "kind": "speakers", "phase": "",
                          "progress": 0.0, "start": time.monotonic(), "paused_s": 0.0, "paused_since": None,
                          "duration_s": None, "factor": None}
 
@@ -1849,7 +1850,6 @@ class Service:
             with self._lock:
                 if self._job:
                     self._job["progress"] = min(fraction, 0.99)
-                    self._job["phase"] = f"Sprecher werden neu zugeordnet: {fraction:.0%}"
             self._wait_while_paused()
 
         try:
@@ -1921,7 +1921,6 @@ class Service:
             with self._lock:
                 if self._job:
                     self._job["progress"] = min(fraction, 0.99)
-                    self._job["phase"] = f"Stimmen werden getrennt: {fraction:.0%}"
             self._wait_while_paused()
 
         try:

@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- **Progress without repetition:** while speakers are re-assigned or voices split, the percentage is shown once
+  (below the bar), no longer also in a line that repeated the heading.
 - **One search for everything:** the switch «Dieses Transkript / Alle Aufnahmen» is gone. The search always lists
   every recording with a hit and marks the hits in the open transcript (↑↓ as before). A folded list opens for
   the results and folds again when the search closes.

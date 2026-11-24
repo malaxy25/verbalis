@@ -2633,6 +2633,7 @@ function showProgress(z) {
   $("progress-text").textContent = z.pause === "recording"
     ? "Pausiert, solange eine Aufnahme läuft – so bleibt die CPU frei für den Call."
     : paused ? "Pausiert" : z.job.phase;
+  $("progress-text").hidden = !$("progress-text").textContent;
   $("progress-remaining").textContent = paused ? `${percent} % erledigt` : `${percent} % erledigt, ${remainingText(z.job.remaining_s)}`;
   const button = $("btn-pause");
   button.textContent = z.pause === "manual" ? "Fortsetzen" : "Pausieren";
