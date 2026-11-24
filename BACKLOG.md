@@ -4,45 +4,27 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## Current state (23 Nov 2026)
+## Current state (24 Nov 2026)
 
-- **Released 0.7.46 (23 Nov 2026)** on Andrea's request; snapshots marked experimental in the CHANGELOG.
-  The in-app tests under «Next step» were not done before the release – still to do. Contents: (1) Screen snapshots while recording (`screens.py`): none / monitor / one window (Windows);
-  kept on a clear change once the screen is still; moving areas (Teams video tiles) are learned and ignored;
-  `screens/HH-MM-SS.png`, linked in `transcript.md`. (2) «Für KI kopieren: <Anweisung>» in the transcript menu
-  «⋯»: the whole text with German placeholders ({transkript} {bilder} {titel} {datum} {dauer} {projekt}
-  {teilnehmende} {notizen}) visible in Settings → KI; «Standard» per delivered entry; lines with only empty
-  placeholders drop out; old saved entries get the placeholders. Named «KI», not Claude. (3) Recording list
-  folds to a narrow rail (button «‹», Ctrl/Cmd+B), remembered in setting `sidebar`. Rail: ›, search, +, ☰ (list
-  floats over the content until a recording is chosen; red dot recording, blue transcribing), folder, gear,
-  version. Ctrl/Cmd+↑/↓ = newer/older recording in list order (`listOrder()`), not while typing.
-  (4) Snapshot choice grouped: «Ganzer Bildschirm» / «Meetings» (Teams/Zoom/Webex/Meet/3CX by title, running calls
-  first; `screens.meeting_kind`) / «Weitere Fenster»; exactly one call open and choice gone or «Keine» → chosen
-  automatically (not after «Keine» by hand). Devices and windows reload when Verbalis gets the focus back; reloading
-  keeps the choice on screen (before, «Geräte neu laden» reset an unsaved microphone choice to the saved one).
-  (5) Pictures prepared for the AI (`screens.prepare`, after the recording and at «Für KI kopieren»): cut to where
-  the pictures differ (no OCR: bar, tiles, taskbar barely change), chosen = shown >= N s (setting
-  `screen_min_s`, Settings → KI, default 5; on the 18 Nov recording 10 s → 65, 5 s → 90, 3 s → 100 of 123) and
-  not a repeat (pixel compare; a coarse hash took different white slides for one), into `screens_crop/` + `index.json`; transcript.md links those, names the others as text. No picture
-  limit (Andrea), no downscaling (Claude scales > 1568 px itself, small UI text stays legible). Tested on the
-  Teams recording of 18 Nov: 4 s for 123 pictures. Andrea's own script (Tocco-Brain `screens_prep.py`, Windows
-  OCR + fixed percentages) replaced by this. Fixed: a picture taken before the recorder ran got the PC uptime as
-  time («124-26-38.png»). Defaults got the Swiss German / decisions / names lines; vault paths stay in Andrea's
-  own settings.
-- **Next step:** Andrea tests in the app: snapshots in a real Teams call (window «Meeting | Microsoft Teams»),
-  «Für KI kopieren» on the 18 Nov recording (first copy prepares ~4 s; Andrea deletes the stray
-  `124-26-38.png` there himself), the new field in Settings → KI (not looked at in a browser yet). Then tune, write
-  CHANGELOG, raise to 0.7.46 – push only when Andrea says so. Mac: test the rail/Cmd+B and snapshots there;
-  still open from 0.7.45: `caffeinate`, «heraustrennen».
-- **Open questions for Andrea:** none
-- **Prerequisites / start check:** restart Verbalis (start menu runs the repo `.venv`; `mss` is installed there).
-- **Decided:** no video recording (AI reads no video, big files, CPU load); Markdown + picture folder, not PDF;
-  reset only per KI entry (Andrea: not needed for other settings); placeholders visible in the defaults, no
-  hidden intro; placeholders stay German (users type them – UI language rule); folded list = rail, not hidden.
-- **Later:** OCR on the snapshots so Ctrl+F finds slide text (medium effort); snapshots on the Mac
-  (ScreenCaptureKit permission) untested, windows only on Windows. Test helper `finished_recording` (5 s wait)
-  sometimes times out on the first cold run after a code change – raise the timeout if it shows up in CI.
-- **Idea, not decided:** diarization already during a recording – parked: clustering needs the whole recording.
+- **Released 0.7.47 and 0.7.48 (24 Nov 2026):** devices (microphone, system audio, screen) switch during a
+  recording (`Track.switch`, `Service.switch_device` / `switch_screen`); one search for everything (no more scope
+  switch) that also finds notes, speaker names and date/folder name and says where («Gefunden in»; details first);
+  progress of speaker jobs shows the percentage once; «Beta» badge on experimental features (`BETA` in index.html:
+  screens, device_switch) with «Rückmeldung geben» → prefilled «Problem melden», setting `experimental` hides them.
+- **0.7.48 has no Mac build:** GitHub cancelled the macOS job after 15 min without running a step (no runner).
+  Macs stay on 0.7.47 and the fixed link `releases/latest/download/Verbalis-Mac.dmg` is broken until a release
+  with a Mac build. Proposed to Andrea: a 0.7.49 right away («Mac-Build nachgeliefert») – no answer yet.
+- **Next step:** Andrea tests the device switch in a real Teams call (headset ↔ laptop, screen ↔ window, see
+  `docs/TESTING.md`) and gives feedback; then decide 0.7.49. Still open from 0.7.46: in-app tests of snapshots
+  and «Für KI kopieren»; Mac: rail/Cmd+B, snapshots, `caffeinate`, «heraustrennen».
+- **Code signing:** SignPath application sent (waiting for the answer); Apple Developer Program on hold (CHF 109).
+  See the «Code signing» item below and `docs/CODE-SIGNING.md`.
+- **Open questions for Andrea:** 0.7.49 now for the Mac build, or with the next change?
+- **Prerequisites / start check:** restart Verbalis after a pull (start menu runs the repo `.venv`).
+- **Decided:** no video recording; Markdown + picture folder; one search field (Andrea 24 Nov); «Nur Mikrofon»
+  can't be switched during a recording; no client-side encryption needed elsewhere.
+- **Later:** adding system audio to a microphone-only recording mid-way (second step of the switch); OCR on the
+  snapshots; diarization during a recording parked (needs the whole recording).
 
 ## 0.7.34 – next
 
