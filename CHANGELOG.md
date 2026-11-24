@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.47 – 2026-11-24
 - **Progress without repetition:** while speakers are re-assigned or voices split, the percentage is shown once
   (below the bar), no longer also in a line that repeated the heading.
 - **One search for everything:** the switch «Dieses Transkript / Alle Aufnahmen» is gone. The search always lists
