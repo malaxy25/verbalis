@@ -1,4 +1,4 @@
-"""Search in transcripts: the rules (verbalis/search.py, the same in index.html) and «Alle Aufnahmen»."""
+"""Search in transcripts: the rules (verbalis/search.py, the same in index.html) and the search across all recordings."""
 
 import json
 import shutil
@@ -37,7 +37,7 @@ def test_accents_and_sharp_s():
 
 @pytest.mark.skipif(NODE is None, reason="Node.js not installed")
 def test_window_uses_the_same_rules_as_python():
-    """The open transcript is searched in the window: it must find exactly what «Alle Aufnahmen» finds."""
+    """The open transcript is searched in the window: it must find exactly what the search across all recordings finds."""
     code = functions("foldText", "searchTerms", "matchSpans") + f"""
 const SEARCH_FOLD = {json.dumps(search.FOLD, ensure_ascii=False)};
 const text = {json.dumps(TEXT, ensure_ascii=False)};
