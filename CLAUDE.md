@@ -17,7 +17,8 @@ holds the agreed plan for the next version, if there is one).
   `.\.venv\Scripts\Activate.ps1` – if scripts are blocked: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 - Install: `pip install -e ".[dev]"`. Start the app from the repo: `verbalis app`.
 - Before every commit: `pytest -q`, `pyflakes src tests tools`, `python tools/test_catalog.py`
-  (updates the test catalogue in `docs/TESTING.md`; CI fails if it is out of date).
+  (updates the test catalogue in `docs/TESTING.md`; CI fails if it is out of date). Never edit the catalogue by
+  hand – change the test docstring instead, the catalogue is generated from it.
 - UI in a normal browser with fake data: `python tools/ui_preview.py`, then open
   `tools/ui-preview/preview.html#transcript` (other scenarios listed in `docs/TESTING.md`).
   For a browser check with the Chrome tools serve it (`python -m http.server 8765`) – `file://` is refused.
