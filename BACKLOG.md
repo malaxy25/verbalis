@@ -36,11 +36,14 @@ ignored already. An automatic «everything moves = no picture» rule only helps 
 1. **Transcript view shows what the AI gets** – the chosen, cropped pictures (`screens_crop/`) instead of all
    originals (`service.py` `data["screens"]` uses `screens.listing`; `image_path` only allows `screens/`), so one
    sees what was dropped. **[ux]**
-2. **Collection «Nicht verwendet»** – the left-out pictures (short, same as …, removed by hand) gathered in one
-   place; click one → it is sorted into the transcript at its time. In the transcript «weglassen» moves a picture
-   there (reversible); in the collection «endgültig löschen» deletes the file (privacy: Halle 44). Manual choices
-   stored in `screens_crop/index.json` (forced in/out) so a new `prepare` (other `min_shown_s`) keeps them;
-   transcript.md rewritten. Several at once. **[ux] [privacy]**
+2. **Panel «Bilder» with all pictures** (mockup agreed 25 Nov) – collapsed like the speaker box, summary line
+   «16 – 9 im Transkript, 7 nicht verwendet». Grid of all pictures: used ones marked green «im Transkript» (« (von
+   Hand)» if added by hand), left-out ones faded with the reason (nur kurz gezeigt / gleich wie 03:13 / von Hand
+   weggelassen). Filters: Alle (default), Im Transkript, Nicht verwendet, per reason. Multiple selection; buttons
+   «n ins Transkript» (sorted in at its time), «n weglassen», «n endgültig löschen» (asks, deletes the file –
+   privacy, Halle 44). In the transcript, hovering a picture shows «Original» and «Weglassen». Undo for 5 s after
+   moving (not after deleting). Manual choices stored in `screens_crop/index.json` (forced in/out) so a new
+   `prepare` (other `min_shown_s`) keeps them; transcript.md rewritten. **[ux] [privacy]**
 3. **Button «Bilder pausieren / fortsetzen»** during a recording, audio keeps running; setting «Bilder erst nach
    Klick starten» (recording begins without pictures). **[ux] [privacy]**
 4. **Suggest the meeting window** – when a call window is recognised (`meeting_kind`, `call_detect`) while the
