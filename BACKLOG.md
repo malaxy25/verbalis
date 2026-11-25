@@ -26,6 +26,32 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 - **Later:** adding system audio to a microphone-only recording mid-way (second step of the switch); OCR on the
   snapshots; diarization during a recording parked (needs the whole recording).
 
+## Next – snapshots (planned with Andrea 25 Nov 2026)
+
+Seen in the recordings «SBV LA» and «Halle 44» of 25 Nov (whole screen captured, not the Teams window): before
+anyone shares, pictures come from windows moving/opening on the desktop (SBV 7 before 02:09 + 3 after the end;
+Halle 44 ~24 before 07:52, including unrelated windows – editor, browser). Not the faces: the video tiles are
+ignored already. An automatic «everything moves = no picture» rule only helps when the meeting window is captured.
+
+1. **Transcript view shows what the AI gets** – the chosen, cropped pictures (`screens_crop/`) instead of all
+   originals (`service.py` `data["screens"]` uses `screens.listing`; `image_path` only allows `screens/`), so one
+   sees what was dropped. **[ux]**
+2. **Collection «Nicht verwendet»** – the left-out pictures (short, same as …, removed by hand) gathered in one
+   place; click one → it is sorted into the transcript at its time. In the transcript «weglassen» moves a picture
+   there (reversible); in the collection «endgültig löschen» deletes the file (privacy: Halle 44). Manual choices
+   stored in `screens_crop/index.json` (forced in/out) so a new `prepare` (other `min_shown_s`) keeps them;
+   transcript.md rewritten. Several at once. **[ux] [privacy]**
+3. **Button «Bilder pausieren / fortsetzen»** during a recording, audio keeps running; setting «Bilder erst nach
+   Klick starten» (recording begins without pictures). **[ux] [privacy]**
+4. **Suggest the meeting window** – when a call window is recognised (`meeting_kind`, `call_detect`) while the
+   whole screen is captured: hint «Teams-Meeting erkannt – Bilder nur vom Meeting-Fenster?» [Wechseln]
+   (`switch_screen` exists). Test first: does PrintWindow capture the new Teams call window (GPU, maybe black)?
+   When Andrea shares himself, Teams shrinks to a bar – then the whole screen is right, so only a suggestion,
+   never automatic. Windows only (Mac has no window capture). **[ux]**
+5. **Overview: number of pictures** – «Bilder 38, davon 27 für KI» next to Aufnahmedauer/Rechenzeit. **[ux]**
+6. **Edit title and project while transcribing** – currently locked; the finished transcription must take the
+   title from `meta.json` instead of overwriting the change. **[ux]**
+
 ## 0.7.34 – next
 
 **Status 23 Oct 2026:** 0.7.38 released (speaker box without speakers, MLX file name, Linux Qt/lspci,
