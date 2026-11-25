@@ -4,7 +4,7 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## Current state (24 Nov 2026)
+## Current state (25 Nov 2026)
 
 - **Released 0.7.47 and 0.7.48 (24 Nov 2026):** devices (microphone, system audio, screen) switch during a
   recording (`Track.switch`, `Service.switch_device` / `switch_screen`); one search for everything (no more scope
@@ -14,6 +14,9 @@ Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/
 - **0.7.48 has no Mac build:** GitHub cancelled the macOS job after 15 min without running a step (no runner).
   Macs stay on 0.7.47 and the fixed link `releases/latest/download/Verbalis-Mac.dmg` is broken until a release
   with a Mac build. Proposed to Andrea: a 0.7.49 right away («Mac-Build nachgeliefert») – no answer yet.
+- **Snapshots planned (25 Nov):** six items agreed in «Next – snapshots» below (view = the AI's choice,
+  panel «Bilder» per mockup, pause button, suggest the meeting window, picture count, edit title while
+  transcribing). Proposed start: items 1 and 5 – waiting for Andrea's go.
 - **Next step:** Andrea tests the device switch in a real Teams call (headset ↔ laptop, screen ↔ window, see
   `docs/TESTING.md`) and gives feedback; then decide 0.7.49. Still open from 0.7.46: in-app tests of snapshots
   and «Für KI kopieren»; Mac: rail/Cmd+B, snapshots, `caffeinate`, «heraustrennen».
