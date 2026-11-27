@@ -4,20 +4,15 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## Current state (27 Nov 2026)
+## Current state (27 Nov 2026, evening)
 
-- **0.7.49 (27 Nov 2026), all six snapshot items done** (planned with Andrea 25 Nov, see CHANGELOG): the transcript
-  view shows the chosen, cut pictures (hover: «Original», «Weglassen»); panel «Bilder» with all pictures, filters,
-  in/out with undo, delete for good (`screens.choose_by_hand` / `delete`, hand choices in `screens_crop/index.json`
-  `manual`, content boxes in `boxes`); «Bilder pausieren / fortsetzen» and setting `screen_start` («erst nach Klick»);
-  hint «Teams-Meeting erkannt – Bilder nur vom Meeting-Fenster?» (`screens.call_windows`, `Service._meeting_window`);
-  «Bilder 38, davon 27 für KI»; title/project editable while transcribing. Also fixed: concurrent meta.json writes
-  (own tmp file per thread, `_meta_lock`). 0.7.49 also brings the missing Mac build of 0.7.48.
-- **Device switch** (0.7.47) tested by Andrea in a real call: works (27 Nov).
+- **0.7.50 pushed (27 Nov)** – panel «Bilder»: Shift+click / Shift+Space chooses a range, a click keeps the scroll
+  position (only the selection is redrawn, thumbnails cached). Release builds automatically; Andrea tested it locally.
+- **0.7.49** (snapshot items planned 25 Nov, see CHANGELOG) and the device switch (0.7.47, tested in a real call) are done.
 - **Next step:** Andrea tests the snapshots in a real Teams call (`docs/TESTING.md`, «Snapshots in a real Teams
   call»), especially whether «Wechseln» to the Teams call window gives real pictures (PrintWindow on the GPU-drawn
-  new Teams may be black – then the hint must be dropped or limited). Check that the Mac build of 0.7.49 exists.
-  Still open from 0.7.46: Mac: rail/Cmd+B, snapshots, `caffeinate`, «heraustrennen».
+  new Teams may be black – then the hint must be dropped or limited). Check that the release and Mac build of
+  0.7.50 exist. Still open from 0.7.46: Mac: rail/Cmd+B, snapshots, `caffeinate`, «heraustrennen».
 - **Code signing:** SignPath Foundation declined (27 Nov, too little public visibility); Apple on hold (CHF 109).
   See the «Code signing» item below.
 - **Open questions for Andrea:** code signing – reapply later, paid SignPath or something else?
