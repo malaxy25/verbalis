@@ -1811,18 +1811,28 @@ function showUndo(text, undo) {
   undoTimer = setTimeout(() => toast.remove(), UNDO_SECONDS * 1000);
 }
 
-/* Small pictures load when they scroll into view (Service.screen_image with thumb). */
+/* Small pictures load when they scroll into view (Service.screen_image with thumb). Loaded ones are kept, so a
+   redrawn panel shows them at once instead of flickering. */
+const thumbCache = new Map();   // "id/file" → data URL
+const THUMB_CACHE_MAX = 600;
+
 const lazyPictures = new IntersectionObserver((entries) => {
   for (const e of entries) {
     if (!e.isIntersecting) continue;
     lazyPictures.unobserve(e.target);
-    call("screen_image", e.target.dataset.id, e.target.dataset.file, true).then((url) => { e.target.src = url; }).catch(() => {});
+    const { id, file } = e.target.dataset;
+    call("screen_image", id, file, true).then((url) => {
+      if (thumbCache.size >= THUMB_CACHE_MAX) thumbCache.delete(thumbCache.keys().next().value);
+      thumbCache.set(`${id}/${file}`, url);
+      e.target.src = url;
+    }).catch(() => {});
   }
 }, { rootMargin: "400px" });
 
 function lazyImage(id, file, alt) {
   const img = element("img", { alt, "data-id": id, "data-file": file });
-  lazyPictures.observe(img);
+  const cached = thumbCache.get(`${id}/${file}`);
+  if (cached) img.src = cached; else lazyPictures.observe(img);
   return img;
 }
 
@@ -1873,57 +1883,90 @@ function picturesPanel(a, t, pictures) {
     try { pictures.update(await call("delete_screens", a.id, sources)); } catch (e) { showMessage(e.message); }
   };
 
-  const draw = () => {
-    const all = t.pictures || [];
-    const known = new Set(all.map((p) => p.source));
-    selected = new Set([...selected].filter((s) => known.has(s)));
-    const used = all.filter((p) => p.used).length;
-    summary.textContent = `${all.length} – ${used} im Transkript, ${all.length - used} nicht verwendet`;
-    const filters = PICTURE_FILTERS.filter(([key, , test]) => key === "all" || key === filter || all.some(test));
-    const test = (PICTURE_FILTERS.find(([key]) => key === filter) || PICTURE_FILTERS[0])[2];
-    const shown = all.filter(test);
-    const chosen = all.filter((p) => selected.has(p.source));
+  /* A click only changes the selection: the tiles stay (no new grid), so the scroll position and the loaded
+     pictures stay too (bug 27 Nov 2026: every click jumped back to the first picture). */
+  const actionsBox = element("div", { class: "pictures-actions" });
+  const tiles = new Map();   // source → tile of the pictures shown now
+  let shown = [];
+  let anchor = null;         // last picture clicked without Shift: one end of a Shift range
+
+  const drawSelection = () => {
+    const chosen = (t.pictures || []).filter((p) => selected.has(p.source));
     const n = chosen.length;
     const button = (label, onclick, extra = {}) => element("button", { type: "button", class: "action", onclick, ...extra }, label);
-    const actions = n ? [
+    actionsBox.replaceChildren(...(n ? [
       element("span", { class: "count" }, n === 1 ? "1 Bild gewählt" : `${n} Bilder gewählt`),
       chosen.some((p) => !p.used) ? button(`${n} ins Transkript`, () => act("in")) : null,
       chosen.some((p) => p.used) ? button(`${n} weglassen`, () => act("out")) : null,
       button(deleteArmed ? "Endgültig löschen? Nochmals klicken" : `${n} endgültig löschen`, () => {
         if (deleteArmed) { remove(); return; }
         deleteArmed = true;
-        draw();
+        drawSelection();
       }, { class: "action danger", title: "Löscht die Bilddateien – lässt sich nicht rückgängig machen" }),
-      element("button", { type: "button", class: "link-button", onclick: () => { selected = new Set(); deleteArmed = false; draw(); } },
-        "Auswahl aufheben"),
-    ] : [element("span", { class: "count" }, "Bilder anklicken, um sie auszuwählen")];
+      element("button", { type: "button", class: "link-button",
+        onclick: () => { selected = new Set(); anchor = null; deleteArmed = false; drawSelection(); } }, "Auswahl aufheben"),
+    ] : [element("span", { class: "count" }, "Bilder anklicken, um sie auszuwählen – mit Shift einen ganzen Bereich")]));
+    for (const [source, tile] of tiles) tile.setAttribute("aria-pressed", String(selected.has(source)));
+  };
+
+  /* Plain click: this picture on/off. Shift+click: every shown picture from the last clicked one to this one,
+     set to what the last clicked one is now (so a range can be chosen and also un-chosen). */
+  const pick = (source, range) => {
+    const from = anchor ? shown.findIndex((p) => p.source === anchor) : -1;
+    const to = shown.findIndex((p) => p.source === source);
+    if (range && from >= 0 && to >= 0) {
+      const on = selected.has(anchor);
+      for (const p of shown.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+        if (on) selected.add(p.source); else selected.delete(p.source);
+      }
+    } else {
+      if (selected.has(source)) selected.delete(source); else selected.add(source);
+      anchor = source;
+    }
+    deleteArmed = false;
+    drawSelection();
+  };
+
+  const draw = () => {
+    const all = t.pictures || [];
+    const known = new Set(all.map((p) => p.source));
+    selected = new Set([...selected].filter((s) => known.has(s)));
+    if (anchor && !known.has(anchor)) anchor = null;
+    const used = all.filter((p) => p.used).length;
+    summary.textContent = `${all.length} – ${used} im Transkript, ${all.length - used} nicht verwendet`;
+    const filters = PICTURE_FILTERS.filter(([key, , test]) => key === "all" || key === filter || all.some(test));
+    const test = (PICTURE_FILTERS.find(([key]) => key === filter) || PICTURE_FILTERS[0])[2];
+    shown = all.filter(test);
+    const scrolled = body.querySelector(".pictures-grid")?.scrollTop || 0;   // keep the place after in/out/delete
+    tiles.clear();
+    const grid = shown.length ? element("div", { class: "pictures-grid" }, ...shown.map((p) => {
+      const tile = element("div", { class: `picture-tile${p.used ? "" : " unused"}`, role: "button", tabindex: "0",
+        "aria-label": `Bild ${timeText(p.t)}, ${pictureState(p)}` },
+        lazyImage(a.id, p.source, `Bildschirm ${timeText(p.t)}`),
+        element("div", { class: "tile-head" }, element("time", {}, timeText(p.t)),
+          element("button", { type: "button", class: "tile-open", title: "Original gross anzeigen", onclick: (event) => {
+            event.stopPropagation();
+            call("open_screen_image", a.id, p.source).catch((e) => showMessage(e.message));
+          } }, "Original")),
+        element("span", { class: `tile-state${p.used ? " used" : ""}` }, pictureState(p)));
+      tile.addEventListener("mousedown", (event) => { if (event.shiftKey) event.preventDefault(); });   // no text selection
+      tile.addEventListener("click", (event) => pick(p.source, event.shiftKey));
+      tile.addEventListener("keydown", (event) => {
+        if (event.key === " " || event.key === "Enter") { event.preventDefault(); pick(p.source, event.shiftKey); }
+      });
+      tiles.set(p.source, tile);
+      return tile;
+    })) : element("p", { class: "pictures-empty" }, "Keine Bilder in dieser Auswahl.");
     body.replaceChildren(
       element("div", { class: "pictures-tools" },
         element("div", { class: "pictures-filter", role: "group", "aria-label": "Bilder filtern" },
           ...filters.map(([key, label, f]) => element("button", { type: "button", "aria-pressed": String(key === filter),
-            onclick: () => { filter = key; draw(); } }, `${label} (${all.filter(f).length})`))),
-        element("div", { class: "pictures-actions" }, ...actions)),
-      shown.length ? element("div", { class: "pictures-grid" }, ...shown.map((p) => {
-        const tile = element("div", { class: `picture-tile${p.used ? "" : " unused"}`, role: "button", tabindex: "0",
-          "aria-pressed": String(selected.has(p.source)), "aria-label": `Bild ${timeText(p.t)}, ${pictureState(p)}` },
-          lazyImage(a.id, p.source, `Bildschirm ${timeText(p.t)}`),
-          element("div", { class: "tile-head" }, element("time", {}, timeText(p.t)),
-            element("button", { type: "button", class: "tile-open", title: "Original gross anzeigen", onclick: (event) => {
-              event.stopPropagation();
-              call("open_screen_image", a.id, p.source).catch((e) => showMessage(e.message));
-            } }, "Original")),
-          element("span", { class: `tile-state${p.used ? " used" : ""}` }, pictureState(p)));
-        const toggle = () => {
-          if (selected.has(p.source)) selected.delete(p.source); else selected.add(p.source);
-          deleteArmed = false;
-          draw();
-        };
-        tile.addEventListener("click", toggle);
-        tile.addEventListener("keydown", (event) => {
-          if (event.key === " " || event.key === "Enter") { event.preventDefault(); toggle(); }
-        });
-        return tile;
-      })) : element("p", { class: "pictures-empty" }, "Keine Bilder in dieser Auswahl."));
+            onclick: () => { filter = key; body.querySelector(".pictures-grid")?.scrollTo(0, 0); draw(); } },
+            `${label} (${all.filter(f).length})`))),
+        actionsBox),
+      grid);
+    grid.scrollTop = scrolled;
+    drawSelection();
   };
   panel.redraw = draw;
   draw();

@@ -87,7 +87,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-425 tests in 39 files.
+426 tests in 40 files.
 
 ### `test_acceleration.py` (10)
 
@@ -628,6 +628,12 @@ Merging both tracks into paragraphs and the Markdown output.
 The recording list in the UI: groups open and close. Runs the list functions of index.html in Node.js.
 
 - **List groups open and close again** – 0.7.27: «Diese Woche» could be closed but not opened again (only a click on «Heute» did it),
+
+### `test_ui_pictures.py` (1)
+
+The panel «Bilder» in the UI: choosing pictures. Runs picturesPanel of index.html in Node.js.
+
+- **Clicking a picture keeps the scroll position and shift chooses a range** – 27 Nov 2026: with many pictures, every click on one jumped the list back to the first picture (the whole grid was
 
 ### `test_ui_sidebar.py` (4)
 

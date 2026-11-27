@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.50 – 2026-11-27
+- **Panel «Bilder»: Shift+click chooses a range** – every picture from the last clicked one to this one (or
+  un-chooses them, if the last one was just un-chosen). Also with Shift+Space.
+- **Fixed:** with many pictures, every click on one jumped the list back to the first picture. A click now only
+  marks the tile; after «weglassen» / «ins Transkript» the list stays where it was, loaded pictures don't flicker.
+
 ## 0.7.49 – 2026-11-27
 - **Mac build again:** 0.7.48 had no Mac build (GitHub had no macOS runner); this release brings one, so the
   download link `Verbalis-Mac.dmg` works again.
