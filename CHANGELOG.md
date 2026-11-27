@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.49 – 2026-11-27
+- **Mac build again:** 0.7.48 had no Mac build (GitHub had no macOS runner); this release brings one, so the
+  download link `Verbalis-Mac.dmg` works again.
+- **Transcript view shows what the AI gets:** the snapshots in the transcript are the chosen ones, cut to the
+  shared content (`screens_crop/`), no longer all originals. On hover a picture offers «Original» (the whole
+  screen) and «Weglassen».
+- **Panel «Bilder»:** collapsed like the speaker box, «16 – 9 im Transkript, 7 nicht verwendet». A grid of all
+  snapshots: used ones marked green («im Transkript», «(von Hand)»), the others faded with the reason (nur kurz
+  gezeigt / gleich wie 03:13 / von Hand weggelassen); filters per state. Pictures chosen by a click can be taken
+  into the transcript, left out (both with «Rückgängig» for 5 s) or deleted for good (second click confirms).
+  Choices by hand are kept in `screens_crop/index.json` and survive a new preparation; transcript.md follows.
+- **Pause the pictures:** «Bilder pausieren / fortsetzen» during a recording, the audio goes on. Setting
+  «Bildschirm-Schnappschüsse erst nach Klick starten»: the recording begins without pictures.
+- **Meeting window suggested:** while the whole screen is captured and a call window is open (Windows), the
+  recording view asks «Teams-Meeting erkannt – Bilder nur vom Meeting-Fenster?» with «Wechseln» – never
+  automatic (when sharing yourself, the whole screen is right).
+- **Number of pictures** in the transcript overview: «Bilder 38, davon 27 für KI».
+- **Edit title and project while transcribing** (also while waiting): the finished transcript takes them from
+  the recording instead of the ones read at its start.
+- **Fix:** two threads writing meta.json at the same moment (e.g. a title saved while the transcription wrote)
+  failed – they shared one temporary file; a change made at that moment could also be lost. Reads retry while
+  Windows replaces the file.
+- Recordings of 0.7.46–0.7.48 are prepared once when their transcript is opened.
+
 ## 0.7.48 – 2026-11-24
 - **«Beta» marks experimental features:** screen snapshots and switching devices during a recording carry a «Beta»
   badge. A click explains it and opens «Problem melden» prefilled for that feature. Settings → Allgemein →

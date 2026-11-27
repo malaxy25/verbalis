@@ -122,7 +122,9 @@ class Service:
         self._list_devices = list_devices or self._default_list
         self._monitor_factory = monitor_factory or self._default_monitor
         self._screen_factory = screen_factory or screens.ScreenCapture   # (folder, target, position)
-        self._monitor = None              # level meters before a recording
+        self._call_windows = screens.call_windows   # windows of running calls (hint «nur vom Meeting-Fenster?»)
+        self._screens_lock = threading.Lock()       # preparing / choosing the pictures of a recording
+        self._monitor = None             # level meters before a recording
         self._monitor_key: tuple | None = None
         self._monitor_asked = 0.0         # when the UI last asked for levels (monotonic)
         self._monitor_failed: tuple | None = None   # (devices, when) – don't retry 4× a second
@@ -901,6 +903,7 @@ class Service:
             if screen:   # a closed window is reported before anything is recorded
                 capture = self._screen_factory(
                     folder, screen, lambda: rec.active_seconds() if recording.is_set() and not rec.paused else None)
+                capture.paused = self._s.screen_start == "click"   # «Bilder erst nach Klick starten»
                 capture.start()
             # consent and start are on disk before the first sample – they survive a crash
             try:
@@ -1057,6 +1060,8 @@ class Service:
                 capture = self._screen_factory(info["folder"], target,
                                                lambda: None if rec.paused else rec.active_seconds())
                 capture.count = old.count if old is not None else 0   # the total of this recording
+                # paused stays paused; switched on during the recording = the user wants pictures now
+                capture.paused = bool(old is not None and old.paused)
                 try:
                     capture.start()
                 except Exception:
@@ -1069,6 +1074,39 @@ class Service:
             if self._s.screen != target:
                 self.save_settings({"screen": target})
         log.info("Recording %s: screen snapshots now %s", info["id"], target or "off")
+
+    def pause_screens(self, paused: bool = True) -> None:
+        """«Bilder pausieren / fortsetzen» during a recording: no pictures while paused, the audio goes on."""
+        with self._lock:
+            capture = self._rec_info.get("screens") if self._rec is not None else None
+            if capture is None:
+                raise RuntimeError("Es werden gerade keine Bildschirm-Schnappschüsse aufgenommen.")
+            capture.paused = bool(paused)
+            rid = self._rec_info["id"]
+        log.info("Recording %s: screen snapshots %s", rid, "paused" if paused else "resumed")
+
+    def dismiss_meeting_window(self) -> None:
+        """The hint «Bilder nur vom Meeting-Fenster?» was closed: not again during this recording."""
+        with self._lock:
+            self._rec_info["meeting_dismissed"] = True
+
+    MEETING_CHECK_S = 5.0
+
+    def _meeting_window(self, info: dict) -> dict | None:
+        """While the whole screen is captured and a call window is open: that window, to suggest it (Windows).
+        Looked up at most every MEETING_CHECK_S; None once dismissed."""
+        if info.get("meeting_dismissed") or not info.get("screen", "").startswith(screens.MONITOR):
+            return None
+        now = time.monotonic()
+        if now - info.get("meeting_checked", -1e9) >= self.MEETING_CHECK_S:
+            info["meeting_checked"] = now
+            try:
+                found = self._call_windows()
+            except Exception:
+                log.warning("Call windows could not be listed", exc_info=True)
+                found = []
+            info["meeting_found"] = {**found[0], "name": screens.meeting_name(found[0]["label"])} if found else None
+        return info.get("meeting_found")
 
     def pause_recording(self) -> None:
         with self._lock:
@@ -1681,10 +1719,32 @@ class Service:
         try:
             if end_s is None:
                 end_s = pipeline.read_meta(folder).get("duration_s")
-            if screens.prepare(folder, end_s, self._s.min_shown_s) and (folder / "transcript.json").exists():
-                self._write_markdown(folder, json.loads((folder / "transcript.json").read_text(encoding="utf-8")))
+            with self._screens_lock:
+                if screens.prepare(folder, end_s, self._s.min_shown_s) and (folder / "transcript.json").exists():
+                    self._write_markdown(folder, json.loads((folder / "transcript.json").read_text(encoding="utf-8")))
         except Exception:   # the originals are still linked: worse for the AI, but nothing is lost
             log.exception("Preparing the snapshots of %s failed", folder.name)
+
+    def _screens_changed(self, recording_id: str, change: Callable[[Path], int]) -> dict:
+        """Run a change of the pictures (choice by hand, delete) and rewrite transcript.md; the panel's new data."""
+        folder = self._path(recording_id)
+        with self._lock:
+            if self._rec is not None and self._rec_info.get("id") == recording_id:
+                raise RuntimeError("Während der Aufnahme lassen sich die Bilder nicht ändern.")
+        self._prepare_screens(folder)
+        with self._screens_lock:
+            change(folder)
+            if (folder / "transcript.json").exists():
+                self._write_markdown(folder, json.loads((folder / "transcript.json").read_text(encoding="utf-8")))
+        return screen_data(folder)
+
+    def choose_screens(self, recording_id: str, sources: list[str], choice: str) -> dict:
+        """Panel «Bilder»: «ins Transkript» ("in"), «weglassen» ("out") or undo ("auto") for these pictures."""
+        return self._screens_changed(recording_id, lambda f: screens.choose_by_hand(f, list(sources), choice))
+
+    def delete_screens(self, recording_id: str, sources: list[str]) -> dict:
+        """Panel «Bilder»: delete these pictures for good (privacy – an unrelated window was captured)."""
+        return self._screens_changed(recording_id, lambda f: screens.delete(f, list(sources)))
 
     def _write_markdown(self, folder: Path, data: dict) -> None:
         paragraphs = [segment_from_dict(s) for s in data["segments"]]
@@ -2425,6 +2485,11 @@ class Service:
                 raise ValueError("Bitte ein gültiges Datum mit Uhrzeit angeben.")
             changes["start"] = start.isoformat(timespec="seconds")
         pipeline.update_meta(folder, **changes)
+        with self._lock:   # being transcribed: the new transcript takes title and project from meta.json at its end
+            transcribing = bool(self._job and self._job.get("id") == recording_id
+                                and self._job.get("kind", "transcription") == "transcription")
+        if transcribing:
+            return pipeline.details(pipeline.read_meta(folder))
         if ("title" in changes or "project" in changes) and (folder / "transcript.json").exists():
             _, transcript = self._transcript_data(recording_id)
             meta = pipeline.read_meta(folder)
@@ -2456,13 +2521,14 @@ class Service:
         except FileNotFoundError:
             return None
         self._complete_speakers(folder, data)
+        self._prepare_screens(folder)   # done after the recording; once for recordings of 0.7.46–48 without it
+        data.update(screen_data(folder))
         md = folder / "transcript.md"
         data["markdown"] = md.read_text(encoding="utf-8") if md.exists() else ""
         for seg in data["segments"]:
             seg.pop("words", None)   # only needed here in Python (splitting), not in the window
         # «trennen» in the speaker box: voices with other people marked or moved out of them (0.7.45)
         data["split_with"] = split_candidates(data, pipeline.read_meta(folder).get("speaker_marks") or [])
-        data["screens"] = [{"t": t, "file": path} for t, path in screens.listing(folder)]
         return data
 
     def ai_prompt(self, recording_id: str, index: int) -> str:
@@ -2616,8 +2682,10 @@ class Service:
                                             for s in tracks.values() if getattr(s, "switch_problem", None)), None),
                     "only_microphone": others is None,
                     "live": self._live_status(info["id"]),
-                    "screens": {"count": info["screens"].count, "problem": info["screens"].problem}
+                    "screens": {"count": info["screens"].count, "problem": info["screens"].problem,
+                                "paused": bool(getattr(info["screens"], "paused", False))}
                     if info.get("screens") is not None else None,
+                    "meeting_window": self._meeting_window(info),
                     "call_over": info.get("call_app") if info.get("call_over")
                     and not info.get("call_over_dismissed") else None,
                 }
@@ -2694,6 +2762,15 @@ class Service:
 
 
 _PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+
+def screen_data(folder: Path) -> dict:
+    """The pictures for the transcript view: `screens` = those in the transcript (what the AI gets, cut), `pictures`
+    = all of them for the panel «Bilder» (screens.overview)."""
+    pictures = screens.overview(folder)
+    return {"screens": [{"t": p["t"], "file": p["file"], "source": p["source"], "manual": p["manual"]}
+                        for p in pictures if p["used"]],
+            "pictures": pictures}
 
 
 def screens_hint(folder: Path) -> str:

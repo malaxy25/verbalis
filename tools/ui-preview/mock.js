@@ -24,6 +24,27 @@ for (let n = 3; n <= 7; n++) {   // short extra speakers – diarization of real
   speakerMap[`others-${n}`] = { name: `Gegenüber ${n}`, track: "others" };
   segments.push({ speaker: `Gegenüber ${n}`, speaker_id: `others-${n}`, track: "others", start: 33 + n * 4, end: 33 + n * 4 + n / 2, text: "Ja, genau." });
 }
+// screen snapshots (screens.overview): the chosen ones are cut copies in screens_crop/, the others left out with a reason
+const pictures = [[0, ""], [3, "short"], [8, ""], [12, "short"], [20, "same", 0], [30, ""], [36, "short"], [44, ""]]
+  .map(([t, reason, same]) => {
+    const name = `00-00-${String(t).padStart(2, "0")}.png`;
+    return { t, source: `screens/${name}`, file: reason ? null : `screens_crop/${name}`, used: !reason, reason,
+             same_as: same ?? null, manual: null, auto: reason };
+  });
+function mockScreenData() {
+  return { pictures: pictures.map(({ auto, ...p }) => ({ ...p })),
+           screens: pictures.filter((p) => p.used).map((p) => ({ t: p.t, file: p.file, source: p.source, manual: p.manual })) };
+}
+function mockChoosePictures(sources, choice) {   // as screens.choose_by_hand
+  for (const p of pictures.filter((x) => sources.includes(x.source))) {
+    p.manual = choice === "auto" ? null : choice;
+    p.used = choice === "auto" ? !p.auto : choice === "in";
+    p.reason = p.used ? "" : choice === "out" ? "manual" : p.auto;
+    p.file = p.used ? p.source.replace("screens/", "screens_crop/") : null;
+  }
+  window.__chosen = [sources, choice];
+  return mockScreenData();
+}
 const recs = [
   { id: "2026-10-08_093012", start: "2026-10-08T09:30:12+02:00", duration_s: 1834, status: "running", error: null, audio: true, audio_mb: 60, audio_delete: null },
   { id: "2026-10-15_100000", start: "2026-10-15T10:00:00+02:00", duration_s: null, status: "planned", audio: false, audio_mb: 0, title: "Weekly mit dem Team", project: "tocco Release", participants: { me: ["Andrea"], others: ["Eva Beispiel", "Tom Muster"] }, notes: "Agenda: Release-Termin" },
@@ -60,8 +81,8 @@ window.pywebview = { api: {
   dismiss_model_updates: () => { window.__modelsDismissed = true; return ok(null); },
   dismiss_notice: () => { window.__noticeGone = true; return ok(null); },
   recordings: () => ok((list => window.__scenario === "transcript" ? list.map((a, i) => i === 1 ? { ...a, state: "interrupted", problem: "Verbalis wurde während der Aufnahme beendet (Absturz oder Stromausfall). Das Audio bis dahin ist gesichert.", missing_tracks: ["others"] } : a) : list)(window.__scenario === "paused" ? recs.map((a, i) => i === 0 ? { ...a, status: "paused" } : a) : window.__scenario === "empty" ? [] : window.__scenario === "recording" ? [{ id: "2026-10-08_110000", start: "2026-10-08T11:00:00+02:00", duration_s: null, status: "recording", audio: true, audio_mb: 0, title: "Weekly mit dem Team", participants: window.__participants || { me: ["Andrea"], others: ["Basil", "Sandra"] }, speaker_marks: window.__marks || [] }, ...recs.slice(1)] : recs)),
-  state: () => ok({ recording: window.__scenario === "recording" ? { id: "2026-10-08_110000", duration_s: (t0 += 0.25), levels: { me: -14 - Math.random() * 6, others: -90 }, paused: !!window.__recPaused, others_silent_s: 75, others_device: "Speakers (Realtek(R) Audio)", disk_minutes_left: 42, live: { done_s: 600, recorded_s: Math.round(t0), problem: null, stopped: !!window.__liveStopped }, screens: { count: 7, problem: null } } : null, model_updates: window.__modelsDismissed ? [] : ["Flix-AI/flix-swissgerman-full"], model_download: window.__modelDl || null, notice: window.__scenario === "notice" && !window.__noticeGone ? "Das Modell Flix-AI/flix-swissgerman-full wurde aktualisiert (neuer Stand 9be17d0). Details auf der Modellseite in den Einstellungen." : null, update: window.__scenario === "empty" ? null : { latest: "0.7.5" }, update_progress: window.__progress ?? null, job: { id: "2026-10-08_093012", phase: "Spur «Andrea» wird transkribiert", progress: 0.37, remaining_s: 1260 }, queued: [], pause: window.__scenario === "paused" ? "manual" : (window.__scenario === "recording" ? "recording" : null), recording_error: null, call: window.__scenario === "call" && !window.__callDismissed ? { app: "Teams", planned: { id: "2026-10-15_100000", title: "Weekly mit dem Team" } } : null }),
-  transcript: () => ok({ title: "", header: { Modell: "Flix-AI/flix-swissgerman-full", Aufnahmedauer: "1.1 min", Rechenzeit: "1.7 min (1.54× Echtzeit)" }, tracks: { me: "Andrea", others: "Gegenüber" }, speakers: speakerMap, segments, markdown: "# x", edited: true, screens: [{ t: 0, file: "screens/00-00-00.png" }, { t: 30, file: "screens/00-00-30.png" }], mark_doubts: window.__doubtsGone ? [] : [{ t: 41.5, name: "Sandra", heard: "Gegenüber 1" }] }),
+  state: () => ok({ recording: window.__scenario === "recording" ? { id: "2026-10-08_110000", duration_s: (t0 += 0.25), levels: { me: -14 - Math.random() * 6, others: -90 }, paused: !!window.__recPaused, others_silent_s: 75, others_device: "Speakers (Realtek(R) Audio)", disk_minutes_left: 42, live: { done_s: 600, recorded_s: Math.round(t0), problem: null, stopped: !!window.__liveStopped }, screens: { count: 7, problem: null, paused: !!window.__screensPaused }, screen: "monitor:1", meeting_window: window.__meetingDismissed ? null : { value: "window:Besprechung | Microsoft Teams", label: "Besprechung | Microsoft Teams", name: "Teams-Meeting" } } : null, model_updates: window.__modelsDismissed ? [] : ["Flix-AI/flix-swissgerman-full"], model_download: window.__modelDl || null, notice: window.__scenario === "notice" && !window.__noticeGone ? "Das Modell Flix-AI/flix-swissgerman-full wurde aktualisiert (neuer Stand 9be17d0). Details auf der Modellseite in den Einstellungen." : null, update: window.__scenario === "empty" ? null : { latest: "0.7.5" }, update_progress: window.__progress ?? null, job: { id: "2026-10-08_093012", phase: "Spur «Andrea» wird transkribiert", progress: 0.37, remaining_s: 1260 }, queued: [], pause: window.__scenario === "paused" ? "manual" : (window.__scenario === "recording" ? "recording" : null), recording_error: null, call: window.__scenario === "call" && !window.__callDismissed ? { app: "Teams", planned: { id: "2026-10-15_100000", title: "Weekly mit dem Team" } } : null }),
+  transcript: () => ok({ title: "", header: { Modell: "Flix-AI/flix-swissgerman-full", Aufnahmedauer: "1.1 min", Rechenzeit: "1.7 min (1.54× Echtzeit)" }, tracks: { me: "Andrea", others: "Gegenüber" }, speakers: speakerMap, segments, markdown: "# x", edited: true, ...mockScreenData(), mark_doubts: window.__doubtsGone ? [] : [{ t: 41.5, name: "Sandra", heard: "Gegenüber 1" }] }),
   search: (query) => {   // simplified: lower case only; every finished recording has the sample transcript
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const has = (text) => words.every((w) => text.toLowerCase().includes(w));
@@ -114,8 +135,12 @@ window.pywebview = { api: {
   ai_prompt: (id, i) => { window.__aiPrompt = i; return ok("Lies das Transkript C:/Users/x/transcript.md. Fasse zusammen."); },
   screen_sources: () => ok({ windows_supported: true, monitors: [{ value: "monitor:1", label: "Ganzer Bildschirm 1 (1920×1080)" }, { value: "monitor:2", label: "Ganzer Bildschirm 2 (2560×1440)" }], meetings: [{ value: "window:Besprechung | Microsoft Teams", label: "Besprechung | Microsoft Teams", call: true }, { value: "window:Kalender | Microsoft Teams", label: "Kalender | Microsoft Teams", call: false }], windows: [{ value: "window:Konzept.pptx - PowerPoint", label: "Konzept.pptx - PowerPoint" }] }),
   // a grey «slide» with the time on it
-  screen_image: (id, file) => ok("data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#dde3ea"/><text x="24" y="60" font-family="sans-serif" font-size="28" fill="#333">Folie ${file.slice(8, 16)}</text><rect x="24" y="90" width="300" height="12" fill="#aab"/><rect x="24" y="115" width="260" height="12" fill="#aab"/></svg>`)),
-  open_screen_image: (id, file) => { window.__openedImage = file; return ok(null); }, stop_recording: () => ok("x"), save_settings: (d) => { window.__saved = d; return window.pywebview.api.settings().then((r) => ({ ok: true, data: { ...r.data, ...d } })); },
+  screen_image: (id, file) => ok("data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#dde3ea"/><text x="24" y="60" font-family="sans-serif" font-size="28" fill="#333">${file.startsWith("screens_crop/") ? "Folie" : "Bildschirm"} ${file.split("/").pop().slice(0, 8)}</text><rect x="24" y="90" width="300" height="12" fill="#aab"/><rect x="24" y="115" width="260" height="12" fill="#aab"/></svg>`)),
+  open_screen_image: (id, file) => { window.__openedImage = file; return ok(null); },
+  choose_screens: (id, sources, choice) => ok(mockChoosePictures(sources, choice)),
+  delete_screens: (id, sources) => { for (const s of sources) pictures.splice(pictures.findIndex((p) => p.source === s), 1); window.__deleted = sources; return ok(mockScreenData()); },
+  pause_screens: (paused) => { window.__screensPaused = paused; return ok(null); },
+  dismiss_meeting_window: () => { window.__meetingDismissed = true; return ok(null); }, stop_recording: () => ok("x"), save_settings: (d) => { window.__saved = d; return window.pywebview.api.settings().then((r) => ({ ok: true, data: { ...r.data, ...d } })); },
   pause: () => ok(null), resume: () => ok(null),
   stop_live: () => { window.__liveStopped = true; return ok(null); },
   mark_speaker: (name, track) => { (window.__marks = window.__marks || []).push({ t: Math.round(t0 * 10) / 10, name, track }); const p = window.__participants = window.__participants || { me: ["Andrea"], others: ["Basil", "Sandra"] }; if (!(p[track] || []).includes(name)) p[track] = [...(p[track] || []), name]; return ok([...window.__marks]); },

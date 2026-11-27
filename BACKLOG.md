@@ -4,59 +4,29 @@ Open items, roughly in priority order. Done items move to `CHANGELOG.md`.
 Tags: **[quality]** transcript quality · **[ux]** usability · **[ops]** build/deploy ·
 **[privacy]** data protection · **[tocco]** needed before use at tocco
 
-## Current state (25 Nov 2026)
+## Current state (27 Nov 2026)
 
-- **Released 0.7.47 and 0.7.48 (24 Nov 2026):** devices (microphone, system audio, screen) switch during a
-  recording (`Track.switch`, `Service.switch_device` / `switch_screen`); one search for everything (no more scope
-  switch) that also finds notes, speaker names and date/folder name and says where («Gefunden in»; details first);
-  progress of speaker jobs shows the percentage once; «Beta» badge on experimental features (`BETA` in index.html:
-  screens, device_switch) with «Rückmeldung geben» → prefilled «Problem melden», setting `experimental` hides them.
-- **0.7.48 has no Mac build:** GitHub cancelled the macOS job after 15 min without running a step (no runner).
-  Macs stay on 0.7.47 and the fixed link `releases/latest/download/Verbalis-Mac.dmg` is broken until a release
-  with a Mac build. Proposed to Andrea: a 0.7.49 right away («Mac-Build nachgeliefert») – no answer yet.
-- **Snapshots planned (25 Nov):** six items agreed in «Next – snapshots» below (view = the AI's choice,
-  panel «Bilder» per mockup, pause button, suggest the meeting window, picture count, edit title while
-  transcribing). Proposed start: items 1 and 5 – waiting for Andrea's go.
-- **Next step:** Andrea tests the device switch in a real Teams call (headset ↔ laptop, screen ↔ window, see
-  `docs/TESTING.md`) and gives feedback; then decide 0.7.49. Still open from 0.7.46: in-app tests of snapshots
-  and «Für KI kopieren»; Mac: rail/Cmd+B, snapshots, `caffeinate`, «heraustrennen».
-- **Code signing:** SignPath application sent (waiting for the answer); Apple Developer Program on hold (CHF 109).
-  See the «Code signing» item below and `docs/CODE-SIGNING.md`.
-- **Open questions for Andrea:** 0.7.49 now for the Mac build, or with the next change?
+- **0.7.49 (27 Nov 2026), all six snapshot items done** (planned with Andrea 25 Nov, see CHANGELOG): the transcript
+  view shows the chosen, cut pictures (hover: «Original», «Weglassen»); panel «Bilder» with all pictures, filters,
+  in/out with undo, delete for good (`screens.choose_by_hand` / `delete`, hand choices in `screens_crop/index.json`
+  `manual`, content boxes in `boxes`); «Bilder pausieren / fortsetzen» and setting `screen_start` («erst nach Klick»);
+  hint «Teams-Meeting erkannt – Bilder nur vom Meeting-Fenster?» (`screens.call_windows`, `Service._meeting_window`);
+  «Bilder 38, davon 27 für KI»; title/project editable while transcribing. Also fixed: concurrent meta.json writes
+  (own tmp file per thread, `_meta_lock`). 0.7.49 also brings the missing Mac build of 0.7.48.
+- **Device switch** (0.7.47) tested by Andrea in a real call: works (27 Nov).
+- **Next step:** Andrea tests the snapshots in a real Teams call (`docs/TESTING.md`, «Snapshots in a real Teams
+  call»), especially whether «Wechseln» to the Teams call window gives real pictures (PrintWindow on the GPU-drawn
+  new Teams may be black – then the hint must be dropped or limited). Check that the Mac build of 0.7.49 exists.
+  Still open from 0.7.46: Mac: rail/Cmd+B, snapshots, `caffeinate`, «heraustrennen».
+- **Code signing:** SignPath Foundation declined (27 Nov, too little public visibility); Apple on hold (CHF 109).
+  See the «Code signing» item below.
+- **Open questions for Andrea:** code signing – reapply later, paid SignPath or something else?
 - **Prerequisites / start check:** restart Verbalis after a pull (start menu runs the repo `.venv`).
 - **Decided:** no video recording; Markdown + picture folder; one search field (Andrea 24 Nov); «Nur Mikrofon»
-  can't be switched during a recording; no client-side encryption needed elsewhere.
+  can't be switched during a recording; no client-side encryption needed elsewhere; the meeting window is only
+  suggested, never switched automatically.
 - **Later:** adding system audio to a microphone-only recording mid-way (second step of the switch); OCR on the
   snapshots; diarization during a recording parked (needs the whole recording).
-
-## Next – snapshots (planned with Andrea 25 Nov 2026)
-
-Seen in the recordings «SBV LA» and «Halle 44» of 25 Nov (whole screen captured, not the Teams window): before
-anyone shares, pictures come from windows moving/opening on the desktop (SBV 7 before 02:09 + 3 after the end;
-Halle 44 ~24 before 07:52, including unrelated windows – editor, browser). Not the faces: the video tiles are
-ignored already. An automatic «everything moves = no picture» rule only helps when the meeting window is captured.
-
-1. **Transcript view shows what the AI gets** – the chosen, cropped pictures (`screens_crop/`) instead of all
-   originals (`service.py` `data["screens"]` uses `screens.listing`; `image_path` only allows `screens/`), so one
-   sees what was dropped. **[ux]**
-2. **Panel «Bilder» with all pictures** (mockup agreed 25 Nov) – collapsed like the speaker box, summary line
-   «16 – 9 im Transkript, 7 nicht verwendet». Grid of all pictures: used ones marked green «im Transkript» (« (von
-   Hand)» if added by hand), left-out ones faded with the reason (nur kurz gezeigt / gleich wie 03:13 / von Hand
-   weggelassen). Filters: Alle (default), Im Transkript, Nicht verwendet, per reason. Multiple selection; buttons
-   «n ins Transkript» (sorted in at its time), «n weglassen», «n endgültig löschen» (asks, deletes the file –
-   privacy, Halle 44). In the transcript, hovering a picture shows «Original» and «Weglassen». Undo for 5 s after
-   moving (not after deleting). Manual choices stored in `screens_crop/index.json` (forced in/out) so a new
-   `prepare` (other `min_shown_s`) keeps them; transcript.md rewritten. **[ux] [privacy]**
-3. **Button «Bilder pausieren / fortsetzen»** during a recording, audio keeps running; setting «Bilder erst nach
-   Klick starten» (recording begins without pictures). **[ux] [privacy]**
-4. **Suggest the meeting window** – when a call window is recognised (`meeting_kind`, `call_detect`) while the
-   whole screen is captured: hint «Teams-Meeting erkannt – Bilder nur vom Meeting-Fenster?» [Wechseln]
-   (`switch_screen` exists). Test first: does PrintWindow capture the new Teams call window (GPU, maybe black)?
-   When Andrea shares himself, Teams shrinks to a bar – then the whole screen is right, so only a suggestion,
-   never automatic. Windows only (Mac has no window capture). **[ux]**
-5. **Overview: number of pictures** – «Bilder 38, davon 27 für KI» next to Aufnahmedauer/Rechenzeit. **[ux]**
-6. **Edit title and project while transcribing** – currently locked; the finished transcription must take the
-   title from `meta.json` instead of overwriting the change. **[ux]**
 
 ## 0.7.34 – next
 
@@ -238,11 +208,13 @@ Still open:
 - [ ] **German release notes for users** – «Was ist neu» and the update dialog show the English changelog; consider a short German summary per release. **[ux]**
 - [ ] **Code signing** – decided 23 Nov 2026: Mac = Apple Developer Program (individual, Developer ID +
   notarization), Windows = SignPath Foundation. **Pipeline prepared** (not released yet, switches on with the
-  secrets): `docs/CODE-SIGNING.md` is the checklist. **Status 23 Nov 2026:** SignPath Foundation application
-  sent (waiting for the answer). Apple **on hold** (Andrea: CHF 109/year, waits for now; enrollment started, not
-  paid – can be continued later). Until then Mac stays on the own certificate as today. Next: SignPath answer →
-  secrets → first signed Windows release → `WINDOWS_PUBLISHER`. Apple later: enroll → Team ID → bridge release
-  with `updates.APPLE_TEAM_ID` → secrets → first Developer ID release.
+  secrets): `docs/CODE-SIGNING.md` is the checklist. **Status 27 Nov 2026:** SignPath Foundation **declined**
+  (project not visible enough yet: stars, forks, articles, institutional backing; reapply later or take a paid
+  SignPath plan). Apple **on hold** (Andrea: CHF 109/year, waits for now; enrollment started, not paid – can be
+  continued later). Until then Windows stays unsigned and Mac on the own certificate. Open for Andrea: reapply
+  later, paid SignPath, or another way (e.g. Azure Trusted Signing – needs a company of 3+ years or tocco as
+  publisher). Apple later: enroll → Team ID → bridge release with `updates.APPLE_TEAM_ID` → secrets → first
+  Developer ID release.
   Risks: entitlements only verified by the CI self-test, not yet on a real Mac (TCC prompts, process tap,
   MLX); SignPath approval needed for every release (Windows job waits up to 5 h). **[ops]**
 

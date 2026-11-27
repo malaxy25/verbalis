@@ -419,6 +419,41 @@
   .screen-status { flex-basis: 100%; color: var(--muted); font-size: 13px; }
   .screen-status.problem { color: var(--amber); }
   .screen-status[hidden] { display: none; }
+  .screen-status .link-button, .meeting-hint .link-button { padding: 0 4px; margin-left: 6px; }
+  .meeting-hint { flex-basis: 100%; color: var(--limmat); font-size: 13px; }
+  .meeting-hint[hidden] { display: none; }
+  /* panel «Bilder» in the transcript view (0.7.49): all snapshots, which ones the AI gets */
+  .pictures-tools { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 10px 0; }
+  .pictures-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+  .pictures-filter button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 2px 10px;
+    font-size: 13px; cursor: pointer; color: var(--ink); }
+  .pictures-filter button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .pictures-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-left: auto; }
+  .pictures-actions .count { color: var(--muted); font-size: 13px; }
+  .pictures-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px;
+    max-height: 520px; overflow-y: auto; padding: 2px; }
+  .picture-tile { display: grid; gap: 4px; padding: 6px; border: 2px solid var(--line); border-radius: 8px;
+    background: var(--surface); cursor: pointer; text-align: left; font: inherit; color: var(--ink); }
+  .picture-tile img { width: 100%; aspect-ratio: 16 / 10; object-fit: contain; background: var(--surface-2); border-radius: 4px; }
+  .picture-tile.unused img { opacity: .45; }
+  .picture-tile[aria-pressed="true"] { border-color: var(--limmat); background: var(--limmat-soft); }
+  .picture-tile .tile-head { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; }
+  .picture-tile time { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .picture-tile .tile-state { font-size: 12px; color: var(--muted); }
+  .picture-tile .tile-state.used { color: var(--green); font-weight: 600; }
+  .picture-tile .tile-open { border: 0; background: none; padding: 0; color: var(--muted); cursor: zoom-in; font-size: 12px;
+    text-decoration: underline; }
+  .pictures-empty { color: var(--muted); font-size: 13px; margin: 8px 0; }
+  .screen-shot .shot-wrap { position: relative; display: inline-block; max-width: 100%; }
+  .screen-shot .shot-tools { position: absolute; top: 6px; right: 6px; display: none; gap: 4px; }
+  .screen-shot .shot-wrap:hover .shot-tools, .screen-shot .shot-wrap:focus-within .shot-tools { display: flex; }
+  .screen-shot .shot-tools button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px;
+    padding: 2px 8px; font-size: 12px; cursor: pointer; box-shadow: 0 2px 6px rgb(0 0 0 / .15); }
+  .action.danger { color: var(--red); }
+  .undo-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 40; display: flex; gap: 12px;
+    align-items: center; padding: 8px 14px; border-radius: 8px; background: var(--ink); color: var(--surface); font-size: 14px;
+    box-shadow: 0 6px 20px rgb(0 0 0 / .25); }
+  .undo-toast button { border: 0; background: none; color: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
   /* «Beta»: features still marked experimental (BETA in the script) */
   .beta { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--amber); border-radius: 999px;
           background: none; color: var(--amber); font-size: 11px; font-weight: 600; line-height: 16px; vertical-align: middle;
@@ -785,6 +820,7 @@
       <button type="button" class="link-button" id="btn-reload-devices">Geräte neu laden</button>
       <small class="device-hint" id="device-hint" hidden></small>
       <small class="screen-status" id="screen-status" role="status" hidden></small>
+      <small class="meeting-hint" id="meeting-hint" hidden></small>
       <small class="switch-beta beta-feature" id="switch-beta" hidden>Mikrofon, Systemton und Bildschirm lassen sich
         während der Aufnahme wechseln.<button type="button" class="beta" data-beta="device_switch">Beta</button></small>
     </div>
@@ -950,6 +986,8 @@
             <span>Während der Aufnahme</span>
             <label class="consent-like"><input type="checkbox" name="keep_display_on"> Bildschirm anlassen</label>
             <small>Der Computer geht während Aufnahme und Transkription nicht in den Ruhezustand. Mit diesem Häkchen bleibt auch der Bildschirm an – praktisch, um bei Meetings vor Ort die Namen anzuklicken. Wird der Deckel des Laptops zugeklappt, schläft er trotzdem ein.</small>
+            <label class="consent-like beta-feature"><input type="checkbox" name="screen_start"> Bildschirm-Schnappschüsse erst nach Klick starten</label>
+            <small class="beta-feature">Die Aufnahme beginnt ohne Bilder; «Bilder starten» in der Aufnahme schaltet sie ein. Praktisch, wenn vor dem Meeting noch anderes auf dem Bildschirm ist.</small>
           </div>
           <div class="field">
             <span>Calls erkennen</span>
@@ -1385,14 +1423,14 @@ async function renderContent(force = false) {
       return;
     case "queued":
       if (pause === "manual") {
-        content.replaceChildren(element("div", { class: "empty" },
+        content.replaceChildren(detailsPanel(a), element("div", { class: "empty" },
           element("h2", {}, "Transkriptionen sind pausiert"),
           element("p", {}, "Diese Aufnahme wird transkribiert, sobald die Transkription fortgesetzt wird."),
           element("div", { class: "actions" },
             element("button", { type: "button", class: "action primary", onclick: togglePause }, "Fortsetzen")),
         ));
       } else {
-        content.replaceChildren(element("div", { class: "empty" },
+        content.replaceChildren(detailsPanel(a), element("div", { class: "empty" },
           element("h2", {}, "Wartet auf Transkription"),
           element("p", {}, pause === "recording"
             ? "Wird transkribiert, sobald die laufende Aufnahme beendet ist."
@@ -1402,7 +1440,8 @@ async function renderContent(force = false) {
       return;
     case "running":
     case "paused":
-      content.replaceChildren(element("div", { class: "progress", id: "progress" },
+      // title, project and notes stay editable: the finished transcript takes them from the recording (0.7.49)
+      content.replaceChildren(detailsPanel(a), element("div", { class: "progress", id: "progress" },
         element("h2", {}, "Transkript wird erstellt"),
         element("div", { class: "bar" }, element("div", { id: "progress-bar" })),
         element("p", { id: "progress-text" }, "Wird vorbereitet"),
@@ -1690,6 +1729,8 @@ async function renderTranscript(a) {
     headerList.append(element("div", {}, element("dt", {}, k), element("dd", {}, v)));
   }
   headerList.append(element("div", {}, element("dt", {}, "Audio"), element("dd", {}, audioText(a))));
+  const pictureCount = element("dd", {}, picturesText(t));
+  if ((t.pictures || []).length) headerList.append(element("div", {}, element("dt", {}, "Bilder"), pictureCount));
 
   const copyButton = element("button", { type: "button", class: "action" }, "Transkript kopieren");
   copyButton.addEventListener("click", async () => {
@@ -1716,8 +1757,177 @@ async function renderTranscript(a) {
     body.append(element("p", { class: "empty" }, "Im Transkript ist kein gesprochener Text. Pegel und Gerätewahl der Aufnahme prüfen."));
   }
   renderSegments(body, a.id, t.segments, t.speakers, meName, true, !!a.audio, a.participants || {});
-  placeScreens(body, a.id, t.segments, t.screens || []);
-  $("content").replaceChildren(...[header, speakersPanel(a, t), body].filter(Boolean));
+  // a change of the pictures (panel «Bilder» or «Weglassen» at a picture): transcript, panel and count follow
+  const pictures = { t, body, panel: null };
+  pictures.update = (data) => {
+    Object.assign(t, data);
+    placeScreens(body, a.id, t.segments, t.screens || [], pictures);
+    pictureCount.textContent = picturesText(t);
+    if (pictures.panel) pictures.panel.redraw();
+  };
+  pictures.choose = (sources, choice) => choosePictures(a.id, t, sources, choice, pictures.update);
+  pictures.panel = picturesPanel(a, t, pictures);
+  placeScreens(body, a.id, t.segments, t.screens || [], pictures);
+  $("content").replaceChildren(...[header, speakersPanel(a, t), pictures.panel, body].filter(Boolean));
+}
+
+/* «Bilder 38, davon 27 für KI» in the overview of a transcript. */
+function picturesText(t) {
+  const all = (t.pictures || []).length;
+  const used = (t.pictures || []).filter((p) => p.used).length;
+  return all ? `${all}, davon ${used} für KI` : "";
+}
+
+/* «ins Transkript» / «weglassen» for some pictures, then «Rückgängig» for 5 seconds: back to what each one was
+   (by hand in/out, or the automatic choice). */
+async function choosePictures(id, t, sources, choice, update) {
+  const before = new Map((t.pictures || []).filter((p) => sources.includes(p.source)).map((p) => [p.source, p.manual || "auto"]));
+  try {
+    update(await call("choose_screens", id, sources, choice));
+  } catch (e) { showMessage(e.message); return; }
+  const n = sources.length;
+  const what = n === 1 ? "1 Bild" : `${n} Bilder`;
+  showUndo(choice === "in" ? `${what} ins Transkript genommen` : `${what} weggelassen`, async () => {
+    try {
+      let data = null;
+      for (const back of ["auto", "in", "out"]) {
+        const group = [...before].filter(([, was]) => was === back).map(([source]) => source);
+        if (group.length) data = await call("choose_screens", id, group, back);
+      }
+      if (data) update(data);
+    } catch (e) { showMessage(e.message); }
+  });
+}
+
+const UNDO_SECONDS = 5;
+let undoTimer = null;
+
+function showUndo(text, undo) {
+  document.querySelector(".undo-toast")?.remove();
+  clearTimeout(undoTimer);
+  const toast = element("div", { class: "undo-toast", role: "status" }, element("span", {}, text),
+    element("button", { type: "button", onclick: () => { toast.remove(); clearTimeout(undoTimer); undo(); } }, "Rückgängig"));
+  document.body.append(toast);
+  undoTimer = setTimeout(() => toast.remove(), UNDO_SECONDS * 1000);
+}
+
+/* Small pictures load when they scroll into view (Service.screen_image with thumb). */
+const lazyPictures = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    lazyPictures.unobserve(e.target);
+    call("screen_image", e.target.dataset.id, e.target.dataset.file, true).then((url) => { e.target.src = url; }).catch(() => {});
+  }
+}, { rootMargin: "400px" });
+
+function lazyImage(id, file, alt) {
+  const img = element("img", { alt, "data-id": id, "data-file": file });
+  lazyPictures.observe(img);
+  return img;
+}
+
+const PICTURE_FILTERS = [
+  ["all", "Alle", () => true],
+  ["used", "Im Transkript", (p) => p.used],
+  ["unused", "Nicht verwendet", (p) => !p.used],
+  ["short", "nur kurz gezeigt", (p) => p.reason === "short"],
+  ["same", "Wiederholung", (p) => p.reason === "same"],
+  ["manual", "von Hand weggelassen", (p) => p.reason === "manual"],
+];
+
+function pictureState(p) {
+  if (p.used) return p.manual === "in" ? "im Transkript (von Hand)" : "im Transkript";
+  if (p.reason === "same") return `gleich wie ${timeText(p.same_as)}`;
+  return p.reason === "manual" ? "von Hand weggelassen" : "nur kurz gezeigt";
+}
+
+/* Panel «Bilder» (0.7.49, mockup agreed 25 Nov 2026): every snapshot, the ones in the transcript (what the AI gets)
+   marked green, the others faded with the reason. Pictures are chosen by a click; then «ins Transkript»,
+   «weglassen» or «endgültig löschen» (unrelated windows – privacy). Collapsed like the speaker box. */
+function picturesPanel(a, t, pictures) {
+  if (!(t.pictures || []).length) return null;
+  let filter = "all";
+  let selected = new Set();
+  let deleteArmed = false;
+  const summary = element("span", { class: "speaker-names" });
+  const body = element("div", { class: "pictures-body" });
+  const hint = "Grün markiert: diese Bilder stehen im Transkript und gehen mit «Für KI kopieren» an die KI – auf den gezeigten "
+    + "Inhalt zugeschnitten. Die übrigen waren nur kurz zu sehen oder wiederholen ein früheres Bild. Bilder anklicken, dann "
+    + "ins Transkript nehmen, weglassen oder endgültig löschen (z.B. ein fremdes Fenster).";
+  const panel = element("details", { class: "speakers-panel pictures-panel", "aria-label": "Bilder" },
+    element("summary", {}, element("h3", {}, "Bilder"), summary,
+      element("span", { class: "help", tabindex: "0", title: hint, "aria-label": hint }, "?")),
+    body);
+  panel.open = Boolean((state.picturesOpen || {})[a.id]);
+  panel.addEventListener("toggle", () => { state.picturesOpen = { ...(state.picturesOpen || {}), [a.id]: panel.open }; });
+
+  const act = async (choice) => {
+    const sources = [...selected];
+    selected = new Set();
+    await pictures.choose(sources, choice);
+  };
+  const remove = async () => {
+    const sources = [...selected];
+    selected = new Set();
+    deleteArmed = false;
+    try { pictures.update(await call("delete_screens", a.id, sources)); } catch (e) { showMessage(e.message); }
+  };
+
+  const draw = () => {
+    const all = t.pictures || [];
+    const known = new Set(all.map((p) => p.source));
+    selected = new Set([...selected].filter((s) => known.has(s)));
+    const used = all.filter((p) => p.used).length;
+    summary.textContent = `${all.length} – ${used} im Transkript, ${all.length - used} nicht verwendet`;
+    const filters = PICTURE_FILTERS.filter(([key, , test]) => key === "all" || key === filter || all.some(test));
+    const test = (PICTURE_FILTERS.find(([key]) => key === filter) || PICTURE_FILTERS[0])[2];
+    const shown = all.filter(test);
+    const chosen = all.filter((p) => selected.has(p.source));
+    const n = chosen.length;
+    const button = (label, onclick, extra = {}) => element("button", { type: "button", class: "action", onclick, ...extra }, label);
+    const actions = n ? [
+      element("span", { class: "count" }, n === 1 ? "1 Bild gewählt" : `${n} Bilder gewählt`),
+      chosen.some((p) => !p.used) ? button(`${n} ins Transkript`, () => act("in")) : null,
+      chosen.some((p) => p.used) ? button(`${n} weglassen`, () => act("out")) : null,
+      button(deleteArmed ? "Endgültig löschen? Nochmals klicken" : `${n} endgültig löschen`, () => {
+        if (deleteArmed) { remove(); return; }
+        deleteArmed = true;
+        draw();
+      }, { class: "action danger", title: "Löscht die Bilddateien – lässt sich nicht rückgängig machen" }),
+      element("button", { type: "button", class: "link-button", onclick: () => { selected = new Set(); deleteArmed = false; draw(); } },
+        "Auswahl aufheben"),
+    ] : [element("span", { class: "count" }, "Bilder anklicken, um sie auszuwählen")];
+    body.replaceChildren(
+      element("div", { class: "pictures-tools" },
+        element("div", { class: "pictures-filter", role: "group", "aria-label": "Bilder filtern" },
+          ...filters.map(([key, label, f]) => element("button", { type: "button", "aria-pressed": String(key === filter),
+            onclick: () => { filter = key; draw(); } }, `${label} (${all.filter(f).length})`))),
+        element("div", { class: "pictures-actions" }, ...actions)),
+      shown.length ? element("div", { class: "pictures-grid" }, ...shown.map((p) => {
+        const tile = element("div", { class: `picture-tile${p.used ? "" : " unused"}`, role: "button", tabindex: "0",
+          "aria-pressed": String(selected.has(p.source)), "aria-label": `Bild ${timeText(p.t)}, ${pictureState(p)}` },
+          lazyImage(a.id, p.source, `Bildschirm ${timeText(p.t)}`),
+          element("div", { class: "tile-head" }, element("time", {}, timeText(p.t)),
+            element("button", { type: "button", class: "tile-open", title: "Original gross anzeigen", onclick: (event) => {
+              event.stopPropagation();
+              call("open_screen_image", a.id, p.source).catch((e) => showMessage(e.message));
+            } }, "Original")),
+          element("span", { class: `tile-state${p.used ? " used" : ""}` }, pictureState(p)));
+        const toggle = () => {
+          if (selected.has(p.source)) selected.delete(p.source); else selected.add(p.source);
+          deleteArmed = false;
+          draw();
+        };
+        tile.addEventListener("click", toggle);
+        tile.addEventListener("keydown", (event) => {
+          if (event.key === " " || event.key === "Enter") { event.preventDefault(); toggle(); }
+        });
+        return tile;
+      })) : element("p", { class: "pictures-empty" }, "Keine Bilder in dieser Auswahl."));
+  };
+  panel.redraw = draw;
+  draw();
+  return panel;
 }
 
 /* Paragraphs, with short interjections («ja», «genau») in a narrow column next to the
@@ -1773,27 +1983,27 @@ function renderSegments(body, id, segments, speakerMap, meName, editable, playab
 }
 
 /* Screen snapshots (screens.py) between the paragraphs: each before the first paragraph starting at or after it.
-   The small pictures load when they scroll into view; a click opens the full picture in the image viewer. */
-function placeScreens(body, id, segments, screens) {
-  if (!screens.length) return;
-  const observer = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      observer.unobserve(e.target);
-      call("screen_image", id, e.target.dataset.file, true).then((url) => { e.target.src = url; }).catch(() => {});
-    }
-  }, { rootMargin: "400px" });
+   Shown is what the AI gets – the chosen pictures, cut to the shared content (0.7.49). A click opens the picture in
+   the image viewer; on hover «Original» (the whole screen) and «Weglassen». Placed anew after a change. */
+function placeScreens(body, id, segments, screens, pictures = null) {
+  body.querySelectorAll(":scope > .screen-shot").forEach((row) => row.remove());
   const rows = [...body.querySelectorAll(":scope > .paragraph[data-index]")];
   for (const shot of screens) {
-    const img = element("img", { alt: `Bildschirm ${timeText(shot.t)}`, "data-file": shot.file });
+    const img = lazyImage(id, shot.file, `Bildschirm ${timeText(shot.t)}`);
+    const tools = element("span", { class: "shot-tools" },
+      shot.source && shot.source !== shot.file ? element("button", { type: "button", title: "Den ganzen Bildschirm anzeigen",
+        onclick: () => call("open_screen_image", id, shot.source).catch((e) => showMessage(e.message)) }, "Original") : null,
+      pictures ? element("button", { type: "button", title: "Nicht ins Transkript und nicht an die KI",
+        onclick: () => pictures.choose([shot.source], "out") }, "Weglassen") : null);
     const row = element("div", { class: "paragraph screen-shot" },
       element("div", {}, element("div", { class: "who" }, "Bildschirm"), element("time", {}, timeText(shot.t))),
-      element("div", {}, element("button", { type: "button", class: "shot", title: "Gross anzeigen",
-        onclick: () => call("open_screen_image", id, shot.file).catch((e) => showMessage(e.message)) }, img)),
+      element("div", {}, element("span", { class: "shot-wrap" },
+        element("button", { type: "button", class: "shot", title: "Gross anzeigen",
+          onclick: () => call("open_screen_image", id, shot.file).catch((e) => showMessage(e.message)) }, img),
+        tools)),
       element("div"));
     const next = rows.find((r) => segments[Number(r.dataset.index)].start >= shot.t);
     if (next) body.insertBefore(row, next); else body.append(row);
-    observer.observe(img);
   }
 }
 
@@ -2429,18 +2639,58 @@ function liveText(live) {
     + (behind > 300 ? ` – ${Math.round(behind / 60)} Min. im Rückstand, der Rest folgt nach dem Ende.` : "");
 }
 
-/* Screen snapshots of the running recording (Service.state → recording.screens). */
+/* Screen snapshots of the running recording (Service.state → recording.screens), with «Bilder pausieren /
+   fortsetzen» (the audio goes on). Redrawn only on change, so the button stays clickable. */
 function showScreenStatus(recording) {
   const box = $("screen-status");
   const s = recording && recording.screens;
   box.hidden = !s;
-  if (!s) return;
+  if (!s) { box.dataset.text = ""; return; }
+  const count = s.count === 1 ? "1 Bildschirm-Schnappschuss" : `${s.count} Bildschirm-Schnappschüsse`;
+  const text = s.problem || (s.paused ? (s.count ? `Bilder pausiert – ${count}` : "Noch keine Bilder – sie starten mit dem Klick")
+    : count);
+  const key = `${text}|${s.paused}|${!!s.problem}`;
+  if (key === box.dataset.text) return;
+  box.dataset.text = key;
   box.classList.toggle("problem", !!s.problem);
-  box.textContent = s.problem || (s.count === 1 ? "1 Bildschirm-Schnappschuss" : `${s.count} Bildschirm-Schnappschüsse`);
+  const label = s.paused ? (s.count ? "Bilder fortsetzen" : "Bilder starten") : "Bilder pausieren";
+  box.replaceChildren(element("span", {}, text), s.problem ? null : element("button", { type: "button",
+    class: "link-button", id: "btn-pause-screens", title: "Nur die Bilder – der Ton wird weiter aufgenommen",
+    onclick: async () => {
+      try { await call("pause_screens", !s.paused); await poll(); } catch (e) { showMessage(e.message); }
+    } }, label));
+}
+
+/* While the whole screen is captured and a call window is open (Windows): suggest taking the pictures of that window
+   only – no other windows in the pictures. Never automatic: when sharing yourself, the whole screen is right. */
+function showMeetingHint(recording) {
+  const box = $("meeting-hint");
+  const m = recording && recording.meeting_window;
+  box.hidden = !m;
+  if (!m) { box.dataset.value = ""; return; }
+  if (box.dataset.value === m.value) return;
+  box.dataset.value = m.value;
+  const close = async () => {
+    try { await call("dismiss_meeting_window"); box.hidden = true; } catch (e) { showMessage(e.message); }
+  };
+  box.replaceChildren(
+    element("span", {}, `${m.name} erkannt – Bilder nur vom Meeting-Fenster?`),
+    element("button", { type: "button", class: "link-button", title: m.label, onclick: async () => {
+      const select = $("sel-screen");
+      try {
+        await call("switch_screen", m.value);
+        if (![...select.options].some((o) => o.value === m.value)) await loadScreenSources();
+        select.value = select.dataset.recorded = m.value;
+        await poll();
+      } catch (e) { showMessage(e.message); }
+    } }, "Wechseln"),
+    element("button", { type: "button", class: "link-button", "aria-label": "Hinweis schliessen", title: "Nein, ganzer Bildschirm",
+      onclick: close }, "×"));
 }
 
 function showRecording(recording) {
   showScreenStatus(recording);
+  showMeetingHint(recording);
   const status = document.getElementById("live-status");
   if (status) {
     const live = recording && recording.live;
@@ -3359,6 +3609,7 @@ async function openSettings(tab) {
   form.elements.live_transcribe.checked = e.live_transcribe === "on";
   form.elements.experimental.checked = e.experimental !== "off";
   form.elements.keep_display_on.checked = e.keep_display_on !== "off";
+  form.elements.screen_start.checked = e.screen_start === "click";
   form.elements.call_detection.checked = e.call_detection !== "off";
   $("audio-hint").textContent = AUDIO_HINT;
   call("audio_usage").then((sp) => {
@@ -4109,6 +4360,7 @@ function collectSettings() {
   data.live_transcribe = form.elements.live_transcribe.checked ? "on" : "off";
   data.experimental = form.elements.experimental.checked ? "on" : "off";
   data.keep_display_on = form.elements.keep_display_on.checked ? "on" : "off";
+  data.screen_start = form.elements.screen_start.checked ? "click" : "auto";
   data.call_detection = form.elements.call_detection.checked ? "on" : "off";
   data.ai_prompts = JSON.stringify(collectPrompts());
   const choice = chosenModel();

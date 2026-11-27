@@ -75,6 +75,25 @@ def meeting_kind(title: str) -> str | None:
     return None
 
 
+def meeting_name(title: str) -> str:
+    """What to call a call window in a hint: «Teams-Meeting», «Zoom-Meeting» …"""
+    low = title.lower()
+    if low.endswith(TEAMS):
+        return "Teams-Meeting"
+    if _MEET.match(title):
+        return "Google-Meet"
+    if "zoom" in low:
+        return "Zoom-Meeting"
+    return "Meeting"
+
+
+def call_windows() -> list[dict]:
+    """The windows of running calls (Windows only; elsewhere []): {value, label}, front-most first."""
+    if sys.platform != "win32":
+        return []
+    return [m for m in group_windows([title for _, title in _win_windows()])["meetings"] if m["call"]]
+
+
 def group_windows(titles: list[str]) -> dict:
     """Window titles as choices: meeting windows (calls first, otherwise in the given order) and the others."""
     meetings, windows = [], []
@@ -254,21 +273,32 @@ def listing(folder: Path) -> list[tuple[float, str]]:
 
 def save(folder: Path, seconds: float, picture: np.ndarray) -> Path:
     """Write the picture (and its small copy for the app). Never overwrites an earlier one."""
-    import mss.tools
-
     target = folder / FOLDER
-    (target / THUMBS).mkdir(parents=True, exist_ok=True)
+    target.mkdir(parents=True, exist_ok=True)
     path = target / file_name(seconds)
     n = 1
     while path.exists():
         path = target / f"{file_name(seconds)[:-4]}_{n}.png"
         n += 1
+    _write_with_thumb(path, picture)
+    return path
+
+
+def _write_with_thumb(path: Path, picture: np.ndarray) -> None:
+    """The picture as PNG and its small copy in .thumbs/ next to it."""
+    import mss.tools
+
+    (path.parent / THUMBS).mkdir(parents=True, exist_ok=True)
     h, w = picture.shape[:2]
     mss.tools.to_png(np.ascontiguousarray(picture).tobytes(), (w, h), level=6, output=str(path))
     step = max(1, -(-w // THUMB_WIDTH))
     thumb = np.ascontiguousarray(picture[::step, ::step])
-    mss.tools.to_png(thumb.tobytes(), (thumb.shape[1], thumb.shape[0]), level=6, output=str(target / THUMBS / path.name))
-    return path
+    mss.tools.to_png(thumb.tobytes(), (thumb.shape[1], thumb.shape[0]), level=6, output=str(path.parent / THUMBS / path.name))
+
+
+def _remove_with_thumb(path: Path) -> None:
+    path.unlink(missing_ok=True)
+    (path.parent / THUMBS / path.name).unlink(missing_ok=True)
 
 
 def read_png(path: Path) -> np.ndarray:
@@ -390,84 +420,211 @@ def choose(times: list[float], greys: list[np.ndarray], end_s: float | None,
     return result
 
 
-def prepare(folder: Path, end_s: float | None = None, min_shown_s: float = MIN_SHOWN_S) -> bool:
-    """Cut and choose the snapshots for an AI (screens_crop/ and its index.json). Does nothing if that is up to
-    date with screens/ and min_shown_s; True if it was (re)done."""
+#
+# Choices by hand (0.7.49): the panel «Bilder» in the transcript view adds a left-out picture to the transcript or
+# leaves a chosen one out. They are kept in index.json (`manual`: source → "in" / "out") and survive a new `prepare`
+# (e.g. another min_shown_s). The automatic verdict stays in each entry (`short`, `same_as`; neither = chosen), so
+# «back to automatic» (the undo) knows it; `file` is there exactly when the picture is in the transcript.
+
+MANUAL_IN, MANUAL_OUT, AUTOMATIC = "in", "out", "auto"
+
+
+def _read_index(folder: Path) -> dict | None:
+    """index.json if it matches the pictures in screens/, else None (not prepared, or pictures added since)."""
     import json
 
-    import mss.tools
+    try:
+        index = json.loads((folder / CROP_FOLDER / INDEX).read_text(encoding="utf-8"))
+        if [p for _, p in listing(folder)] != [e["source"] for e in index["pictures"]]:
+            return None
+        index.setdefault("manual", {})
+        index.setdefault("boxes", {})
+        return index
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def _write_index(folder: Path, index: dict) -> None:
+    import json
+
+    path = folder / CROP_FOLDER / INDEX
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(index, indent=1), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _shape_key(picture: np.ndarray) -> str:
+    return f"{picture.shape[0]}x{picture.shape[1]}"
+
+
+def _box_for(folder: Path, index: dict, picture: np.ndarray):
+    """The content box for pictures of this size – from index.json, or worked out once (an index of 0.7.46–48)."""
+    key = _shape_key(picture)
+    if key not in index["boxes"]:
+        same = [p for p in (read_png(folder / s) for s in (e["source"] for e in index["pictures"]))
+                if p.shape == picture.shape]
+        box = content_box([_grey(p) for p in same])
+        index["boxes"][key] = list(box) if box else None
+    return index["boxes"][key]
+
+
+def _write_cut(folder: Path, source: str, box) -> str:
+    """Cut the original `source` with `box` into screens_crop/; returns the path relative to the recording."""
+    name = Path(source).name
+    _write_with_thumb(folder / CROP_FOLDER / name, _cut(read_png(folder / source), box))
+    return f"{CROP_FOLDER}/{name}"
+
+
+def prepare(folder: Path, end_s: float | None = None, min_shown_s: float = MIN_SHOWN_S) -> bool:
+    """Cut and choose the snapshots for an AI (screens_crop/ and its index.json). Does nothing if that is up to
+    date with screens/ and min_shown_s; True if it was (re)done. Choices by hand are kept."""
+    import json
 
     pictures = listing(folder)
     target = folder / CROP_FOLDER
     if not pictures:
         return False
     try:
-        old = json.loads((target / INDEX).read_text(encoding="utf-8"))
-        same_pictures = [p for _, p in pictures] == [e["source"] for e in old["pictures"]]
-        if same_pictures and old.get("min_shown_s") == min_shown_s:
-            return False
-    except (OSError, ValueError, KeyError, TypeError):
-        pass
-    loaded = [read_png(folder / p) for _, p in pictures]
+        manual = dict(json.loads((target / INDEX).read_text(encoding="utf-8")).get("manual") or {})
+    except (OSError, ValueError, AttributeError, TypeError):
+        manual = {}
+    current = _read_index(folder)
+    if current is not None and current.get("min_shown_s") == min_shown_s:
+        return False
+    sources = [p for _, p in pictures]
+    manual = {k: v for k, v in manual.items() if k in sources and v in (MANUAL_IN, MANUAL_OUT)}
+    loaded = [read_png(folder / p) for p in sources]
     boxes = {}
     for shape in {p.shape for p in loaded}:
         boxes[shape] = content_box([_grey(p) for p in loaded if p.shape == shape])
     cut = [_cut(p, boxes[p.shape]) for p in loaded]
     verdicts = choose([t for t, _ in pictures], [_grey(c) for c in cut], end_s, min_shown_s)
     target.mkdir(exist_ok=True)
-    for stale in target.glob("*.png"):
+    for stale in [*target.glob("*.png"), *(target / THUMBS).glob("*.png")]:
         stale.unlink()
     entries = []
     for (t, source), picture, verdict in zip(pictures, cut, verdicts):
         entry = {"t": t, "source": source}
-        if verdict == "":
-            name = Path(source).name
-            h, w = picture.shape[:2]
-            mss.tools.to_png(np.ascontiguousarray(picture).tobytes(), (w, h), level=6, output=str(target / name))
-            entry["file"] = f"{CROP_FOLDER}/{name}"
-        elif verdict == "short":
+        if verdict == "short":
             entry["short"] = True
-        else:
+        elif verdict:
             entry["same_as"] = pictures[int(verdict)][0]
+        if source in manual:
+            entry["manual"] = manual[source]
+        if manual.get(source, MANUAL_IN if verdict == "" else MANUAL_OUT) == MANUAL_IN:
+            name = Path(source).name
+            _write_with_thumb(target / name, picture)
+            entry["file"] = f"{CROP_FOLDER}/{name}"
         entries.append(entry)
-    (target / INDEX).write_text(json.dumps({"min_shown_s": min_shown_s, "pictures": entries}, indent=1), encoding="utf-8")
-    log.info("Snapshots of %s prepared: %d of %d chosen", folder.name, sum("file" in e for e in entries), len(entries))
+    _write_index(folder, {"min_shown_s": min_shown_s, "manual": manual,
+                          "boxes": {_shape_key(p): (list(boxes[p.shape]) if boxes[p.shape] else None) for p in loaded},
+                          "pictures": entries})
+    log.info("Snapshots of %s prepared: %d of %d chosen%s", folder.name, sum("file" in e for e in entries),
+             len(entries), f", {len(manual)} by hand" if manual else "")
     return True
+
+
+def choose_by_hand(folder: Path, sources: list[str], choice: str) -> int:
+    """«ins Transkript» (MANUAL_IN), «weglassen» (MANUAL_OUT) or back to the automatic choice (AUTOMATIC, the undo)
+    for these pictures. Returns how many changed. Needs prepared pictures (`prepare`)."""
+    if choice not in (MANUAL_IN, MANUAL_OUT, AUTOMATIC):
+        raise ValueError(f"Unbekannte Auswahl «{choice}».")
+    index = _read_index(folder)
+    if index is None:
+        raise RuntimeError("Die Bilder sind noch nicht vorbereitet – bitte das Transkript neu öffnen.")
+    wanted, changed = set(sources), 0
+    for e in index["pictures"]:
+        source = e["source"]
+        if source not in wanted:
+            continue
+        if choice == AUTOMATIC:
+            index["manual"].pop(source, None)
+            e.pop("manual", None)
+            use = not e.get("short") and "same_as" not in e
+        else:
+            index["manual"][source] = e["manual"] = choice
+            use = choice == MANUAL_IN
+        if use and "file" not in e:
+            e["file"] = _write_cut(folder, source, _box_for(folder, index, read_png(folder / source)))
+            changed += 1
+        elif not use and "file" in e:
+            _remove_with_thumb(folder / e.pop("file"))
+            changed += 1
+    _write_index(folder, index)
+    log.info("Snapshots of %s: %d changed by hand (%s)", folder.name, changed, choice)
+    return changed
+
+
+def delete(folder: Path, sources: list[str]) -> int:
+    """Delete these snapshots for good: original, small copy, cut copy, entry. Returns how many were deleted."""
+    known = {p for _, p in listing(folder)}
+    index = _read_index(folder)
+    gone = []
+    for source in sources:
+        if source not in known:
+            continue
+        name = Path(source).name
+        _remove_with_thumb(folder / FOLDER / name)
+        _remove_with_thumb(folder / CROP_FOLDER / name)
+        gone.append(source)
+    if index is not None:   # still matches the pictures that are left
+        index["pictures"] = [e for e in index["pictures"] if e["source"] not in gone]
+        for source in gone:
+            index["manual"].pop(source, None)
+        _write_index(folder, index)
+    log.info("Snapshots of %s: %d deleted by hand", folder.name, len(gone))
+    return len(gone)
+
+
+REASONS = {"short": "nur kurz gezeigt", "manual": "von Hand weggelassen"}
+
+
+def _reason(e: dict) -> str:
+    """Why a picture is not in the transcript: "manual", "short" or "same"; "" if it is."""
+    if "file" in e:
+        return ""
+    if e.get("manual") == MANUAL_OUT:
+        return "manual"
+    return "same" if "same_as" in e else "short"
+
+
+def overview(folder: Path) -> list[dict]:
+    """All snapshots for the panel «Bilder»: t, source (original), file (what the transcript shows: the cut copy;
+    the original if not prepared), used, reason ("", "short", "same", "manual"), same_as, manual (by hand: in/out)."""
+    index = _read_index(folder)
+    if index is None:
+        return [{"t": t, "source": p, "file": p, "used": True, "reason": "", "same_as": None, "manual": None}
+                for t, p in listing(folder)]
+    return [{"t": e["t"], "source": e["source"], "file": e.get("file"), "used": "file" in e, "reason": _reason(e),
+             "same_as": e.get("same_as"), "manual": e.get("manual")} for e in index["pictures"]]
 
 
 def for_transcript(folder: Path) -> list[tuple[float, str, str]]:
     """The snapshots for transcript.md: (second, path, note). Prepared: the chosen ones from screens_crop/ with an
     empty note, the others from screens/ with why they were left out. Not (yet) prepared: all originals."""
-    import json
-
     from .transcript import _time
 
-    pictures = listing(folder)
-    try:
-        index = json.loads((folder / CROP_FOLDER / INDEX).read_text(encoding="utf-8"))["pictures"]
-        if [p for _, p in pictures] != [e["source"] for e in index]:
-            raise ValueError("stale")
-    except (OSError, ValueError, KeyError, TypeError):
-        return [(t, p, "") for t, p in pictures]
     result = []
-    for e in index:
-        if "file" in e:
-            result.append((e["t"], e["file"], ""))
-        elif "same_as" in e:
-            result.append((e["t"], e["source"], f"gleich wie {_time(e['same_as'])}"))
+    for p in overview(folder):
+        if p["used"]:
+            result.append((p["t"], p["file"], ""))
+        elif p["reason"] == "same":
+            result.append((p["t"], p["source"], f"gleich wie {_time(p['same_as'])}"))
         else:
-            result.append((e["t"], e["source"], "nur kurz gezeigt"))
+            result.append((p["t"], p["source"], REASONS[p["reason"]]))
     return result
 
 
 def image_path(folder: Path, relative: str, thumb: bool = False) -> Path:
-    """A snapshot file of this recording – only names from `listing`, no paths elsewhere."""
+    """A snapshot file of this recording (original in screens/ or cut copy in screens_crop/) – only names like
+    `listing` gives, no paths elsewhere."""
     name = Path(relative).name
-    if not _NAME.match(name) or relative != f"{FOLDER}/{name}":
+    sub = next((f for f in (FOLDER, CROP_FOLDER) if relative == f"{f}/{name}"), None)
+    if not _NAME.match(name) or sub is None:
         raise RuntimeError("Unbekanntes Bild.")
-    path = folder / FOLDER / THUMBS / name if thumb else folder / FOLDER / name
+    path = folder / sub / THUMBS / name if thumb else folder / sub / name
     if thumb and not path.exists():
-        path = folder / FOLDER / name
+        path = folder / sub / name
     return path
 
 
@@ -486,6 +643,7 @@ class ScreenCapture:
         self.interval_s = interval_s
         self.count = 0
         self.problem: str | None = None
+        self.paused = False   # «Bilder pausieren»: the audio goes on, no pictures (0.7.49)
         self._stop = threading.Event()
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True, name="screens")
@@ -515,8 +673,10 @@ class ScreenCapture:
         try:
             while not self._stop.is_set():
                 started = time.monotonic()
-                t = self.position()
-                if t is not None:
+                t = None if self.paused else self.position()
+                if t is None:   # paused: a change that began before does not date a picture after it
+                    detector.change_since, detector.still = None, 0
+                else:
                     try:
                         picture = grab()
                         failures = 0

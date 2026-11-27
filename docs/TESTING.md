@@ -71,6 +71,11 @@ in the README and in `BACKLOG.md`):
   microphone and back, «Systemton kommt über» to the loudspeakers and back, and the screen to another window
   and to «Keine». The recording goes on, both tracks have sound after each switch (a moment of silence is
   fine), meta.json lists `switches` and `devices_used`, and the snapshots keep their times in the transcript.
+- **Snapshots in a real Teams call (0.7.49):** record with «Ganzer Bildschirm» while a Teams call runs → the hint
+  «Teams-Meeting erkannt – Bilder nur vom Meeting-Fenster?» appears; «Wechseln» must give real pictures of the
+  call window (PrintWindow may return black pictures for the GPU-drawn new Teams – then the hint must go).
+  «Bilder pausieren» stops pictures while the audio goes on; with «erst nach Klick starten» the recording begins
+  without pictures. Afterwards the panel «Bilder» shows all pictures; in/out/undo/delete change transcript.md.
 - **Signed Windows installer:** the first signed release shows «SignPath Foundation» as publisher in the
   SmartScreen/UAC dialog; after `WINDOWS_PUBLISHER` is set, an update via the notice still installs.
 
@@ -82,7 +87,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-414 tests in 39 files.
+425 tests in 39 files.
 
 ### `test_acceleration.py` (10)
 
@@ -206,7 +211,7 @@ Nvidia GPU (experimental): choosing the device, CPU fallback, downloading cuBLAS
 - **Install keeps only the libraries**
 - **Install with a wrong checksum installs nothing**
 
-### `test_details.py` (10)
+### `test_details.py` (12)
 
 Recording details (name, project, participants, notes) and planned recordings.
 
@@ -220,6 +225,8 @@ Recording details (name, project, participants, notes) and planned recordings.
 - **Own name marks the microphone** – 28 Oct 2026: Andrea typed his own name as «Neuer Name» in a Teams call – the mark went to the system audio,
 - **Zero people leaves a track out** – 28 Oct 2026: a meeting on site with the system audio recorded by mistake – «0» people for the system audio
 - **Speaker plan from numbers participants and settings**
+- **Title changed while transcribing is kept** – 0.7.49: the title could not be changed while a transcription ran; changed meanwhile, the finished transcript
+- **Meta written by two threads at once** – Bug 27 Nov 2026: changing the title while the transcription wrote meta.json failed – both threads used the
 
 ### `test_devices.py` (7)
 
@@ -464,7 +471,7 @@ Robustness of recordings: honest end states, no overwriting, crash recovery, dis
 - **Shutdown during pause ends the worker**
 - **Recovery runs before the clean up compresses audio** – Order at start matters: repair the WAV first, then the clean-up may compress it.
 
-### `test_screens.py` (25)
+### `test_screens.py` (34)
 
 Screen snapshots during a recording (screens.py): which pictures are kept, their files, the Markdown links
 
@@ -493,6 +500,15 @@ Screen snapshots during a recording (screens.py): which pictures are kept, their
 - **Png written by save is read back**
 - **Prepare cuts chooses and the transcript links the chosen**
 - **Minimum shown time is a setting and a change prepares anew**
+- **Overview lists every picture with the reason it was left out**
+- **Pictures chosen by hand go in and out and survive a new prepare**
+- **Deleted pictures are gone for good**
+- **Cut pictures can be shown but no other files**
+- **Panel changes rewrite the transcript**
+- **Old recording is prepared when its transcript is opened** – Recordings of 0.7.46–48 may have no screens_crop/ (or pictures added since): opening the transcript prepares
+- **Pictures can be paused while the audio goes on**
+- **Pause button and start after click**
+- **Meeting window is suggested while the whole screen is captured**
 
 ### `test_search.py` (8)
 

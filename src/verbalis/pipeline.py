@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import platform
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -59,8 +60,9 @@ def missing_tracks(folder: Path) -> list[str]:
 # ---------------------------------------------------------------- crash-safe files
 
 def write_json_atomic(path: Path, data) -> None:
-    """Write JSON so that a crash leaves either the old or the new file, never half of one."""
-    tmp = path.with_name(path.name + ".tmp")
+    """Write JSON so that a crash leaves either the old or the new file, never half of one.
+    Own temporary file per thread: two threads writing at once (the title changed while transcribing) both failed."""
+    tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.flush()
@@ -236,8 +238,7 @@ def start_meta(folder: Path, start: datetime, samplerate: int, consent_time: str
 def write_meta(folder: Path, start: datetime, duration_s: float, samplerate: int,
                consent_time: str, devices: dict[str, str], tracks: list,
                state: str = COMPLETE, problem: str | None = None) -> dict:
-    meta = {
-        **details(read_meta(folder)),     # entered before or during the recording
+    fixed = {
         "app_version": __version__,
         "start": start.isoformat(timespec="seconds"),
         "state": state,
@@ -259,25 +260,37 @@ def write_meta(folder: Path, start: datetime, duration_s: float, samplerate: int
         },
     }
     if problem:
-        meta["problem"] = problem
-    write_json_atomic(folder / "meta.json", meta)
+        fixed["problem"] = problem
+    with _meta_lock:   # details entered before or during the recording stay – also one saved this very moment
+        meta = {**details(read_meta(folder)), **fixed}
+        write_json_atomic(folder / "meta.json", meta)
     return meta
 
 
 def read_meta(folder: Path) -> dict:
     """meta.json – {} if there is none, {"damaged": True} if it can't be read (never silently empty)."""
-    try:
-        data = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {"damaged": True}
-    except FileNotFoundError:
-        return {}
-    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
-        return {"damaged": True}
+    for attempt in range(10):
+        try:
+            data = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {"damaged": True}
+        except FileNotFoundError:
+            return {}
+        except PermissionError:   # Windows: another thread is replacing the file this very moment
+            if attempt == 9:
+                return {"damaged": True}
+            time.sleep(0.05)
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+            return {"damaged": True}
+    return {"damaged": True}
+
+
+_meta_lock = threading.RLock()   # read-change-write of meta.json from several threads (UI, worker, recorder)
 
 
 def update_meta(folder: Path, **fields) -> None:
-    meta = {**read_meta(folder), **fields}
-    write_json_atomic(folder / "meta.json", meta)
+    with _meta_lock:
+        meta = {**read_meta(folder), **fields}
+        write_json_atomic(folder / "meta.json", meta)
 
 
 def recording_start(folder: Path) -> datetime | None:
@@ -559,7 +572,7 @@ def create_transcript(folder: Path, transcriber, model: str, names: dict[str, st
                                                 problems=problems, partial=folder / PARTIAL, model=model,
                                                 people=people, threshold=threshold, asides=asides)
     h = header(folder, model, compute, recording)
-    meta = read_meta(folder)
+    meta = read_meta(folder)   # now, not at the start: title and project may be changed while transcribing
     if meta.get("project"):
         h["Projekt"] = meta["project"]
     if left_out:

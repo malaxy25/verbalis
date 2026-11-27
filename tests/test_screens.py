@@ -1,6 +1,7 @@
 """Screen snapshots during a recording (screens.py): which pictures are kept, their files, the Markdown links
 and the way through the service. No real screen: pictures are numpy arrays."""
 
+import time
 
 import numpy as np
 import pytest
@@ -170,7 +171,8 @@ def test_recording_with_snapshots_links_them_in_the_transcript(home):
     assert wait_until(lambda: s.recordings()[0]["status"] == "done", timeout=15)
     folder = home / "recordings" / rid
     t = s.transcript(rid)
-    assert len(t["screens"]) == 2 and t["screens"][0]["file"].startswith("screens/")
+    # the view shows what the AI gets: the chosen, cut pictures (0.7.49); the panel «Bilder» all of them
+    assert len(t["pictures"]) == 2 and t["screens"] and all(p["file"].startswith("screens_crop/") for p in t["screens"])
     assert wait_until(lambda: "](screens_crop/" in (folder / "transcript.md").read_text(encoding="utf-8"))
     assert s.settings()["screen"] == "monitor:1"   # remembered for the next recording
     assert s.screen_image(rid, t["screens"][0]["file"], thumb=True).startswith("data:image/png;base64,")
@@ -364,3 +366,157 @@ def test_minimum_shown_time_is_a_setting_and_a_change_prepares_anew(tmp_path):
     assert screens.prepare(tmp_path, 90, min_shown_s=5) is False
     assert screens.prepare(tmp_path, 90, min_shown_s=3) is True
     assert [note for _, _, note in screens.for_transcript(tmp_path)][1] == ""
+
+
+# ------------------------------------------------------------------ the panel «Bilder» (0.7.49)
+
+def slides(folder, plan=((0, 1), (30, 2), (32, 3), (60, 1), (90, 4))):
+    """Pictures of a call: slide 2 shown 2 s (short), slide 1 again at 60 (a repeat)."""
+    for t, slide in plan:
+        screens.save(folder, t, call_screen(slide, t))
+    screens.prepare(folder, end_s=120)
+
+
+def test_overview_lists_every_picture_with_the_reason_it_was_left_out(tmp_path):
+    slides(tmp_path)
+    o = screens.overview(tmp_path)
+    assert [(p["t"], p["used"], p["reason"]) for p in o] == [
+        (0, True, ""), (30, False, "short"), (32, True, ""), (60, False, "same"), (90, True, "")]
+    assert o[0]["file"] == "screens_crop/00-00-00.png" and o[1]["file"] is None and o[3]["same_as"] == 0
+    assert (tmp_path / "screens_crop" / ".thumbs" / "00-00-00.png").exists()   # small copy for the transcript view
+
+
+def test_pictures_chosen_by_hand_go_in_and_out_and_survive_a_new_prepare(tmp_path):
+    slides(tmp_path)
+    assert screens.choose_by_hand(tmp_path, ["screens/00-00-30.png"], "in") == 1
+    assert screens.choose_by_hand(tmp_path, ["screens/00-00-32.png"], "out") == 1
+    o = {p["t"]: p for p in screens.overview(tmp_path)}
+    assert o[30]["used"] and o[30]["manual"] == "in" and (tmp_path / o[30]["file"]).exists()
+    cut = screens.read_png(tmp_path / o[30]["file"])
+    assert cut.shape[0] < 300 * 0.9                                  # cut like the others
+    assert not o[32]["used"] and o[32]["reason"] == "manual"
+    assert not (tmp_path / "screens_crop" / "00-00-32.png").exists()
+    notes = dict((t, note) for t, _, note in screens.for_transcript(tmp_path))
+    assert notes[30] == "" and notes[32] == "von Hand weggelassen"
+    screens.prepare(tmp_path, end_s=120, min_shown_s=1)               # another setting: the hand choice stays
+    o = {p["t"]: p for p in screens.overview(tmp_path)}
+    assert o[30]["used"] and not o[32]["used"]
+    screens.choose_by_hand(tmp_path, ["screens/00-00-30.png", "screens/00-00-32.png"], "auto")   # the undo
+    o = {p["t"]: p for p in screens.overview(tmp_path)}
+    assert o[30]["used"] and o[32]["used"] and o[30]["manual"] is None   # 2 s >= 1 s now
+
+
+def test_deleted_pictures_are_gone_for_good(tmp_path):
+    slides(tmp_path)
+    assert screens.delete(tmp_path, ["screens/00-00-00.png", "screens/../meta.json"]) == 1
+    assert not (tmp_path / "screens" / "00-00-00.png").exists()
+    assert not (tmp_path / "screens" / ".thumbs" / "00-00-00.png").exists()
+    assert not (tmp_path / "screens_crop" / "00-00-00.png").exists()
+    assert [p["t"] for p in screens.overview(tmp_path)] == [30, 32, 60, 90]
+    assert screens.prepare(tmp_path, end_s=120) is False             # the index still matches: nothing redone
+
+
+def test_cut_pictures_can_be_shown_but_no_other_files():
+    from pathlib import Path
+
+    folder = Path("rec")
+    assert screens.image_path(folder, "screens_crop/00-00-05.png") == folder / "screens_crop" / "00-00-05.png"
+    for bad in ("screens_crop/index.json", "screens_crop/../me.flac"):
+        with pytest.raises(RuntimeError):
+            screens.image_path(folder, bad)
+
+
+def test_panel_changes_rewrite_the_transcript(home):
+    from test_service import finished_recording
+
+    s = make_service()
+    rid = finished_recording(s)
+    folder = s._path(rid)
+    slides(folder)
+    t = s.transcript(rid)
+    assert [p["t"] for p in t["screens"]] == [0, 32, 90] and len(t["pictures"]) == 5
+    data = s.choose_screens(rid, ["screens/00-00-30.png"], "in")
+    assert [p["t"] for p in data["screens"]] == [0, 30, 32, 90]
+    assert "](screens_crop/00-00-30.png)" in (folder / "transcript.md").read_text(encoding="utf-8")
+    data = s.delete_screens(rid, ["screens/00-00-30.png"])
+    assert len(data["pictures"]) == 4
+    assert "00-00-30" not in (folder / "transcript.md").read_text(encoding="utf-8")
+
+
+def test_old_recording_is_prepared_when_its_transcript_is_opened(home):
+    """Recordings of 0.7.46–48 may have no screens_crop/ (or pictures added since): opening the transcript prepares
+    them once, so the view and the panel show the AI's choice."""
+    from test_service import finished_recording
+
+    s = make_service()
+    rid = finished_recording(s)
+    for t, slide in ((0, 1), (30, 2), (60, 3)):
+        screens.save(s._path(rid), t, call_screen(slide, t))
+    assert all(p["file"].startswith("screens_crop/") for p in s.transcript(rid)["screens"])
+
+
+def test_pictures_can_be_paused_while_the_audio_goes_on(tmp_path):
+    frames = iter([picture(10)] * 4 + [picture(200)] * 400)
+    cap = ScreenCapture(tmp_path, "monitor:1", lambda: 1.0, opener=lambda target: lambda: next(frames),
+                        interval_s=0.01)
+    cap.paused = True
+    cap.start()
+    time.sleep(0.2)
+    assert cap.count == 0
+    cap.paused = False
+    assert wait_until(lambda: cap.count == 1)
+    cap.stop()
+
+
+def test_pause_button_and_start_after_click(home):
+    made = []
+
+    class Probe:
+        def __init__(self, folder, target, position):
+            self.count, self.problem, self.paused = 0, None, False
+            made.append(self)
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    s = make_service(screen_factory=Probe)
+    s._s.screen_start = "click"                      # «Bilder erst nach Klick starten»
+    s.start_recording("Mic", "", consent=True, screen="monitor:1")
+    assert made[0].paused and s.state()["recording"]["screens"]["paused"]
+    s.pause_screens(False)
+    assert not s.state()["recording"]["screens"]["paused"]
+    s.pause_screens(True)
+    s.switch_screen("monitor:2")                      # stays paused on another screen
+    assert made[1].paused
+    s.stop_recording()
+    with pytest.raises(RuntimeError):
+        s.pause_screens(True)
+    from verbalis.settings import Settings
+    assert Settings.from_dict({"screen_start": "x"}).screen_start == "auto"
+
+
+def test_meeting_window_is_suggested_while_the_whole_screen_is_captured(home):
+    class Probe:
+        def __init__(self, folder, target, position):
+            self.count, self.problem, self.paused = 0, None, False
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    s = make_service(screen_factory=Probe)
+    s._call_windows = lambda: [{"value": "window:Weekly | Microsoft Teams", "label": "Weekly | Microsoft Teams"}]
+    s.start_recording("Mic", "", consent=True, screen="monitor:1")
+    hint = s.state()["recording"]["meeting_window"]
+    assert hint["value"] == "window:Weekly | Microsoft Teams" and hint["name"] == "Teams-Meeting"
+    s.switch_screen("window:Weekly | Microsoft Teams")
+    assert s.state()["recording"]["meeting_window"] is None    # only for a whole screen
+    s.switch_screen("monitor:1")
+    s.dismiss_meeting_window()
+    assert s.state()["recording"]["meeting_window"] is None    # closed: not again in this recording
+    s.stop_recording()

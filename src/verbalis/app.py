@@ -77,6 +77,18 @@ class Api:
     def open_screen_image(self, recording_id, file):
         return self._call(self._s.open_screen_image, recording_id, file)
 
+    def choose_screens(self, recording_id, sources, choice):
+        return self._call(self._s.choose_screens, recording_id, list(sources or []), str(choice))
+
+    def delete_screens(self, recording_id, sources):
+        return self._call(self._s.delete_screens, recording_id, list(sources or []))
+
+    def pause_screens(self, paused=True):
+        return self._call(self._s.pause_screens, bool(paused))
+
+    def dismiss_meeting_window(self):
+        return self._call(self._s.dismiss_meeting_window)
+
     def plan_recording(self, data=None):
         return self._call(self._s.plan_recording, data)
 

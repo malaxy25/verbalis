@@ -149,3 +149,52 @@ def test_speaker_plan_from_numbers_participants_and_settings():
         ({"others": True, "me": True}, {"me": 3}, ["others"])
     assert speaker_plan(s, {"participants": {"me": ["Andrea"]}, "people": {"me": None}}) == \
         ({"others": True, "me": False}, {}, [])
+
+
+def test_title_changed_while_transcribing_is_kept():
+    """0.7.49: the title could not be changed while a transcription ran; changed meanwhile, the finished transcript
+    must take it from meta.json instead of the one read at its start."""
+    import threading
+
+    from test_service import FakeTranscriber
+
+    release = threading.Event()
+
+    class Slow(FakeTranscriber):
+        def transcribe(self, audio, language="de", progress=None):
+            release.wait(10)
+            return super().transcribe(audio, language, progress)
+
+    s = make_service(transcriber_factory=Slow)
+    rid = s.start_recording(consent=True)
+    s.stop_recording()
+    assert wait_until(lambda: (s.state()["job"] or {}).get("id") == rid)
+    s.update_details(rid, {"title": "Neuer Name", "project": "tocco"})
+    release.set()
+    assert wait_until(lambda: s.recordings()[0]["status"] == "done")
+    md = (s._path(rid) / "transcript.md").read_text(encoding="utf-8")
+    assert md.startswith("# Neuer Name") and "**Projekt:** tocco" in md
+
+
+def test_meta_written_by_two_threads_at_once(tmp_path):
+    """Bug 27 Nov 2026: changing the title while the transcription wrote meta.json failed – both threads used the
+    same temporary file («meta.json.tmp» not found); a change made at the same moment could also be lost."""
+    import threading
+
+    pipeline.write_json_atomic(tmp_path / "meta.json", {"state": "complete"})
+    errors = []
+
+    def write(field):
+        try:
+            for n in range(40):
+                pipeline.update_meta(tmp_path, **{field: n})
+        except Exception as e:   # noqa: BLE001 – collected for the assert
+            errors.append(e)
+
+    threads = [threading.Thread(target=write, args=(f,)) for f in ("title", "people")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors
+    assert pipeline.read_meta(tmp_path) == {"state": "complete", "title": 39, "people": 39}

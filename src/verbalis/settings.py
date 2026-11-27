@@ -46,6 +46,7 @@ class Settings:
     speakers: str = ""                # output device whose loopback is recorded
     screen: str = ""                  # screen snapshots while recording: "" off, "monitor:N", "window:<title>"
     screen_min_s: str = "5"           # pictures for the AI: only those shown at least N seconds (0 = all but repeats)
+    screen_start: str = "auto"        # "auto" = pictures from the start, "click" = only after «Bilder starten» (0.7.49)
     sidebar: str = "open"            # the recording list: "open" or "closed" (a narrow rail; Ctrl/Cmd+B)
     window_size: str = ""             # last window size, e.g. "1180x700"
     audio_days: str = "3"             # delete audio after N days; empty = never, 0 = right after transcription
@@ -147,6 +148,8 @@ class Settings:
         if not (s.screen_min_s.isdigit() and int(s.screen_min_s) <= 600):
             s.screen_min_s = "5"
         s.screen_min_s = str(int(s.screen_min_s))   # «05» → «5»
+        if s.screen_start not in ("auto", "click"):
+            s.screen_start = "auto"
         if s.call_detection not in ("on", "off"):
             s.call_detection = "on"
         for name, default in (("audio_days", "3"), ("audio_max_mb", ""), ("max_recording_min", "120")):
