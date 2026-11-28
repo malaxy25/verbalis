@@ -42,6 +42,13 @@ def test_every_job_builds_the_tested_commit():
         assert checkout["with"]["ref"] == "${{ needs.version.outputs.sha }}", name
 
 
+def test_release_runs_one_after_the_other():
+    """Bug 27 Nov 2026: two pushes 12 s apart started two release runs for 0.7.50; both found no tag yet,
+    both built, and the second failed at «Create the version tag». Queued runs never overlap, and a running
+    release is never cancelled by the next push."""
+    assert WORKFLOW["concurrency"] == {"group": "release", "cancel-in-progress": False}
+
+
 def test_tag_only_after_a_successful_windows_build():
     publish = JOBS["publish"]
     assert "needs.windows.result == 'success'" in publish["if"]

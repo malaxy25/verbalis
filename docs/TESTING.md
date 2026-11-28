@@ -87,7 +87,7 @@ During development every UI change was clicked through this way with Playwright.
 ## Catalogue
 
 <!-- catalog:start -->
-426 tests in 40 files.
+427 tests in 40 files.
 
 ### `test_acceleration.py` (10)
 
@@ -436,7 +436,7 @@ Two-track recorder: padding dropouts with silence, pausing without padding.
 - **Switch to a device that does not open goes back**
 - **Recorder switch needs an existing track**
 
-### `test_release_workflow.py` (12)
+### `test_release_workflow.py` (13)
 
 The release workflow: only after green tests, only for a new version, exactly the tested commit.
 
@@ -444,6 +444,7 @@ The release workflow: only after green tests, only for a new version, exactly th
 - **Tests run once per push to main and for pull requests**
 - **Release starts after tests not on tags**
 - **Every job builds the tested commit**
+- **Release runs one after the other** – Bug 27 Nov 2026: two pushes 12 s apart started two release runs for 0.7.50; both found no tag yet,
 - **Tag only after a successful windows build**
 - **Fixed download names are never taken for an update** – frehner.tech links to fixed names (releases/latest/download/…) because the GitHub API it used for the
 - **Decision step**

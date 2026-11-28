@@ -21,6 +21,13 @@ on:
     types: [completed]
   workflow_dispatch:
 
+# One release run at a time: two pushes a few seconds apart (version bump, then a backlog commit) both saw
+# «no tag v0.7.50 yet», both built, and the second failed at «Create the version tag» (27 Nov 2026). Queued, the
+# second run starts after the first has tagged and finds «already released – nothing to do».
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
   contents: write   # needed to create the release
   actions: read     # SignPath reads the build and downloads the unsigned installer
